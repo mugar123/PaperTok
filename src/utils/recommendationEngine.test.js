@@ -109,6 +109,49 @@ test('category signals preserve personalization without OpenAlex enrichment', ()
   assert.ok(score.affinity > 10);
 });
 
+test('every score component is bounded by its designed maximum', () => {
+  const extremeConcepts = Array.from({ length: 8 }, (_, index) => ({ id: `concept-${index}`, score: 1 }));
+  const extremeAffinities = Object.fromEntries(extremeConcepts.map(concept => [concept.id, 100]));
+  const score = scorePaperForRecommendation(
+    {
+      id: 'paper-extreme',
+      primaryCategory: 'cs.AI',
+      allCategories: ['cs.AI', 'cs.LG', 'cs.CL', 'cs.CV', 'cs.NE', 'stat.ML'],
+      published: '2010-01-01T00:00:00Z',
+      openAlex: { cited_by_count: 5_000_000, concepts: extremeConcepts },
+    },
+    {
+      now: NOW,
+      categoryAffinities: { 'cs.AI': 100, 'cs.LG': 100, 'cs.CL': 100, 'cs.CV': 100, 'cs.NE': 100, 'stat.ML': 100 },
+      conceptAffinities: extremeAffinities,
+      temporalPreference: -1,
+    }
+  );
+
+  assert.equal(score.affinity, 100);
+  assert.equal(score.semantic, 20);
+  assert.equal(score.citations, 25);
+  assert.ok(score.classicBoost <= 25);
+});
+
+test('negative concept affinities subtract but stay bounded', () => {
+  const score = scorePaperForRecommendation(
+    {
+      id: 'paper-negative',
+      primaryCategory: 'cs.AI',
+      published: '2026-07-01T00:00:00Z',
+      openAlex: { concepts: [{ id: 'disliked', score: 1 }] },
+    },
+    {
+      now: NOW,
+      conceptAffinities: { disliked: -10 },
+    }
+  );
+
+  assert.ok(score.semantic < 0);
+  assert.ok(score.semantic >= -20);
+});
+
 test('stable followed entities boost papers and cap the combined signal', () => {
   const score = scorePaperForRecommendation({
     id: 'paper-followed',

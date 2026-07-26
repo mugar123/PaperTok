@@ -1,3 +1,7 @@
+// Every score component is bounded so the weights below describe the REAL
+// maximum contribution of each signal. Resulting hierarchy: preference and
+// learned affinity (<=100) > follows (<=70) > citations/classics (<=25) >
+// semantic concepts (<=semanticConceptMultiplier) > graph/diversity/recency.
 export const DEFAULT_RECOMMENDATION_WEIGHTS = Object.freeze({
   selectedCategory: 100,
   relatedSelectedCategory: 80,
@@ -6,11 +10,13 @@ export const DEFAULT_RECOMMENDATION_WEIGHTS = Object.freeze({
   followedInstitution: 30,
   followedProject: 45,
   maxFollowBoost: 70,
+  maxAffinity: 100,
   maxRecency: 5,
   recencyHalfLifeDays: 7,
   classicCitationMultiplier: 5,
   semanticConceptMultiplier: 20,
   citationMultiplier: 5,
+  maxCitationLog: 5,
   graphCandidate: 15,
   explorationBaseWeight: 5,
   exploitBaseWeight: 15,
@@ -152,10 +158,13 @@ export function scorePaperForRecommendation(paper, context = {}) {
   const isExploration = paper._debugScore?.isExploration || paper._type === 'exploration';
   const recentPropsCount = context.recentPropsCount || { preprint: 0, published: 0, openAccess: 0, subscription: 0, journal: 0, conference: 0 };
 
-  const affinity = categorySignals.reduce((sum, category, index) => {
+  const rawAffinity = categorySignals.reduce((sum, category, index) => {
     const multiplier = index === 0 ? 1 : 0.35;
     return sum + (categoryAffinities[category] || 0) * multiplier;
   }, 0);
+  // Secondary categories can push the sum past the per-category clamp; cap it so
+  // learned affinity never outweighs an explicit preference by accumulation alone.
+  const affinity = clamp(rawAffinity, -weights.maxAffinity, weights.maxAffinity);
 
   let preference = 0;
   if (primaryCategory && userPreferences.includes(primaryCategory)) {
@@ -175,17 +184,25 @@ export function scorePaperForRecommendation(paper, context = {}) {
     * (1 + temporalPreference);
 
   const citedBy = paper.openAlex?.cited_by_count ?? paper.openAlex?.citationCount ?? paper.citationCount ?? 0;
+  // log10 saturates at maxCitationLog (10^5 citations) so mega-cited classics
+  // cannot grow without bound.
   const classicBoost = temporalPreference < 0 && ageDays > 365 && citedBy > 10
-    ? Math.abs(temporalPreference) * Math.log10(citedBy) * weights.classicCitationMultiplier
+    ? Math.abs(temporalPreference) * Math.min(Math.log10(citedBy), weights.maxCitationLog) * weights.classicCitationMultiplier
     : 0;
 
-  const semantic = (paper.openAlex?.concepts || []).reduce((sum, concept) => {
+  // Concept match normalized to [-1, 1]: each concept contributes its OpenAlex
+  // confidence times the learned affinity as a fraction of the affinity clamp
+  // (100), so semanticConceptMultiplier IS the maximum semantic contribution.
+  // Before this, the raw product reached hundreds of points per concept and
+  // whether OpenAlex enrichment had arrived decided the ranking's character.
+  const semanticMatch = (paper.openAlex?.concepts || []).reduce((sum, concept) => {
     const affinityValue = conceptAffinities[concept.id] || 0;
-    return sum + (concept.score || 0) * affinityValue * weights.semanticConceptMultiplier;
+    return sum + (concept.score || 0) * (affinityValue / 100);
   }, 0);
+  const semantic = clamp(semanticMatch, -1, 1) * weights.semanticConceptMultiplier;
 
   const citations = citedBy > 0
-    ? Math.log10(citedBy + 1) * weights.citationMultiplier
+    ? Math.min(Math.log10(citedBy + 1), weights.maxCitationLog) * weights.citationMultiplier
     : 0;
 
   const graphBoost = paper._isGraphCandidate ? weights.graphCandidate : 0;
