@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
 import { useFeed } from '../../context/FeedContext';
 import { useFollowingUpdates } from '../../context/FollowingUpdatesContext';
@@ -10,8 +10,8 @@ import CustomDateSelector from './CustomDateSelector';
 import ReportFilters from './ReportFilters';
 import FollowingUpdatesPanel from '../Following/FollowingUpdatesPanel';
 import PaperCard from '../Feed/PaperCard';
-import { CATEGORIES, getCategoryGradient, getCategoryLabel } from '../../data/categories';
-import { Calendar, Award, Share2, Check, BadgeCheck, Unlock, Lock, ExternalLink, FileText, BarChart3, TrendingUp, X, Flame, Database, Globe2, Sparkles, BellRing } from 'lucide-react';
+import { CATEGORIES, getCategoryLabel } from '../../data/categories';
+import { Calendar, Award, Share2, Check, BadgeCheck, Unlock, Lock, ExternalLink, FileText, TrendingUp, X, Flame, Database, Globe2, Sparkles, BellRing } from 'lucide-react';
 import ScientificText from '../ScientificText';
 import 'katex/dist/katex.min.css';
 import './ScientificReport.css';
@@ -144,6 +144,7 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedScope = searchParams.get('scope');
   const scope = SCOPES.some(item => item.id === requestedScope) ? requestedScope : initialScope;
+  const prefersReducedMotion = useReducedMotion();
   const [timeframe, setTimeframe] = useState('7d');
   const [filters, setFilters] = useState({ categories: [], countries: [] });
   const [report, setReport] = useState({ mainDiscovery: null, highlights: [] });
@@ -316,7 +317,6 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
 
   const hero = edition.mainDiscovery;
   const accessibleHero = heroOpenCopy ? { ...hero, ...heroOpenCopy, openAccess: true } : hero;
-  const heroGradient = hero ? getCategoryGradient(hero.primaryCategory || '') : 'var(--gradient-brand)';
 
   useEffect(() => {
     let active = true;
@@ -370,31 +370,29 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
           </div>
         </div>
 
+        {/* Editorial section tabs: type-first, an animated hairline underline
+            marks the active scope instead of boxed segmented controls. */}
         <nav className="sr-scopes" aria-label="Ámbito de las novedades">
-          {SCOPES.map(({ id, label, Icon, hint }) => (
-            <motion.button
+          {SCOPES.map(({ id, label, hint }) => (
+            <button
               key={id}
               className={`sr-scope ${scope === id ? 'active' : ''}`}
               onClick={() => handleScopeChange(id)}
               title={hint}
               aria-pressed={scope === id}
             >
-              {scope === id && (
-                <motion.span
-                  className="sr-scope-active-indicator"
-                  layoutId="sr-scope-active-indicator"
-                  transition={{ type: 'spring', stiffness: 420, damping: 36 }}
-                />
-              )}
-              <span className="sr-scope-icon"><Icon size={16} /></span>
-              <span className="sr-scope-copy">
-                <strong>{label}</strong>
-                <small>{hint}</small>
-              </span>
+              <span className="sr-scope-label">{label}</span>
               {id === 'following' && unreadCount > 0 && (
                 <span className="sr-scope-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
               )}
-            </motion.button>
+              {scope === id && (
+                <motion.span
+                  className="sr-scope-underline"
+                  layoutId="sr-scope-underline"
+                  transition={prefersReducedMotion ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 38 }}
+                />
+              )}
+            </button>
           ))}
         </nav>
 
@@ -404,9 +402,9 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
         <motion.p
           className="sr-scope-description"
           key={scope}
-          initial={{ opacity: 0, y: 4 }}
+          initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.18 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.18 }}
         >
           {activeScope.description}
         </motion.p>
@@ -502,32 +500,14 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
             </div>
           )}
 
-          {/* Stats Bar */}
-          <div className="sr-stats-bar">
-            <div className="sr-stat" title="Papers incluidos en esta selección editorial">
-              <BarChart3 size={16} />
-              <div className="sr-stat-info">
-                <span className="sr-stat-number"><AnimatedNumber value={totalPapers} /></span>
-                <span className="sr-stat-label">Seleccionados</span>
-              </div>
-            </div>
-            <div className="sr-stat-divider" />
-            <div className="sr-stat" title="Suma de citas de los papers seleccionados">
-              <TrendingUp size={16} />
-              <div className="sr-stat-info">
-                <span className="sr-stat-number"><AnimatedNumber value={totalCitations} duration={800} /></span>
-                <span className="sr-stat-label">Citas selección</span>
-              </div>
-            </div>
-            <div className="sr-stat-divider" />
-            <div className="sr-stat" title="Papers Open Access dentro de la selección">
-              <Unlock size={16} />
-              <div className="sr-stat-info">
-                <span className="sr-stat-number">{oaCount}/{totalPapers}</span>
-                <span className="sr-stat-label">OA selección</span>
-              </div>
-            </div>
-          </div>
+          {/* Selection facts as one editorial dateline instead of boxed stats. */}
+          <p className="sr-stats-line" aria-label="Resumen de la selección">
+            <strong title="Papers incluidos en esta selección editorial"><AnimatedNumber value={totalPapers} /> papers</strong>
+            <span className="sr-stats-sep" aria-hidden="true">·</span>
+            <strong title="Suma de citas de los papers seleccionados"><AnimatedNumber value={totalCitations} duration={800} /> citas</strong>
+            <span className="sr-stats-sep" aria-hidden="true">·</span>
+            <strong title="Papers en acceso abierto dentro de la selección">{oaCount} de {totalPapers} en abierto</strong>
+          </p>
 
           <section className={`sr-real-trends ${displayTrends.loading ? 'updating' : ''}`} aria-label="Tendencias científicas">
             <div className="sr-trends-heading">
@@ -540,18 +520,25 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
             </div>
             {trendItems.length > 0 ? (
               <div className="sr-trend-list">
-                {trendItems.map((item, index) => (
-                  <div
-                    className="sr-trend-item sr-trend-item--enter"
-                    key={`${showPersonalTrends ? 'personal' : 'panorama'}-${displayTrends.periods?.current?.fromStr || 'current'}-${item.id}`}
-                    style={{ '--trend-order': index }}
-                    title={`${item.currentCount} trabajos en el periodo actual y ${item.previousCount} en el anterior. Confianza ${item.confidence}.`}
-                  >
-                    <span className="sr-trend-name">{item.label}</span>
-                    <strong>+{item.changePercent}% de presencia</strong>
-                    <small>{item.currentCount} trabajos; antes {item.previousCount}</small>
-                  </div>
-                ))}
+                {trendItems.map((item, index) => {
+                  const growth = Math.min(100, Math.max(8, Number(item.changePercent) || 0));
+                  const confidence = String(item.confidence || '').toLowerCase();
+                  return (
+                    <div
+                      className={`sr-trend-row sr-trend-row--enter confidence-${confidence || 'media'}`}
+                      key={`${showPersonalTrends ? 'personal' : 'panorama'}-${displayTrends.periods?.current?.fromStr || 'current'}-${item.id}`}
+                      style={{ '--trend-order': index, '--trend-growth': `${growth}%` }}
+                      title={`${item.currentCount} trabajos en el periodo actual y ${item.previousCount} en el anterior.`}
+                    >
+                      <span className="sr-trend-name">{item.label}</span>
+                      <span className="sr-trend-meter" aria-hidden="true"><i /></span>
+                      <strong className="sr-trend-change">+{item.changePercent}%</strong>
+                      <small className="sr-trend-confidence">
+                        {confidence === 'alta' ? 'confianza alta' : confidence === 'baja' ? 'confianza baja' : 'confianza media'}
+                      </small>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <p className="sr-trends-state">
@@ -581,8 +568,7 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
 
           {/* Hero */}
           {hero && (
-            <section className="sr-hero" style={{ '--hero-glow': heroGradient }}>
-              <div className="sr-hero-glow" />
+            <section className="sr-hero">
               <div className="sr-hero-inner">
                 <div className="sr-hero-kicker">
                   <span className="sr-kicker-cat">{getHeroCategoryLabel(hero).toUpperCase()}</span>
@@ -620,41 +606,35 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
             </section>
           )}
 
-          {/* Bento Highlights */}
+          {/* Secondary picks as a ruled editorial list: faster to scan than the
+              old bento grid and it holds any number of items without gaps. */}
           {edition.highlights?.length > 0 && (
             <section className="sr-highlights">
-              <h2 className="sr-section-label">Otras Investigaciones Destacadas</h2>
-              <div className="sr-bento">
+              <h2 className="sr-section-label">También destacadas</h2>
+              <div className="sr-briefs" role="list">
                 {edition.highlights.map((paper, i) => {
                   const cat = (paper.categories && paper.categories[0]) || paper.primaryCategory || 'General';
-                  const accent = getCategoryGradient(cat);
-                  // Pattern: wide, narrow, narrow, wide, narrow, narrow...
-                  const isWide = i % 3 === 0;
-
+                  const showAbstract = i < 2 && paper.abstract;
                   return (
                     <article
                       key={paper.id}
-                      className={`sr-bento-card ${isWide ? 'wide' : 'narrow'}`}
+                      role="listitem"
+                      className="sr-brief"
                       onClick={() => setSelectedPaper(paper)}
-                      style={{ animationDelay: `${0.3 + i * 0.08}s` }}
+                      style={{ '--brief-order': i }}
                     >
-                      <div className="sr-bento-accent" style={{ background: accent }} />
-                      <div className="sr-bento-body">
-                        <div className="sr-bento-top">
-                          <span className="sr-bento-cat" style={{ background: accent, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                            {cat.split('.')[0]}
-                          </span>
-                          <span className="sr-bento-year">{paper.year}</span>
-                        </div>
-                        <h3 className="sr-bento-title"><ScientificText>{paper.title}</ScientificText></h3>
-                        {isWide && <p className="sr-bento-abstract"><ScientificText>{paper.abstract}</ScientificText></p>}
-                        <div className="sr-bento-bottom">
-                          <div className="sr-bento-tags">
-                            {paper.openAccess && <span className="sr-micro oa"><Unlock size={11} /> Open Access</span>}
-                            {paper.citationCount > 0 && <span className="sr-micro">{paper.citationCount} citas</span>}
-                            {paper.journal && <span className="sr-micro venue">{paper.journal}</span>}
-                          </div>
-                        </div>
+                      <span className="sr-brief-index" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
+                      <div className="sr-brief-body">
+                        <h3 className="sr-brief-title"><ScientificText>{paper.title}</ScientificText></h3>
+                        {showAbstract && <p className="sr-brief-abstract"><ScientificText>{paper.abstract}</ScientificText></p>}
+                        <p className="sr-brief-meta">
+                          <span className="sr-brief-cat">{cat.split('.')[0]}</span>
+                          <span aria-hidden="true">·</span>
+                          <span>{paper.year}</span>
+                          {paper.journal && <><span aria-hidden="true">·</span><span className="sr-brief-venue">{paper.journal}</span></>}
+                          {paper.citationCount > 0 && <><span aria-hidden="true">·</span><span>{paper.citationCount} citas</span></>}
+                          {paper.openAccess && <><span aria-hidden="true">·</span><span className="sr-brief-oa"><Unlock size={11} /> abierto</span></>}
+                        </p>
                       </div>
                     </article>
                   );
