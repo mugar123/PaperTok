@@ -8,7 +8,10 @@ import { getIcon } from '../../utils/icons';
 import { paperLegacyAdapter } from '../../models/Paper';
 import { Download, Pencil, X } from 'lucide-react';
 import { downloadCitationFile } from '../../utils/readingLibrary';
+import { settleWithin } from '../../utils/asyncTiming';
 import './ListsPage.css';
+
+const LISTS_LOAD_DEADLINE_MS = 10_000;
 
 function demoGet(key, fallback) {
   try { const v = localStorage.getItem(`papertok_${key}`); return v ? JSON.parse(v) : fallback; }
@@ -29,6 +32,8 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
   const [savedPapers, setSavedPapers] = useState({});
   const [expandedList, setExpandedList] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [reloadToken, setReloadToken] = useState(0);
 
   const displayLists = useMemo(() => {
     const readLaterIds = Object.values(personalLibrary)
@@ -60,7 +65,10 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
         if (active) setLoading(false);
         return;
       }
-      if (active) setLoading(true);
+      if (active) {
+        setLoading(true);
+        setError(null);
+      }
       try {
         let userLists = [];
         let papers = {};
@@ -73,16 +81,26 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
           likedPaperIds = demoGet('likedPaperIds', []);
           readPaperIds = demoGet('readPaperIds', []);
         } else {
-          const listsRef = collection(db, 'users', user.uid, 'lists');
-          const listsSnapshot = await getDocs(listsRef);
+          // The three collections are independent: fetching them in parallel cuts
+          // the load to one round-trip, and the deadline guarantees the spinner
+          // can never outlive a hung Firestore connection.
+          const snapshots = await settleWithin(
+            Promise.all([
+              getDocs(collection(db, 'users', user.uid, 'lists')),
+              getDocs(collection(db, 'users', user.uid, 'savedPapers')),
+              getDocs(collection(db, 'users', user.uid, 'interactions')),
+            ]),
+            LISTS_LOAD_DEADLINE_MS,
+          );
+          if (snapshots.status !== 'fulfilled') {
+            throw snapshots.status === 'timed_out'
+              ? new Error('La conexión está tardando demasiado.')
+              : (snapshots.reason || new Error('No se pudieron cargar tus listas.'));
+          }
+          const [listsSnapshot, papersSnapshot, intSnapshot] = snapshots.value;
+
           listsSnapshot.forEach((d) => { userLists.push({ id: d.id, ...d.data() }); });
-
-          const papersRef = collection(db, 'users', user.uid, 'savedPapers');
-          const papersSnapshot = await getDocs(papersRef);
           papersSnapshot.forEach((d) => { papers[d.id] = paperLegacyAdapter({ id: d.id, ...d.data() }); });
-
-          const interactionsRef = collection(db, 'users', user.uid, 'interactions');
-          const intSnapshot = await getDocs(interactionsRef);
           intSnapshot.forEach((doc) => {
             const data = doc.data();
             if (data.liked) {
@@ -117,6 +135,7 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
         setSavedPapers(papers);
       } catch (err) {
         console.error('Error loading lists:', err);
+        if (active) setError('No se pudieron cargar tus listas. Comprueba tu conexión e inténtalo de nuevo.');
       } finally {
         if (active) setLoading(false);
       }
@@ -124,7 +143,7 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
 
     loadData();
     return () => { active = false; };
-  }, [user]);
+  }, [user, reloadToken]);
 
   const handleDeleteList = async (listId) => {
     if (listId === '__favorites__' || listId === '__read__' || listId === '__read_later__') return;
@@ -193,6 +212,19 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
         <div className="lists-loading">
           <div className="lists-loading-spinner" />
           <p>Cargando tus listas...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="lists-page">
+        <div className="lists-loading" role="alert">
+          <p>{error}</p>
+          <button className="lists-retry-btn" onClick={() => setReloadToken(token => token + 1)}>
+            Reintentar
+          </button>
         </div>
       </div>
     );
