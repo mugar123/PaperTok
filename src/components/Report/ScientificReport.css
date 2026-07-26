@@ -164,6 +164,10 @@
   color: #fff;
   border-color: transparent;
   background: var(--gradient-brand, linear-gradient(135deg, #7c5cff, #4aa8ff));
+  /* Size the gradient to the border box: with the default padding-box origin the
+     1px transparent border ring gets tiled with the wrapped gradient, which reads
+     as an unpainted notch on the left cap and a purple sliver on the right. */
+  background-origin: border-box;
   box-shadow: 0 4px 16px rgba(124, 92, 255, 0.28);
 }
 
