@@ -53,9 +53,14 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
   const getPaper = (paperId) => savedPapers[paperId] || personalLibrary[paperId]?.paper;
 
   useEffect(() => {
-    if (!user) return;
+    let active = true;
 
     const loadData = async () => {
+      if (!user) {
+        if (active) setLoading(false);
+        return;
+      }
+      if (active) setLoading(true);
       try {
         let userLists = [];
         let papers = {};
@@ -107,16 +112,18 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
           ...userLists,
         ];
         
+        if (!active) return;
         setLists(allLists);
         setSavedPapers(papers);
       } catch (err) {
         console.error('Error loading lists:', err);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
 
     loadData();
+    return () => { active = false; };
   }, [user]);
 
   const handleDeleteList = async (listId) => {

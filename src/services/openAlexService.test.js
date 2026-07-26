@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mapCrossrefInstitutionWork } from './crossrefInstitutionService.js';
-import { isOpenAlexEnrichmentId, mapOpenAlexEnrichmentWork } from './openAlexService.js';
+import { isOpenAlexEnrichmentId, mapOpenAlexEnrichmentWork, dedupeAuthors } from './openAlexService.js';
 
 test('only sends arXiv and OpenAlex identifiers to batch enrichment', () => {
   assert.equal(isOpenAlexEnrichmentId('2503.10761v2'), true);
@@ -86,6 +86,40 @@ test('falls back to current OpenAlex topics when legacy concepts are absent', ()
 
   assert.equal(mapped.enrichment.concepts[0].display_name, 'Quantum sensing');
   assert.equal(mapped.enrichment.primaryTopic.id, 'https://openalex.org/T123');
+});
+
+test('collapses fragmented author records sharing a name, keeping the richest profile', () => {
+  const deduped = dedupeAuthors([
+    { id: 'A1', display_name: 'Geoffrey E. Hinton', works_count: 12, cited_by_count: 100, orcid: null, institution: null },
+    { id: 'A2', display_name: 'Geoffrey E. Hinton', works_count: 400, cited_by_count: 500000, orcid: 'https://orcid.org/0000-0001', institution: 'University of Toronto' },
+    { id: 'A3', display_name: 'geoffrey e hinton', works_count: 3, cited_by_count: 5, orcid: null, institution: null },
+  ]);
+
+  assert.equal(deduped.length, 1);
+  assert.equal(deduped[0].id, 'A2');
+  assert.equal(deduped[0].institution, 'University of Toronto');
+});
+
+test('back-fills a missing institution and ORCID from a weaker duplicate', () => {
+  const deduped = dedupeAuthors([
+    { id: 'B1', display_name: 'Ada Lovelace', works_count: 50, cited_by_count: 900, orcid: null, institution: null },
+    { id: 'B2', display_name: 'Ada Lovelace', works_count: 2, cited_by_count: 3, orcid: 'https://orcid.org/0000-0002', institution: 'Analytical Engine Lab' },
+  ]);
+
+  // B1 wins on works/citations, but adopts the identity fields it was missing.
+  assert.equal(deduped.length, 1);
+  assert.equal(deduped[0].id, 'B1');
+  assert.equal(deduped[0].institution, 'Analytical Engine Lab');
+  assert.equal(deduped[0].orcid, 'https://orcid.org/0000-0002');
+});
+
+test('keeps distinct authors with different names', () => {
+  const deduped = dedupeAuthors([
+    { id: 'C1', display_name: 'Yann LeCun', works_count: 300, cited_by_count: 400000, orcid: null, institution: 'NYU' },
+    { id: 'C2', display_name: 'Yoshua Bengio', works_count: 350, cited_by_count: 450000, orcid: null, institution: 'MILA' },
+  ]);
+
+  assert.equal(deduped.length, 2);
 });
 
 test('maps Crossref institution fallback records into PaperTok papers', () => {

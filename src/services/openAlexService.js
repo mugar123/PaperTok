@@ -530,6 +530,48 @@ export async function getAuthorProfileExact(authorName, arxivId) {
  * @param {string} query 
  * @returns {Promise<Array>}
  */
+/**
+ * Collapse duplicate author entries returned by OpenAlex. The API often yields
+ * several fragmented records for the same researcher (same name, frequently with
+ * an unknown institution). We merge them by normalized name, keeping the richest
+ * profile and back-filling a missing institution from a weaker duplicate.
+ * @param {Array} authors
+ * @returns {Array}
+ */
+export function dedupeAuthors(authors) {
+  const normalizeName = (name) => (name || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[.]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Higher score = the more prominent / canonical profile. Research output is the
+  // primary signal; identity fields (ORCID, institution) are back-filled below.
+  const score = (author) => (author.works_count || 0) * 1e6
+    + (author.cited_by_count || 0);
+
+  const byName = new Map();
+  for (const author of authors) {
+    const key = normalizeName(author.display_name);
+    if (!key) continue;
+    const existing = byName.get(key);
+    if (!existing) {
+      byName.set(key, author);
+      continue;
+    }
+    const winner = score(author) >= score(existing) ? author : existing;
+    const loser = winner === author ? existing : author;
+    // Preserve an institution if the stronger record is missing one.
+    if (!winner.institution && loser.institution) winner.institution = loser.institution;
+    if (!winner.orcid && loser.orcid) winner.orcid = loser.orcid;
+    byName.set(key, winner);
+  }
+
+  return Array.from(byName.values());
+}
+
 export async function searchAuthors(query) {
   if (!query) return [];
   const normalizedQuery = query.trim();
@@ -545,7 +587,7 @@ export async function searchAuthors(query) {
       persistentTtlMs: 24 * 60 * 60 * 1000,
     });
 
-    return (data?.results || []).map(author => ({
+    const authors = (data?.results || []).map(author => ({
       id: author.id,
       display_name: author.display_name,
       works_count: author.works_count || 0,
@@ -555,6 +597,8 @@ export async function searchAuthors(query) {
       institution: author.last_known_institutions?.[0]?.display_name || null,
       concepts: (author.x_concepts || []).slice(0, 5),
     })).filter(author => author.id && author.display_name);
+
+    return dedupeAuthors(authors);
   } catch {
     // Search authors failed
   }

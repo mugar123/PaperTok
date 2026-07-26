@@ -605,8 +605,9 @@ const PaperCard = memo(function PaperCard({
           </div>
           <div className="pc-author-names" style={{ position: 'relative' }}>
             {(paper.authors || []).slice(0, 3).map((author, index) => (
-               <span 
-                 onClick={(e) => { 
+               <span
+                 key={index}
+                 onClick={(e) => {
                    e.stopPropagation(); 
                    const pId = paper.id.startsWith('arxiv:') ? paper.id.split(':')[1] : paper.id;
                    navigate(`/explorer/author/${encodeURIComponent(author.name || author)}?arxivId=${pId}`); 
