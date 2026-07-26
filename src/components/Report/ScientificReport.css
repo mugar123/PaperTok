@@ -5,7 +5,7 @@
 /* ── Page ── */
 .sr {
   width: 100%;
-  max-width: 900px;
+  max-width: 980px;
   margin: 0 auto;
   padding: 100px 24px 120px;
   min-height: 100vh;
@@ -15,7 +15,7 @@
 
 /* ── Header ── */
 .sr-header {
-  margin-bottom: 36px;
+  margin-bottom: 30px;
   animation: sr-fade-down 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -23,7 +23,7 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   padding-bottom: 16px;
 }
@@ -50,15 +50,11 @@
 
 .sr-masthead {
   font-family: var(--font-title);
-  font-size: 34px;
+  font-size: 36px;
   font-weight: 800;
-  letter-spacing: -0.035em;
+  letter-spacing: 0;
   line-height: 1;
-  background: linear-gradient(90deg, #fff 0%, rgba(255, 255, 255, 0.35) 50%, #fff 100%);
-  background-size: 200% auto;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: sr-shimmer 6s ease-in-out infinite;
+  color: #fff;
   margin: 0;
 }
 
@@ -78,7 +74,7 @@
   letter-spacing: 0.03em;
   text-transform: uppercase;
   padding: 6px 12px;
-  border-radius: 999px;
+  border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.03);
   white-space: nowrap;
@@ -127,51 +123,119 @@
 
 /* ── Scope selector (Panorama / Mi campo / Siguiendo) ── */
 .sr-scopes {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 14px;
-  width: fit-content;
-  max-width: 100%;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  width: 100%;
+  margin-bottom: 12px;
+  padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
   animation: sr-fade-up 0.5s 0.1s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .sr-scope {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.02);
-  color: rgba(255, 255, 255, 0.55);
-  font-size: 13.5px;
-  font-weight: 650;
-  padding: 9px 15px;
-  border-radius: 999px;
+  justify-content: flex-start;
+  gap: 10px;
+  min-width: 0;
+  min-height: 54px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: left;
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  position: relative;
+  transition: color 0.2s ease, background 0.2s ease;
+  isolation: isolate;
 }
 
 .sr-scope:hover {
-  color: rgba(255, 255, 255, 0.9);
-  border-color: rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.035);
 }
 
 .sr-scope:active { transform: scale(0.96); }
 
 .sr-scope.active {
   color: #fff;
-  border-color: transparent;
-  background: var(--gradient-brand, linear-gradient(135deg, #7c5cff, #4aa8ff));
-  /* Size the gradient to the border box: with the default padding-box origin the
-     1px transparent border ring gets tiled with the wrapped gradient, which reads
-     as an unpainted notch on the left cap and a purple sliver on the right. */
-  background-origin: border-box;
-  box-shadow: 0 4px 16px rgba(124, 92, 255, 0.28);
+  background: transparent;
+}
+
+.sr-scope-active-indicator {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border: 1px solid rgba(139, 92, 246, 0.34);
+  border-radius: 6px;
+  background:
+    linear-gradient(135deg, rgba(139, 92, 246, 0.16), rgba(65, 153, 210, 0.08)),
+    rgba(255, 255, 255, 0.045);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+}
+
+.sr-scope-icon {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.035);
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.sr-scope.active .sr-scope-icon {
+  border-color: rgba(169, 140, 247, 0.35);
+  color: #c5adff;
+  background: rgba(139, 92, 246, 0.12);
+}
+
+.sr-scope-copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.sr-scope-copy strong {
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 720;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sr-scope-copy small {
+  overflow: hidden;
+  margin-top: 3px;
+  color: rgba(255, 255, 255, 0.32);
+  font-size: 10.5px;
+  font-weight: 550;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sr-scope.active .sr-scope-copy small {
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .sr-scope-badge {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  margin-left: auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -179,20 +243,21 @@
   height: 18px;
   padding: 0 5px;
   border-radius: 999px;
-  background: #ff2d55;
+  background: #df4661;
   color: #fff;
   font-size: 10.5px;
   font-weight: 800;
   line-height: 1;
 }
 
-.sr-scope.active .sr-scope-badge { background: rgba(0, 0, 0, 0.35); }
+.sr-scope.active .sr-scope-badge { background: #df4661; }
 
 .sr-scope-description {
-  margin: 0 0 16px;
+  min-height: 21px;
+  margin: 0 0 18px;
   max-width: 660px;
-  color: var(--text-secondary, rgba(255, 255, 255, 0.55));
-  font-size: 14.5px;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 13.5px;
   line-height: 1.45;
 }
 
@@ -214,13 +279,33 @@
 
 /* The inbox is embedded in the report shell, which is already left-aligned and
    padded, so its standalone right-aligned header actions need realigning. */
-.sr .following-updates-panel { animation: sr-fade-up 0.5s 0.2s cubic-bezier(0.16, 1, 0.3, 1) both; }
-.sr .following-updates-actions { justify-content: flex-start; margin-bottom: 6px; }
-.sr .following-updates-toolbar { padding-top: 4px; }
+.sr .following-updates-panel {
+  animation: sr-fade-up 0.5s 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
 
 @media (max-width: 560px) {
-  .sr-scope { padding: 8px 12px; font-size: 12.5px; }
-  .sr-scope span { white-space: nowrap; }
+  .sr-scopes { gap: 3px; }
+  .sr-scope {
+    justify-content: center;
+    gap: 7px;
+    min-height: 46px;
+    padding: 7px 6px;
+  }
+  .sr-scope-icon {
+    width: 27px;
+    height: 27px;
+  }
+  .sr-scope-copy strong { font-size: 12px; }
+  .sr-scope-copy small { display: none; }
+  .sr-scope-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    font-size: 9px;
+  }
 }
 
 /* ── Tabs ── */
@@ -1096,7 +1181,7 @@
    ============================================ */
 @media (max-width: 700px) {
   .sr { padding: 85px 16px 100px; }
-  .sr-masthead { font-size: 22px; }
+  .sr-masthead { font-size: 28px; }
   .sr-header-top { flex-direction: column; gap: 6px; align-items: flex-start; }
   .sr-tabs { overflow-x: auto; width: 100%; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
   .sr-tabs::-webkit-scrollbar { display: none; }

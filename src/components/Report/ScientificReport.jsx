@@ -21,21 +21,21 @@ const SCOPES = [
     id: 'panorama',
     label: 'Panorama',
     Icon: Globe2,
-    hint: 'Lo más relevante de toda la ciencia',
+    hint: 'Toda la ciencia',
     description: 'La selección editorial del periodo, sin filtrar por tus intereses.',
   },
   {
     id: 'personal',
     label: 'Mi campo',
     Icon: Sparkles,
-    hint: 'La edición ponderada por tus intereses',
+    hint: 'Afinado para ti',
     description: 'La misma edición, reordenada según tus áreas, seguimientos y lecturas.',
   },
   {
     id: 'following',
     label: 'Siguiendo',
     Icon: BellRing,
-    hint: 'Novedades de lo que sigues',
+    hint: 'Tus seguimientos',
     description: 'Publicaciones recientes de los autores, temas, instituciones y proyectos que sigues.',
   },
 ];
@@ -312,12 +312,12 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
       <header className="sr-header">
         <div className="sr-header-top">
           <div className="sr-masthead-block">
-            <span className="sr-eyebrow"><Sparkles size={13} /> Tu resumen científico</span>
+            <span className="sr-eyebrow"><Sparkles size={13} /> Radar científico</span>
             <h1 className="sr-masthead">Novedades</h1>
           </div>
           <div className="sr-header-actions">
             <span className="sr-edition">
-              <Calendar size={12} />
+              {isFollowingScope ? <BellRing size={12} /> : <Calendar size={12} />}
               {isFollowingScope ? 'Tus seguimientos' : getContextText()}
             </span>
           </div>
@@ -325,23 +325,44 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
 
         <nav className="sr-scopes" aria-label="Ámbito de las novedades">
           {SCOPES.map(({ id, label, Icon, hint }) => (
-            <button
+            <motion.button
               key={id}
               className={`sr-scope ${scope === id ? 'active' : ''}`}
               onClick={() => handleScopeChange(id)}
               title={hint}
               aria-pressed={scope === id}
             >
-              <Icon size={15} />
-              <span>{label}</span>
+              {scope === id && (
+                <motion.span
+                  className="sr-scope-active-indicator"
+                  layoutId="sr-scope-active-indicator"
+                  transition={{ type: 'spring', stiffness: 420, damping: 36 }}
+                />
+              )}
+              <span className="sr-scope-icon"><Icon size={16} /></span>
+              <span className="sr-scope-copy">
+                <strong>{label}</strong>
+                <small>{hint}</small>
+              </span>
               {id === 'following' && unreadCount > 0 && (
                 <span className="sr-scope-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
               )}
-            </button>
+            </motion.button>
           ))}
         </nav>
 
-        <p className="sr-scope-description">{activeScope.description}</p>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.p
+            className="sr-scope-description"
+            key={scope}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.18 }}
+          >
+            {activeScope.description}
+          </motion.p>
+        </AnimatePresence>
 
         {!isFollowingScope && (
           <nav className="sr-tabs" aria-label="Periodo de las novedades">

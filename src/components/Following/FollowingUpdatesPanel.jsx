@@ -99,28 +99,38 @@ export default function FollowingUpdatesPanel({ onOpenPdf = () => {}, onSelectPa
 
   return (
     <div className="following-updates-panel">
-      <div className="following-updates-actions">
-        {unreadCount > 0 && (
-          <button className="following-updates-secondary" onClick={markAllSeen}>
-            <CheckCheck size={18} /> Marcar todo como visto
+      <div className="following-updates-overview">
+        <div className="following-updates-overview-copy">
+          <span className={unreadCount > 0 ? 'has-unread' : ''}>
+            {unreadCount > 0 ? <BellRing size={17} /> : <CheckCheck size={17} />}
+            <strong>{unreadCount > 0 ? `${unreadCount} sin ver` : 'Todo al día'}</strong>
+          </span>
+          <small>{lastUpdatedLabel ? `Actualizado a las ${lastUpdatedLabel}` : 'Preparando tu bandeja'}</small>
+        </div>
+        <div className="following-updates-actions">
+          {unreadCount > 0 && (
+            <button className="following-updates-secondary" onClick={markAllSeen}>
+              <CheckCheck size={17} /> Marcar vistos
+            </button>
+          )}
+          <button
+            className={`following-updates-secondary following-updates-email ${emailPreferences.enabled ? 'is-active' : ''}`}
+            onClick={() => setIsEmailModalOpen(true)}
+            title="Configurar novedades por email"
+          >
+            <Mail size={17} /> Email
+            {emailPreferences.enabled && <span className="following-updates-email-dot" />}
           </button>
-        )}
-        <button
-          className={`following-updates-secondary following-updates-email ${emailPreferences.enabled ? 'is-active' : ''}`}
-          onClick={() => setIsEmailModalOpen(true)}
-        >
-          <Mail size={18} /> Email
-          {emailPreferences.enabled && <span className="following-updates-email-dot" />}
-        </button>
-        <button
-          className="following-updates-refresh"
-          onClick={() => refresh()}
-          disabled={refreshing}
-          title="Buscar novedades"
-        >
-          <RefreshCw size={19} className={refreshing ? 'is-spinning' : ''} />
-          <span>Actualizar</span>
-        </button>
+          <button
+            className="following-updates-refresh"
+            onClick={() => refresh()}
+            disabled={refreshing}
+            title="Buscar novedades"
+          >
+            <RefreshCw size={18} className={refreshing ? 'is-spinning' : ''} />
+            <span>{refreshing ? 'Actualizando' : 'Actualizar'}</span>
+          </button>
+        </div>
       </div>
 
       <section className="following-updates-toolbar" aria-label="Filtros de novedades">
@@ -145,10 +155,11 @@ export default function FollowingUpdatesPanel({ onOpenPdf = () => {}, onSelectPa
             );
           })}
         </div>
-        <p className="following-updates-status">
-          {unreadCount > 0 ? <strong>{unreadCount} sin ver</strong> : 'Todo al día'}
-          {lastUpdatedLabel ? ` · Actualizado a las ${lastUpdatedLabel}` : ''}
-        </p>
+        {items.length > 0 && (
+          <p className="following-updates-status">
+            {visibleItems.length} {visibleItems.length === 1 ? 'paper' : 'papers'}
+          </p>
+        )}
       </section>
 
       {loading && items.length === 0 && (
@@ -159,8 +170,13 @@ export default function FollowingUpdatesPanel({ onOpenPdf = () => {}, onSelectPa
       )}
 
       {!loading && followedEntities.length === 0 && (
-        <section className="following-updates-empty">
-          <BellRing size={28} />
+        <section className="following-updates-empty is-no-follows">
+          <div className="following-updates-empty-visual" aria-hidden="true">
+            <UserRound size={18} />
+            <Tag size={18} />
+            <Building2 size={18} />
+            <FolderKanban size={18} />
+          </div>
           <h2>Tu bandeja todavía está vacía</h2>
           <p>Sigue un tema desde cualquier paper, o un autor, institución o proyecto desde su página.</p>
           <button onClick={() => navigate('/')}>Descubrir papers</button>
@@ -213,6 +229,7 @@ export default function FollowingUpdatesPanel({ onOpenPdf = () => {}, onSelectPa
                       return (
                         <button
                           key={`${match.type}:${match.canonicalId}`}
+                          className={`is-${match.type}`}
                           onClick={(event) => {
                             event.stopPropagation();
                             navigate(entityPath(match));
