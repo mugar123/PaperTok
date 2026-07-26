@@ -2,17 +2,21 @@ import { useState, useRef, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useFeed } from '../../context/FeedContext';
-import { LogOut, Settings2, RotateCw, Search } from 'lucide-react';
+import { useFollowingUpdates } from '../../context/FollowingUpdatesContext';
+import { Bell, Bookmark, LogOut, Settings2, RotateCw, Search } from 'lucide-react';
 import EditInterestsModal from '../Settings/EditInterestsModal';
+import EmailNotificationModal from '../Following/EmailNotificationModal';
 import './Navbar.css';
 
 export default function Navbar() {
   const { user, signOut } = useAuth();
   const { feedMode, setFeedMode, refreshFeed, isRefreshing } = useFeed();
+  const { unreadCount, refresh: refreshFollowing, refreshing: isFollowingRefreshing } = useFollowingUpdates();
   const navigate = useNavigate();
   const location = useLocation();
   const [showDropdown, setShowDropdown] = useState(false);
   const [isEditInterestsOpen, setIsEditInterestsOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isReportRefreshing, setIsReportRefreshing] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -42,35 +46,36 @@ export default function Navbar() {
     navigate('/login');
   };
 
-  const handleRefresh = () => {
-    refreshFeed();
-  };
-
   const isFollowingActive = location.pathname === '/following';
-  // /following is the same unified Novedades page opened on its "Siguiendo"
-  // scope, so the Novedades tab stays selected there too.
-  const isReportActive = location.pathname === '/report' || isFollowingActive;
-  const isListsActive = location.pathname === '/lists';
+  const isResearchActive = location.pathname === '/research' || location.pathname === '/report';
   const isHomeActive = location.pathname === '/';
 
   let sliderTransform = 'translateX(0)';
-  if (isReportActive) {
+  if (isResearchActive) {
     sliderTransform = 'translateX(100%)';
-  } else if (isListsActive) {
+  } else if (isFollowingActive) {
     sliderTransform = 'translateX(200%)';
   }
+
+  const showReloadButton = isHomeActive || isResearchActive || isFollowingActive;
+  const reloadSpinning = (isHomeActive && isRefreshing)
+    || (isResearchActive && isReportRefreshing)
+    || (isFollowingActive && isFollowingRefreshing);
+
+  const handleReload = () => {
+    if (isHomeActive) refreshFeed();
+    else if (isResearchActive) window.dispatchEvent(new Event('refreshScientificReport'));
+    else if (isFollowingActive) refreshFollowing();
+  };
 
   return (
     <>
       <nav className="navbar glass-strong">
         <div className="navbar-left">
-          {(isHomeActive || isReportActive) && (
-            <button 
-              className={`navbar-action-btn ${(isHomeActive && isRefreshing) || (isReportActive && isReportRefreshing) ? 'spinning' : ''}`}
-              onClick={() => {
-                if (isHomeActive) handleRefresh();
-                if (isReportActive) window.dispatchEvent(new Event('refreshScientificReport'));
-              }}
+          {showReloadButton && (
+            <button
+              className={`navbar-action-btn ${reloadSpinning ? 'spinning' : ''}`}
+              onClick={handleReload}
               title="Recargar"
             >
               <RotateCw size={20} />
@@ -79,7 +84,7 @@ export default function Navbar() {
         </div>
 
         <div className="navbar-center-pill">
-          <button 
+          <button
             className={`navbar-tab ${isHomeActive && feedMode === 'top' ? 'active' : ''}`}
             onClick={() => {
               if (location.pathname !== '/') navigate('/');
@@ -88,39 +93,43 @@ export default function Navbar() {
           >
             Para ti
           </button>
-          
+
           <NavLink
-            to="/report"
-            className={`navbar-tab ${isReportActive ? 'active' : ''}`}
+            to="/research"
+            className={`navbar-tab ${isResearchActive ? 'active' : ''}`}
           >
-            Novedades
+            Research
           </NavLink>
 
-          <NavLink 
-            to="/lists" 
-            className={`navbar-tab ${isListsActive ? 'active' : ''}`}
+          <NavLink
+            to="/following"
+            className={`navbar-tab navbar-tab--following ${isFollowingActive ? 'active' : ''}`}
+            aria-label={unreadCount ? `Siguiendo, ${unreadCount} sin ver` : 'Siguiendo'}
           >
-            Listas
+            Siguiendo
+            {unreadCount > 0 && (
+              <span className="navbar-tab-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
+            )}
           </NavLink>
-          
+
           {/* Slider indicator */}
-          <div 
-            className="navbar-slider" 
-            style={{ 
+          <div
+            className="navbar-slider"
+            style={{
               transform: sliderTransform
-            }} 
+            }}
           />
         </div>
 
         <div className="navbar-right">
-          <button 
+          <button
             className="navbar-action-btn"
             onClick={() => navigate('/search')}
             title="Buscar"
           >
             <Search size={20} />
           </button>
-          
+
           {user && (
             <div className="navbar-profile" ref={dropdownRef}>
               <button
@@ -148,6 +157,20 @@ export default function Navbar() {
                   <div className="navbar-dropdown-divider" />
                   <button
                     className="navbar-dropdown-item"
+                    onClick={() => { navigate('/lists'); setShowDropdown(false); }}
+                  >
+                    <Bookmark size={16} strokeWidth={2} style={{ display: 'inline-block', verticalAlign: 'text-bottom', marginRight: '8px' }} />
+                    Mis listas
+                  </button>
+                  <button
+                    className="navbar-dropdown-item"
+                    onClick={() => { setIsNotificationsOpen(true); setShowDropdown(false); }}
+                  >
+                    <Bell size={16} strokeWidth={2} style={{ display: 'inline-block', verticalAlign: 'text-bottom', marginRight: '8px' }} />
+                    Notificaciones
+                  </button>
+                  <button
+                    className="navbar-dropdown-item"
                     onClick={() => { setIsEditInterestsOpen(true); setShowDropdown(false); }}
                   >
                     <Settings2 size={16} strokeWidth={2} style={{ display: 'inline-block', verticalAlign: 'text-bottom', marginRight: '8px' }} />
@@ -167,9 +190,13 @@ export default function Navbar() {
         </div>
       </nav>
 
-      <EditInterestsModal 
-        isOpen={isEditInterestsOpen} 
-        onClose={() => setIsEditInterestsOpen(false)} 
+      <EditInterestsModal
+        isOpen={isEditInterestsOpen}
+        onClose={() => setIsEditInterestsOpen(false)}
+      />
+      <EmailNotificationModal
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
       />
     </>
   );

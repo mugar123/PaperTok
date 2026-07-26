@@ -1,64 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useSearchParams } from 'react-router-dom';
 import { useFeed } from '../../context/FeedContext';
-import { useFollowingUpdates } from '../../context/FollowingUpdatesContext';
 import { getScientificReport } from '../../services/scientificReportService';
 import { getScientificTrends } from '../../services/scientificTrendService';
 import { findOpenAccessCopy } from '../../services/unpaywallService';
 import CustomDateSelector from './CustomDateSelector';
 import ReportFilters from './ReportFilters';
-import FollowingUpdatesPanel from '../Following/FollowingUpdatesPanel';
 import PaperCard from '../Feed/PaperCard';
 import { CATEGORIES, getCategoryGradient, getCategoryLabel } from '../../data/categories';
-import { Calendar, Award, Share2, Check, BadgeCheck, Unlock, Lock, ExternalLink, FileText, BarChart3, TrendingUp, X, Flame, Database, Globe2, Sparkles, BellRing } from 'lucide-react';
+import { Calendar, Award, Share2, Check, BadgeCheck, Unlock, Lock, ExternalLink, FileText, BarChart3, TrendingUp, X, Flame, Database, Sparkles } from 'lucide-react';
 import ScientificText from '../ScientificText';
 import 'katex/dist/katex.min.css';
 import './ScientificReport.css';
-
-const SCOPES = [
-  {
-    id: 'panorama',
-    label: 'Panorama',
-    Icon: Globe2,
-    hint: 'Toda la ciencia',
-    description: 'La selección editorial del periodo, sin filtrar por tus intereses.',
-  },
-  {
-    id: 'personal',
-    label: 'Mi campo',
-    Icon: Sparkles,
-    hint: 'Afinado para ti',
-    description: 'La misma edición, reordenada según tus áreas, seguimientos y lecturas.',
-  },
-  {
-    id: 'following',
-    label: 'Siguiendo',
-    Icon: BellRing,
-    hint: 'Tus seguimientos',
-    description: 'Publicaciones recientes de los autores, temas, instituciones y proyectos que sigues.',
-  },
-];
-
-
-// Map the profile's leaf preferences (e.g. "cs.AI") to the top-level area keys
-// ("cs") that the report/trend filters understand.
-function deriveProfileAreas(profile) {
-  const areas = new Set();
-  (profile?.userPreferences || []).forEach((pref) => {
-    if (CATEGORIES[pref]) {
-      areas.add(pref);
-      return;
-    }
-    for (const [areaKey, area] of Object.entries(CATEGORIES)) {
-      if (area.subcategories?.[pref]) {
-        areas.add(areaKey);
-        break;
-      }
-    }
-  });
-  return [...areas].sort();
-}
 
 function getHeroCategoryLabel(paper) {
   const category = typeof paper?.primaryCategory === 'string' ? paper.primaryCategory.trim() : '';
@@ -137,21 +90,11 @@ function ReportCoverage({ coverage }) {
   );
 }
 
-export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope = 'panorama' }) {
-  // The scope lives in the query string, not in state: <Routes> is keyed by
-  // pathname, so navigating to /following from the navbar while already on
-  // /following would not remount and a state-only scope would ignore the click.
-  const [searchParams, setSearchParams] = useSearchParams();
-  const requestedScope = searchParams.get('scope');
-  const scope = SCOPES.some(item => item.id === requestedScope) ? requestedScope : initialScope;
+export default function ScientificReport({ onOpenPdf, onSaveToList }) {
   const [timeframe, setTimeframe] = useState('7d');
   const [filters, setFilters] = useState({ categories: [], countries: [] });
   const [report, setReport] = useState({ mainDiscovery: null, highlights: [] });
   const [trends, setTrends] = useState({ status: 'loading', items: [] });
-  // "Mi campo" narrows the trends to the profile's areas; kept separate from the
-  // shared panorama trends so switching scopes never clobbers either result.
-  const [personalTrends, setPersonalTrends] = useState(null);
-  const personalTrendsRequestId = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -165,19 +108,12 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
   const {
     likedPaperIds, savedPaperIds, readPaperIds,
     toggleLike, markNotInterested, markAsRead, trackViewTime, trackSkip,
-    getRecommendationProfileSnapshot,
   } = useFeed();
-  const { unreadCount, refresh: refreshFollowing } = useFollowingUpdates();
   const getInteractionState = useCallback((paper) => ({
     isLiked: likedPaperIds.has(paper.id),
     isSaved: savedPaperIds.has(paper.id),
     isRead: readPaperIds.has(paper.id),
   }), [likedPaperIds, readPaperIds, savedPaperIds]);
-
-  // Read through a ref so the profile never becomes a fetch dependency: it changes
-  // on every interaction and would otherwise re-request the whole corpus.
-  const profileRef = useRef(getRecommendationProfileSnapshot);
-  useEffect(() => { profileRef.current = getRecommendationProfileSnapshot; }, [getRecommendationProfileSnapshot]);
 
   const fetchReport = useCallback(async (tf, currentFilters, targetPage = 1, options = {}) => {
     const requestId = ++reportRequestId.current;
@@ -191,11 +127,9 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
         : null;
       if (trendPromise) setTrends(current => ({ ...current, loading: true }));
 
-      const profile = profileRef.current?.();
       const data = await getScientificReport(tf, targetPage, currentFilters, {
         forceRefresh: options.forceRefresh,
         trends: trendsRef.current,
-        profile,
       });
       if (requestId === reportRequestId.current) {
         setReport(data);
@@ -212,7 +146,6 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
           try {
             const reranked = await getScientificReport(tf, targetPage, currentFilters, {
               trends: nextTrends,
-              profile: profileRef.current?.(),
             });
             if (requestId === reportRequestId.current) setReport(reranked);
           } catch (rerankError) {
@@ -224,7 +157,7 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
     } catch (err) {
       console.error('Error fetching report:', err);
       if (requestId === reportRequestId.current) {
-        setError('No se pudieron cargar las novedades. Reinténtalo.');
+        setError('No se pudo cargar la edición. Reinténtalo.');
       }
       return false;
     } finally {
@@ -239,54 +172,23 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
     reportRequestId.current += 1;
   }, []);
 
-  // Panorama and personal share one payload, so this deliberately depends on
-  // needsCorpus rather than scope: toggling between those two must not refetch.
-  const needsCorpus = scope !== 'following';
-
   useEffect(() => {
-    if (!needsCorpus) return undefined;
     trendsRef.current = null;
     const requestId = setTimeout(() => {
       setTrends({ status: 'loading', items: [], loading: true });
       fetchReport(timeframe, filters, 1, { refreshTrends: true });
     }, 0);
     return () => clearTimeout(requestId);
-  }, [timeframe, filters, fetchReport, needsCorpus]);
-
-  useEffect(() => {
-    if (scope !== 'personal') return undefined;
-    // A manual category filter already narrows the trends; the personal scope
-    // only adds its own narrowing when the user has not filtered explicitly.
-    if (filters.categories?.length) return undefined;
-    const areas = deriveProfileAreas(profileRef.current?.());
-    if (areas.length === 0) return undefined;
-
-    const requestId = ++personalTrendsRequestId.current;
-    setPersonalTrends({ status: 'loading', items: [], loading: true });
-    getScientificTrends(timeframe, { categories: areas, countries: filters.countries || [] })
-      .then((result) => {
-        if (requestId === personalTrendsRequestId.current) setPersonalTrends({ ...result, loading: false });
-      })
-      .catch(() => {
-        if (requestId === personalTrendsRequestId.current) setPersonalTrends(null);
-      });
-    return undefined;
-  }, [scope, timeframe, filters]);
+  }, [timeframe, filters, fetchReport]);
 
   useEffect(() => {
     const handleGlobalRefresh = () => {
-      // The navbar reload button is scope-aware: on "Siguiendo" it re-queries the
-      // followed entities instead of pointlessly rebuilding the editorial corpus.
-      if (scope === 'following') {
-        refreshFollowing();
-        return;
-      }
       fetchReport(timeframe, filters, 1, { forceRefresh: true, refreshTrends: true });
     };
 
     window.addEventListener('refreshScientificReport', handleGlobalRefresh);
     return () => window.removeEventListener('refreshScientificReport', handleGlobalRefresh);
-  }, [timeframe, filters, fetchReport, scope, refreshFollowing]);
+  }, [timeframe, filters, fetchReport]);
 
   const getContextText = () => {
     if (typeof timeframe === 'object' && timeframe.type === 'custom') {
@@ -302,19 +204,14 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
     else { navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 2000); }
   };
 
-  const isFollowingScope = scope === 'following';
-  const activeScope = SCOPES.find(item => item.id === scope) || SCOPES[0];
-  // Both editions arrive in the same payload, so switching scope is instant.
-  const edition = (scope === 'personal' ? report.editions?.personal : report.editions?.panorama) || report;
-
-  const allPapers = [edition.mainDiscovery, ...(edition.highlights || [])].filter(Boolean);
+  const allPapers = [report.mainDiscovery, ...(report.highlights || [])].filter(Boolean);
   const totalPapers = allPapers.length;
   const totalCitations = allPapers.reduce((sum, p) => sum + (p.citationCount || 0), 0);
-  const heroOpenCopy = heroAccess.paperId === edition.mainDiscovery?.id ? heroAccess.copy : null;
-  const oaCount = allPapers.filter(p => p.openAccess || (p.id === edition.mainDiscovery?.id && heroOpenCopy)).length;
+  const heroOpenCopy = heroAccess.paperId === report.mainDiscovery?.id ? heroAccess.copy : null;
+  const oaCount = allPapers.filter(p => p.openAccess || (p.id === report.mainDiscovery?.id && heroOpenCopy)).length;
   const hasActiveFilters = (filters.categories?.length || 0) + (filters.countries?.length || 0) > 0;
 
-  const hero = edition.mainDiscovery;
+  const hero = report.mainDiscovery;
   const accessibleHero = heroOpenCopy ? { ...hero, ...heroOpenCopy, openAccess: true } : hero;
   const heroGradient = hero ? getCategoryGradient(hero.primaryCategory || '') : 'var(--gradient-brand)';
 
@@ -340,18 +237,9 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
     setSelectedPaper(null);
   };
 
-  const handleScopeChange = useCallback((nextScope) => {
-    setShowCustomPicker(false);
-    setSearchParams(nextScope === initialScope ? {} : { scope: nextScope });
-  }, [initialScope, setSearchParams]);
-
-  const showPersonalTrends = scope === 'personal'
-    && !filters.categories?.length
-    && Boolean(personalTrends);
-  const displayTrends = showPersonalTrends ? personalTrends : trends;
-  const trendItems = displayTrends.items || [];
-  const currentTrendPeriod = formatTrendPeriod(displayTrends.periods?.current);
-  const previousTrendPeriod = formatTrendPeriod(displayTrends.periods?.previous);
+  const trendItems = trends.items || [];
+  const currentTrendPeriod = formatTrendPeriod(trends.periods?.current);
+  const previousTrendPeriod = formatTrendPeriod(trends.periods?.previous);
 
   return (
     <main className="sr">
@@ -359,90 +247,42 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
       <header className="sr-header">
         <div className="sr-header-top">
           <div className="sr-masthead-block">
-            <span className="sr-eyebrow"><Sparkles size={13} /> Radar científico</span>
-            <h1 className="sr-masthead">Novedades</h1>
+            <span className="sr-eyebrow"><Sparkles size={13} /> Edición científica del periodo</span>
+            <h1 className="sr-masthead">Research</h1>
           </div>
           <div className="sr-header-actions">
             <span className="sr-edition">
-              {isFollowingScope ? <BellRing size={12} /> : <Calendar size={12} />}
-              {isFollowingScope ? 'Tus seguimientos' : getContextText()}
+              <Calendar size={12} />
+              {getContextText()}
             </span>
           </div>
         </div>
 
-        <nav className="sr-scopes" aria-label="Ámbito de las novedades">
-          {SCOPES.map(({ id, label, Icon, hint }) => (
-            <motion.button
-              key={id}
-              className={`sr-scope ${scope === id ? 'active' : ''}`}
-              onClick={() => handleScopeChange(id)}
-              title={hint}
-              aria-pressed={scope === id}
-            >
-              {scope === id && (
-                <motion.span
-                  className="sr-scope-active-indicator"
-                  layoutId="sr-scope-active-indicator"
-                  transition={{ type: 'spring', stiffness: 420, damping: 36 }}
-                />
-              )}
-              <span className="sr-scope-icon"><Icon size={16} /></span>
-              <span className="sr-scope-copy">
-                <strong>{label}</strong>
-                <small>{hint}</small>
-              </span>
-              {id === 'following' && unreadCount > 0 && (
-                <span className="sr-scope-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
-              )}
-            </motion.button>
+        <nav className="sr-tabs" aria-label="Periodo de la edición">
+          {timeOptions.map((o) => (
+            <button
+              key={o.id}
+              className={`sr-tab ${timeframe === o.id || (o.id === 'custom' && customRange) ? 'active' : ''}`}
+              onClick={() => {
+                if (o.id === 'custom') setShowCustomPicker(p => !p);
+                else { setTimeframe(o.id); setCustomRange(null); setShowCustomPicker(false); }
+              }}
+            >{o.label}</button>
           ))}
         </nav>
-
-        {/* Keyed on scope so the copy re-mounts and replays its fade on switch.
-            A prior AnimatePresence mode="wait" here stalled mid-exit against the
-            active-indicator layout animation, freezing the panorama description. */}
-        <motion.p
-          className="sr-scope-description"
-          key={scope}
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.18 }}
-        >
-          {activeScope.description}
-        </motion.p>
-
-        {!isFollowingScope && (
-          <nav className="sr-tabs" aria-label="Periodo de las novedades">
-            {timeOptions.map((o) => (
-              <button
-                key={o.id}
-                className={`sr-tab ${timeframe === o.id || (o.id === 'custom' && customRange) ? 'active' : ''}`}
-                onClick={() => {
-                  if (o.id === 'custom') setShowCustomPicker(p => !p);
-                  else { setTimeframe(o.id); setCustomRange(null); setShowCustomPicker(false); }
-                }}
-              >{o.label}</button>
-            ))}
-          </nav>
-        )}
       </header>
 
-      {!isFollowingScope && showCustomPicker && (
+      {showCustomPicker && (
         <CustomDateSelector
           onApply={(rangeObj) => { setCustomRange(rangeObj); setTimeframe(rangeObj); setShowCustomPicker(false); }}
           onCancel={() => setShowCustomPicker(false)}
         />
       )}
 
-      {!isFollowingScope && <ReportFilters filters={filters} onChange={setFilters} />}
+      <ReportFilters filters={filters} onChange={setFilters} />
 
-      {isFollowingScope && (
-        <FollowingUpdatesPanel onOpenPdf={onOpenPdf} onSelectPaper={setSelectedPaper} />
-      )}
-
-
-      {isFollowingScope ? null : loading && totalPapers === 0 ? (
-        <div className="sr-state"><div className="sr-spinner" /><p>Compilando edición estable...</p></div>
+      {loading && totalPapers === 0 ? (
+        <div className="sr-state"><div className="sr-spinner" /><p>Compilando la edición...</p></div>
       ) : error && totalPapers === 0 ? (
         <div className="sr-state"><p>{error}</p><button className="sr-retry" onClick={() => fetchReport(timeframe, filters, 1, { refreshTrends: true })}>Reintentar</button></div>
       ) : totalPapers === 0 ? (
@@ -488,19 +328,9 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
           key={typeof timeframe === 'string' ? timeframe : JSON.stringify(timeframe)}
         >
 
-          {loading && <div className="sr-update-line" aria-label="Actualizando novedades" />}
+          {loading && <div className="sr-update-line" aria-label="Actualizando la edición" />}
 
           <ReportCoverage coverage={report.coverage} />
-
-          {scope === 'personal' && !edition.personalized && (
-            <div className="sr-scope-note">
-              <Sparkles size={15} aria-hidden="true" />
-              <span>
-                Todavía no tenemos señales suficientes para personalizar esta edición.
-                Sigue autores o temas y da me gusta a algunos papers: mientras tanto verás el panorama general.
-              </span>
-            </div>
-          )}
 
           {/* Stats Bar */}
           <div className="sr-stats-bar">
@@ -529,12 +359,12 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
             </div>
           </div>
 
-          <section className={`sr-real-trends ${displayTrends.loading ? 'updating' : ''}`} aria-label="Tendencias científicas">
+          <section className={`sr-real-trends ${trends.loading ? 'updating' : ''}`} aria-label="Tendencias científicas">
             <div className="sr-trends-heading">
-              <span><TrendingUp size={15} /> {showPersonalTrends ? 'Temas en crecimiento en tus áreas' : 'Temas en crecimiento'}</span>
+              <span><TrendingUp size={15} /> Temas en crecimiento</span>
               {currentTrendPeriod && previousTrendPeriod && (
                 <small>
-                  {displayTrends.provisional ? 'Datos provisionales · ' : ''}{currentTrendPeriod} comparado con {previousTrendPeriod}
+                  {trends.provisional ? 'Datos provisionales · ' : ''}{currentTrendPeriod} comparado con {previousTrendPeriod}
                 </small>
               )}
             </div>
@@ -543,7 +373,7 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
                 {trendItems.map((item, index) => (
                   <div
                     className="sr-trend-item sr-trend-item--enter"
-                    key={`${showPersonalTrends ? 'personal' : 'panorama'}-${displayTrends.periods?.current?.fromStr || 'current'}-${item.id}`}
+                    key={`${trends.periods?.current?.fromStr || 'current'}-${item.id}`}
                     style={{ '--trend-order': index }}
                     title={`${item.currentCount} trabajos en el periodo actual y ${item.previousCount} en el anterior. Confianza ${item.confidence}.`}
                   >
@@ -555,9 +385,9 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
               </div>
             ) : (
               <p className="sr-trends-state">
-                {displayTrends.loading || displayTrends.status === 'loading'
+                {trends.loading || trends.status === 'loading'
                   ? 'Calculando cambios frente al periodo anterior...'
-                  : displayTrends.status === 'unavailable'
+                  : trends.status === 'unavailable'
                     ? 'Las tendencias no están disponibles ahora; la selección de papers sigue activa.'
                     : 'Aún no hay volumen suficiente para detectar una tendencia fiable.'}
               </p>
@@ -565,14 +395,14 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
           </section>
 
           {/* These describe the selected edition; they are not presented as measured trends. */}
-          {displayTrends.status !== 'active' && edition.featuredConcepts?.length > 0 && (
+          {trends.status !== 'active' && report.featuredConcepts?.length > 0 && (
             <div className="sr-trending-topics">
               <span className="sr-trending-label">
                 <Flame size={14} className="sr-flame-icon" />
                 Temas de esta selección:
               </span>
               <div className="sr-trending-pills">
-                {edition.featuredConcepts.map((concept) => (
+                {report.featuredConcepts.map((concept) => (
                   <span key={concept} className="sr-trending-pill">{concept}</span>
                 ))}
               </div>
@@ -621,11 +451,11 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
           )}
 
           {/* Bento Highlights */}
-          {edition.highlights?.length > 0 && (
+          {report.highlights?.length > 0 && (
             <section className="sr-highlights">
               <h2 className="sr-section-label">Otras Investigaciones Destacadas</h2>
               <div className="sr-bento">
-                {edition.highlights.map((paper, i) => {
+                {report.highlights.map((paper, i) => {
                   const cat = (paper.categories && paper.categories[0]) || paper.primaryCategory || 'General';
                   const accent = getCategoryGradient(cat);
                   // Pattern: wide, narrow, narrow, wide, narrow, narrow...

@@ -277,11 +277,6 @@
 
 .sr-scope-note svg { flex-shrink: 0; margin-top: 1px; color: #a98cf7; }
 
-/* The inbox is embedded in the report shell, which is already left-aligned and
-   padded, so its standalone right-aligned header actions need realigning. */
-.sr .following-updates-panel {
-  animation: sr-fade-up 0.5s 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
-}
 
 @media (max-width: 560px) {
   .sr-scopes { gap: 3px; }

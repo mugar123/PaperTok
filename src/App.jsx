@@ -18,6 +18,7 @@ import SaveToListModal from './components/Lists/SaveToListModal'
 import SearchPage from './components/Search/SearchPage'
 import EntityExplorer from './components/Explorer/EntityExplorer'
 import ScientificReport from './components/Report/ScientificReport'
+import FollowingFeedPage from './components/Following/FollowingFeedPage'
 import './App.css'
 
 function AppContent() {
@@ -69,7 +70,7 @@ function AppContent() {
             }
           />
           <Route
-            path="/report"
+            path="/research"
             element={
               <ProtectedRoute>
                 <PageTransition>
@@ -82,16 +83,17 @@ function AppContent() {
               </ProtectedRoute>
             }
           />
+          {/* Legacy Novedades/Reporte links keep working. */}
+          <Route path="/report" element={<Navigate to="/research" replace />} />
           <Route
             path="/following"
             element={
               <ProtectedRoute>
                 <PageTransition>
                   <Navbar />
-                  <ScientificReport
+                  <FollowingFeedPage
                     onOpenPdf={setPdfPaper}
                     onSaveToList={setSaveModalPaper}
-                    initialScope="following"
                   />
                 </PageTransition>
               </ProtectedRoute>

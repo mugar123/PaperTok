@@ -265,7 +265,8 @@
   }
 
   .navbar-center-pill {
-    width: 210px;
+    /* "Research" and "Siguiendo" need more room than the old labels. */
+    width: 246px;
   }
 
   .navbar-tab {
@@ -274,6 +275,16 @@
     font-size: 11px;
     padding: 6px 0;
     text-align: center;
+    justify-content: center;
+  }
+
+  .navbar-tab--following { gap: 3px; }
+
+  .navbar-tab-badge {
+    min-width: 14px;
+    height: 14px;
+    padding: 0 4px;
+    font-size: 9px;
   }
   
   .navbar-slider {
@@ -293,7 +304,7 @@
 
 @media (max-width: 420px) {
   .navbar-center-pill {
-    width: 180px;
+    width: 222px;
   }
 
   .navbar-tab {
@@ -308,4 +319,27 @@
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* Unread badge on the Siguiendo tab */
+.navbar-tab--following {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.navbar-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #df4661;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
 }
