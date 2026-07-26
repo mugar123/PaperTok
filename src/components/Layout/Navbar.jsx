@@ -48,10 +48,12 @@ export default function Navbar() {
     refreshFeed();
   };
 
-  const isReportActive = location.pathname === '/report';
+  const isFollowingActive = location.pathname === '/following';
+  // /following is the same unified Novedades page opened on its "Siguiendo"
+  // scope, so the Novedades tab stays selected there too.
+  const isReportActive = location.pathname === '/report' || isFollowingActive;
   const isListsActive = location.pathname === '/lists';
   const isHomeActive = location.pathname === '/';
-  const isFollowingActive = location.pathname === '/following';
 
   let sliderTransform = 'translateX(0)';
   if (isReportActive) {
@@ -89,11 +91,11 @@ export default function Navbar() {
             Para ti
           </button>
           
-          <NavLink 
-            to="/report" 
+          <NavLink
+            to="/report"
             className={`navbar-tab ${isReportActive ? 'active' : ''}`}
           >
-            Reporte
+            Novedades
           </NavLink>
 
           <NavLink 

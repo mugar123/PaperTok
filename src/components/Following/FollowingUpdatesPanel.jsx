@@ -18,9 +18,9 @@ import { useFollowing } from '../../context/FollowingContext';
 import { useFollowingUpdates } from '../../context/FollowingUpdatesContext';
 import { useFeed } from '../../context/FeedContext';
 import { getFollowingUpdatePaperKey } from '../../utils/followingUpdates';
-import './FollowingUpdatesPage.css';
 import EmailNotificationModal from './EmailNotificationModal';
 import { useEmailNotifications } from '../../context/EmailNotificationsContext';
+import './FollowingUpdatesPage.css';
 
 const TYPE_CONFIG = {
   author: { label: 'Autores', singular: 'Autor', Icon: UserRound },
@@ -51,7 +51,13 @@ function entityPath(match) {
   return `/explorer/${match.type}/${encodeURIComponent(match.canonicalId)}`;
 }
 
-export default function FollowingUpdatesPage({ onOpenPdf }) {
+/**
+ * The "Siguiendo" scope of the unified report: recent work from the entities the
+ * user follows, ordered by date and annotated with the follow that surfaced it.
+ * Rendered inside ScientificReport; keeps its own inbox affordances (unread,
+ * email digest, manual refresh) because they only apply to this scope.
+ */
+export default function FollowingUpdatesPanel({ onOpenPdf = () => {}, onSelectPaper = null }) {
   const navigate = useNavigate();
   const { followedEntities } = useFollowing();
   const {
@@ -87,41 +93,35 @@ export default function FollowingUpdatesPage({ onOpenPdf }) {
 
   const openPaper = (paper) => {
     markSeen(paper);
-    onOpenPdf(paper);
+    if (onSelectPaper) onSelectPaper(paper);
+    else onOpenPdf(paper);
   };
 
   return (
-    <main className="following-updates-page">
-      <header className="following-updates-header">
-        <div>
-          <span className="following-updates-eyebrow"><BellRing size={15} /> NOVEDADES SEGUIDAS</span>
-          <h1>Tu radar científico</h1>
-          <p>Publicaciones recientes de los autores, temas, instituciones y proyectos que sigues.</p>
-        </div>
-        <div className="following-updates-actions">
-          {unreadCount > 0 && (
-            <button className="following-updates-secondary" onClick={markAllSeen}>
-              <CheckCheck size={18} /> Marcar todo como visto
-            </button>
-          )}
-          <button
-            className={`following-updates-secondary following-updates-email ${emailPreferences.enabled ? 'is-active' : ''}`}
-            onClick={() => setIsEmailModalOpen(true)}
-          >
-            <Mail size={18} /> Email
-            {emailPreferences.enabled && <span className="following-updates-email-dot" />}
+    <div className="following-updates-panel">
+      <div className="following-updates-actions">
+        {unreadCount > 0 && (
+          <button className="following-updates-secondary" onClick={markAllSeen}>
+            <CheckCheck size={18} /> Marcar todo como visto
           </button>
-          <button
-            className="following-updates-refresh"
-            onClick={() => refresh()}
-            disabled={refreshing}
-            title="Buscar novedades"
-          >
-            <RefreshCw size={19} className={refreshing ? 'is-spinning' : ''} />
-            <span>Actualizar</span>
-          </button>
-        </div>
-      </header>
+        )}
+        <button
+          className={`following-updates-secondary following-updates-email ${emailPreferences.enabled ? 'is-active' : ''}`}
+          onClick={() => setIsEmailModalOpen(true)}
+        >
+          <Mail size={18} /> Email
+          {emailPreferences.enabled && <span className="following-updates-email-dot" />}
+        </button>
+        <button
+          className="following-updates-refresh"
+          onClick={() => refresh()}
+          disabled={refreshing}
+          title="Buscar novedades"
+        >
+          <RefreshCw size={19} className={refreshing ? 'is-spinning' : ''} />
+          <span>Actualizar</span>
+        </button>
+      </div>
 
       <section className="following-updates-toolbar" aria-label="Filtros de novedades">
         <div className="following-updates-filters">
@@ -267,6 +267,6 @@ export default function FollowingUpdatesPage({ onOpenPdf }) {
         </p>
       )}
       <EmailNotificationModal isOpen={isEmailModalOpen} onClose={() => setIsEmailModalOpen(false)} />
-    </main>
+    </div>
   );
 }

@@ -18,7 +18,6 @@ import SaveToListModal from './components/Lists/SaveToListModal'
 import SearchPage from './components/Search/SearchPage'
 import EntityExplorer from './components/Explorer/EntityExplorer'
 import ScientificReport from './components/Report/ScientificReport'
-import FollowingUpdatesPage from './components/Following/FollowingUpdatesPage'
 import './App.css'
 
 function AppContent() {
@@ -89,7 +88,11 @@ function AppContent() {
               <ProtectedRoute>
                 <PageTransition>
                   <Navbar />
-                  <FollowingUpdatesPage onOpenPdf={setPdfPaper} />
+                  <ScientificReport
+                    onOpenPdf={setPdfPaper}
+                    onSaveToList={setSaveModalPaper}
+                    initialScope="following"
+                  />
                 </PageTransition>
               </ProtectedRoute>
             }

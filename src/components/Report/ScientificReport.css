@@ -22,17 +22,38 @@
 .sr-header-top {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: flex-end;
   margin-bottom: 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  padding-bottom: 14px;
+  padding-bottom: 16px;
 }
+
+.sr-masthead-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sr-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
+  animation: sr-fade-in 0.7s 0.15s both;
+}
+
+.sr-eyebrow svg { color: #a98cf7; }
 
 .sr-masthead {
   font-family: var(--font-title);
-  font-size: 28px;
+  font-size: 34px;
   font-weight: 800;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.035em;
+  line-height: 1;
   background: linear-gradient(90deg, #fff 0%, rgba(255, 255, 255, 0.35) 50%, #fff 100%);
   background-size: 200% auto;
   -webkit-background-clip: text;
@@ -48,13 +69,23 @@
 }
 
 .sr-edition {
-  font-size: 12px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.3);
-  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 650;
+  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 0.03em;
   text-transform: uppercase;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  white-space: nowrap;
   animation: sr-fade-in 0.8s 0.3s both;
 }
+
+.sr-edition svg { color: rgba(255, 255, 255, 0.4); }
 
 .sr-refresh-btn {
   background: transparent;
@@ -92,6 +123,100 @@
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* ── Scope selector (Panorama / Mi campo / Siguiendo) ── */
+.sr-scopes {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+  width: fit-content;
+  max-width: 100%;
+  flex-wrap: wrap;
+  animation: sr-fade-up 0.5s 0.1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.sr-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 13.5px;
+  font-weight: 650;
+  padding: 9px 15px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+.sr-scope:hover {
+  color: rgba(255, 255, 255, 0.9);
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.sr-scope:active { transform: scale(0.96); }
+
+.sr-scope.active {
+  color: #fff;
+  border-color: transparent;
+  background: var(--gradient-brand, linear-gradient(135deg, #7c5cff, #4aa8ff));
+  box-shadow: 0 4px 16px rgba(124, 92, 255, 0.28);
+}
+
+.sr-scope-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ff2d55;
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.sr-scope.active .sr-scope-badge { background: rgba(0, 0, 0, 0.35); }
+
+.sr-scope-description {
+  margin: 0 0 16px;
+  max-width: 660px;
+  color: var(--text-secondary, rgba(255, 255, 255, 0.55));
+  font-size: 14.5px;
+  line-height: 1.45;
+}
+
+.sr-scope-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(124, 92, 255, 0.22);
+  background: rgba(124, 92, 255, 0.08);
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.sr-scope-note svg { flex-shrink: 0; margin-top: 1px; color: #a98cf7; }
+
+/* The inbox is embedded in the report shell, which is already left-aligned and
+   padded, so its standalone right-aligned header actions need realigning. */
+.sr .following-updates-panel { animation: sr-fade-up 0.5s 0.2s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.sr .following-updates-actions { justify-content: flex-start; margin-bottom: 6px; }
+.sr .following-updates-toolbar { padding-top: 4px; }
+
+@media (max-width: 560px) {
+  .sr-scope { padding: 8px 12px; font-size: 12.5px; }
+  .sr-scope span { white-space: nowrap; }
 }
 
 /* ── Tabs ── */
@@ -373,9 +498,16 @@
 
 .sr-trend-item {
   min-width: 0;
-  padding: 10px 11px;
+  padding: 11px 12px;
   border-left: 2px solid rgba(52, 211, 153, 0.55);
+  border-radius: 0 8px 8px 0;
   background: rgba(255, 255, 255, 0.025);
+  transition: background 0.25s, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sr-trend-item:hover {
+  background: rgba(52, 211, 153, 0.08);
+  transform: translateY(-2px);
 }
 
 @keyframes sr-trend-enter {
@@ -445,13 +577,14 @@
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 22px;
+  justify-content: center;
+  gap: 13px;
+  padding: 0 18px;
   color: rgba(255, 255, 255, 0.4);
   transition: color 0.3s;
 }
 
-.sr-stat:hover { color: rgba(255, 255, 255, 0.6); }
+.sr-stat:hover { color: rgba(255, 255, 255, 0.7); }
 .sr-stat svg { flex-shrink: 0; transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
 .sr-stat:hover svg { transform: scale(1.15); }
 
@@ -480,8 +613,9 @@
 
 .sr-stat-divider {
   width: 1px;
-  background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.08), transparent);
+  background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.14), transparent);
   align-self: stretch;
+  margin: 4px 0;
 }
 
 /* ============================================
