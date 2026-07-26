@@ -1,4 +1,4 @@
-import { useRef, useEffect, useLayoutEffect, useCallback, useState } from 'react';
+import { useRef, useEffect, useLayoutEffect, useCallback, useMemo, useState } from 'react';
 import { useFeed } from '../../context/FeedContext';
 
 import PaperCard from './PaperCard';
@@ -10,15 +10,46 @@ import {
 } from '../../utils/wheelNavigation';
 import './FeedContainer.css';
 
-let savedFeedScroll = 0;
+// Per-surface scroll memory: the Siguiendo feed shares this container with
+// Para ti and must not clobber its saved position.
+const savedScrollByKey = {};
 const WHEEL_GESTURE_RESET_MS = 180;
 const SCROLL_IDLE_DELAY_MS = 120;
 
-export default function FeedContainer({ onOpenPdf, onSaveToList }) {
-  const { 
-    papers, loading, error, hasMore, loadMore, refreshFeed, isRefreshing, trackPdfOpened,
+/**
+ * `source` swaps WHERE the papers come from while every interaction (like,
+ * save, read, view tracking) keeps flowing into the recommendation profile
+ * through useFeed. Shape: { papers, loading, error, hasMore, loadMore,
+ * refresh, isRefreshing, emptyState, showFollowReason, onPaperViewed }.
+ */
+export default function FeedContainer({ onOpenPdf, onSaveToList, source = null, scrollKey = 'forYou' }) {
+  const feed = useFeed();
+  const {
+    trackPdfOpened,
     likedPaperIds, savedPaperIds, readPaperIds, toggleLike, markNotInterested, markAsRead, trackViewTime, trackSkip
-  } = useFeed();
+  } = feed;
+  const papers = source ? source.papers : feed.papers;
+  const loading = source ? source.loading : feed.loading;
+  const error = source ? source.error : feed.error;
+  const hasMore = source ? Boolean(source.hasMore) : feed.hasMore;
+  const loadMore = useMemo(
+    () => (source ? (source.loadMore || (() => {})) : feed.loadMore),
+    [source, feed.loadMore],
+  );
+  const refreshFeed = useMemo(
+    () => (source ? (source.refresh || (() => {})) : feed.refreshFeed),
+    [source, feed.refreshFeed],
+  );
+  const isRefreshing = source ? Boolean(source.isRefreshing) : feed.isRefreshing;
+
+  const handleViewTime = useCallback((paper, seconds) => {
+    source?.onPaperViewed?.(paper);
+    trackViewTime(paper, seconds);
+  }, [source, trackViewTime]);
+  const handleSkip = useCallback((paper) => {
+    source?.onPaperViewed?.(paper);
+    trackSkip(paper);
+  }, [source, trackSkip]);
   const feedRef = useRef(null);
   const sentinelRef = useRef(null);
   const [showLoader, setShowLoader] = useState(false);
@@ -36,17 +67,17 @@ export default function FeedContainer({ onOpenPdf, onSaveToList }) {
   useLayoutEffect(() => {
     if (restoreAttemptedRef.current || papers.length === 0) return;
     restoreAttemptedRef.current = true;
-    if (feedRef.current && savedFeedScroll > 0) {
+    if (feedRef.current && (savedScrollByKey[scrollKey] || 0) > 0) {
       const el = feedRef.current;
       const prevBehavior = el.style.scrollBehavior;
       el.style.scrollBehavior = 'auto'; // Force instant jump
-      el.scrollTop = savedFeedScroll;
+      el.scrollTop = savedScrollByKey[scrollKey];
 
       requestAnimationFrame(() => {
         el.style.scrollBehavior = prevBehavior;
       });
     }
-  }, [papers.length]);
+  }, [papers.length, scrollKey]);
 
   // Only show the atom loader if loading takes more than 1.5s
   useEffect(() => {
@@ -216,14 +247,14 @@ export default function FeedContainer({ onOpenPdf, onSaveToList }) {
 
   const handleScroll = useCallback((event) => {
     const container = event.currentTarget;
-    savedFeedScroll = container.scrollTop;
+    savedScrollByKey[scrollKey] = container.scrollTop;
     container.classList.add('feed-container--scrolling');
 
     if (scrollIdleTimerRef.current) clearTimeout(scrollIdleTimerRef.current);
     scrollIdleTimerRef.current = setTimeout(() => {
       container.classList.remove('feed-container--scrolling');
     }, SCROLL_IDLE_DELAY_MS);
-  }, []);
+  }, [scrollKey]);
 
   if (error && papers.length === 0) {
     return (
@@ -248,13 +279,18 @@ export default function FeedContainer({ onOpenPdf, onSaveToList }) {
         </div>
       );
     }
+    // Alternative sources bring their own empty state; Siguiendo must never
+    // fall back to the generic "amplía tus intereses" copy of Para ti.
+    if (source?.emptyState && !loading && !isRefreshing) {
+      return <div className="feed-empty">{source.emptyState}</div>;
+    }
     return (
       <div className="feed-empty">
         <div className="atom-loader">
           <AnimatedAtom size={80} strokeWidth={1} className="atom-loader-icon" />
         </div>
         <h2>{loading || isRefreshing ? 'Sintetizando papers...' : 'Buscando descubrimientos...'}</h2>
-        <p>{loading || isRefreshing ? 'Conectando con arXiv para traer lo último en ciencia' : 'Aún no hay papers en tus categorías. Prueba a ampliar tus intereses.'}</p>
+        <p>{loading || isRefreshing ? 'Conectando con las fuentes para traer lo último en ciencia' : 'Aún no hay papers en tus categorías. Prueba a ampliar tus intereses.'}</p>
         {!loading && (
           <button className="feed-retry-btn" onClick={handleRefresh}>
             Explorar de nuevo
@@ -277,11 +313,12 @@ export default function FeedContainer({ onOpenPdf, onSaveToList }) {
               onLike={toggleLike}
               onNotInterested={markNotInterested}
               onMarkAsRead={markAsRead}
-              trackViewTime={trackViewTime}
-              trackSkip={trackSkip}
+              trackViewTime={handleViewTime}
+              trackSkip={handleSkip}
               onOpenPdf={handleOpenPdf}
               onSaveToList={handleSaveToList}
               getInteractionState={getInteractionState}
+              showFollowReason={Boolean(source?.showFollowReason)}
             />
           </div>
         ))}

@@ -19,6 +19,7 @@ import { resolvePaperTopic, topicExplorerPath } from '../../utils/topicNavigatio
 import AIExplanationSheet from './AIExplanationSheet';
 import { canExplainPaper } from '../../services/aiExplanationService';
 import { buildPaperTopicTags } from '../../utils/paperTopicTags.js';
+import { buildFollowReasonLabel } from '../../utils/followingFeed.js';
 
 // Pool of icons for the background constellation per area
 const AREA_BG_ICONS = {
@@ -56,7 +57,8 @@ const PaperCard = memo(function PaperCard({
   onOpenPdf = () => {},
   onSaveToList = () => {},
   getInteractionState = () => ({}),
-  hideScrollHint = false
+  hideScrollHint = false,
+  showFollowReason = false
 }) {
   const [expanded, setExpanded] = useState(false);
   const [showHeart, setShowHeart] = useState(false);
@@ -444,6 +446,23 @@ const PaperCard = memo(function PaperCard({
       </svg>
 
       <div className="pc-body">
+        {showFollowReason && (() => {
+          const reason = buildFollowReasonLabel(
+            (paper._followedEntityMatches || []).filter(match => typeof match === 'object'),
+          );
+          if (!reason) return null;
+          return (
+            <motion.div
+              className="pc-follow-reason"
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: prefersReducedMotion ? 0 : 0.25 }}
+            >
+              <UserCheck size={13} aria-hidden="true" />
+              <span>{reason}</span>
+            </motion.div>
+          );
+        })()}
         <div className="pc-meta">
           {primaryTopic ? (
             <button
