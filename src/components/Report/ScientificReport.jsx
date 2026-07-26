@@ -41,6 +41,25 @@ const SCOPES = [
 ];
 
 
+// Map the profile's leaf preferences (e.g. "cs.AI") to the top-level area keys
+// ("cs") that the report/trend filters understand.
+function deriveProfileAreas(profile) {
+  const areas = new Set();
+  (profile?.userPreferences || []).forEach((pref) => {
+    if (CATEGORIES[pref]) {
+      areas.add(pref);
+      return;
+    }
+    for (const [areaKey, area] of Object.entries(CATEGORIES)) {
+      if (area.subcategories?.[pref]) {
+        areas.add(areaKey);
+        break;
+      }
+    }
+  });
+  return [...areas].sort();
+}
+
 function getHeroCategoryLabel(paper) {
   const category = typeof paper?.primaryCategory === 'string' ? paper.primaryCategory.trim() : '';
   if (!category) return 'Investigación científica';
@@ -129,6 +148,10 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
   const [filters, setFilters] = useState({ categories: [], countries: [] });
   const [report, setReport] = useState({ mainDiscovery: null, highlights: [] });
   const [trends, setTrends] = useState({ status: 'loading', items: [] });
+  // "Mi campo" narrows the trends to the profile's areas; kept separate from the
+  // shared panorama trends so switching scopes never clobbers either result.
+  const [personalTrends, setPersonalTrends] = useState(null);
+  const personalTrendsRequestId = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -231,6 +254,26 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
   }, [timeframe, filters, fetchReport, needsCorpus]);
 
   useEffect(() => {
+    if (scope !== 'personal') return undefined;
+    // A manual category filter already narrows the trends; the personal scope
+    // only adds its own narrowing when the user has not filtered explicitly.
+    if (filters.categories?.length) return undefined;
+    const areas = deriveProfileAreas(profileRef.current?.());
+    if (areas.length === 0) return undefined;
+
+    const requestId = ++personalTrendsRequestId.current;
+    setPersonalTrends({ status: 'loading', items: [], loading: true });
+    getScientificTrends(timeframe, { categories: areas, countries: filters.countries || [] })
+      .then((result) => {
+        if (requestId === personalTrendsRequestId.current) setPersonalTrends({ ...result, loading: false });
+      })
+      .catch(() => {
+        if (requestId === personalTrendsRequestId.current) setPersonalTrends(null);
+      });
+    return undefined;
+  }, [scope, timeframe, filters]);
+
+  useEffect(() => {
     const handleGlobalRefresh = () => {
       // The navbar reload button is scope-aware: on "Siguiendo" it re-queries the
       // followed entities instead of pointlessly rebuilding the editorial corpus.
@@ -302,9 +345,13 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
     setSearchParams(nextScope === initialScope ? {} : { scope: nextScope });
   }, [initialScope, setSearchParams]);
 
-  const trendItems = trends.items || [];
-  const currentTrendPeriod = formatTrendPeriod(trends.periods?.current);
-  const previousTrendPeriod = formatTrendPeriod(trends.periods?.previous);
+  const showPersonalTrends = scope === 'personal'
+    && !filters.categories?.length
+    && Boolean(personalTrends);
+  const displayTrends = showPersonalTrends ? personalTrends : trends;
+  const trendItems = displayTrends.items || [];
+  const currentTrendPeriod = formatTrendPeriod(displayTrends.periods?.current);
+  const previousTrendPeriod = formatTrendPeriod(displayTrends.periods?.previous);
 
   return (
     <main className="sr">
@@ -351,18 +398,18 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
           ))}
         </nav>
 
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.p
-            className="sr-scope-description"
-            key={scope}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.18 }}
-          >
-            {activeScope.description}
-          </motion.p>
-        </AnimatePresence>
+        {/* Keyed on scope so the copy re-mounts and replays its fade on switch.
+            A prior AnimatePresence mode="wait" here stalled mid-exit against the
+            active-indicator layout animation, freezing the panorama description. */}
+        <motion.p
+          className="sr-scope-description"
+          key={scope}
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.18 }}
+        >
+          {activeScope.description}
+        </motion.p>
 
         {!isFollowingScope && (
           <nav className="sr-tabs" aria-label="Periodo de las novedades">
@@ -482,12 +529,12 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
             </div>
           </div>
 
-          <section className={`sr-real-trends ${trends.loading ? 'updating' : ''}`} aria-label="Tendencias científicas">
+          <section className={`sr-real-trends ${displayTrends.loading ? 'updating' : ''}`} aria-label="Tendencias científicas">
             <div className="sr-trends-heading">
-              <span><TrendingUp size={15} /> Temas en crecimiento</span>
+              <span><TrendingUp size={15} /> {showPersonalTrends ? 'Temas en crecimiento en tus áreas' : 'Temas en crecimiento'}</span>
               {currentTrendPeriod && previousTrendPeriod && (
                 <small>
-                  {trends.provisional ? 'Datos provisionales · ' : ''}{currentTrendPeriod} comparado con {previousTrendPeriod}
+                  {displayTrends.provisional ? 'Datos provisionales · ' : ''}{currentTrendPeriod} comparado con {previousTrendPeriod}
                 </small>
               )}
             </div>
@@ -496,7 +543,7 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
                 {trendItems.map((item, index) => (
                   <div
                     className="sr-trend-item sr-trend-item--enter"
-                    key={`${trends.periods?.current?.fromStr || 'current'}-${item.id}`}
+                    key={`${showPersonalTrends ? 'personal' : 'panorama'}-${displayTrends.periods?.current?.fromStr || 'current'}-${item.id}`}
                     style={{ '--trend-order': index }}
                     title={`${item.currentCount} trabajos en el periodo actual y ${item.previousCount} en el anterior. Confianza ${item.confidence}.`}
                   >
@@ -508,9 +555,9 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
               </div>
             ) : (
               <p className="sr-trends-state">
-                {trends.loading || trends.status === 'loading'
+                {displayTrends.loading || displayTrends.status === 'loading'
                   ? 'Calculando cambios frente al periodo anterior...'
-                  : trends.status === 'unavailable'
+                  : displayTrends.status === 'unavailable'
                     ? 'Las tendencias no están disponibles ahora; la selección de papers sigue activa.'
                     : 'Aún no hay volumen suficiente para detectar una tendencia fiable.'}
               </p>
@@ -518,7 +565,7 @@ export default function ScientificReport({ onOpenPdf, onSaveToList, initialScope
           </section>
 
           {/* These describe the selected edition; they are not presented as measured trends. */}
-          {trends.status !== 'active' && edition.featuredConcepts?.length > 0 && (
+          {displayTrends.status !== 'active' && edition.featuredConcepts?.length > 0 && (
             <div className="sr-trending-topics">
               <span className="sr-trending-label">
                 <Flame size={14} className="sr-flame-icon" />
