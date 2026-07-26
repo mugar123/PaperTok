@@ -17,6 +17,9 @@
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   scrollbar-width: none;
+  /* Scroll anchoring fights the snap when infinite scroll appends a page,
+     producing a one-frame teleport; snap already owns the position. */
+  overflow-anchor: none;
 }
 
 .feed-container::-webkit-scrollbar {
@@ -27,7 +30,9 @@
   height: 100vh;
   height: 100dvh;
   scroll-snap-align: start;
-  scroll-snap-stop: normal;
+  /* "always" forces momentum scrolls to settle on every card instead of
+     sailing past intermediate snap points — one flick, one paper. */
+  scroll-snap-stop: always;
   content-visibility: auto;
   contain-intrinsic-size: 0 100dvh;
 }

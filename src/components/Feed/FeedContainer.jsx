@@ -29,14 +29,19 @@ export default function FeedContainer({ onOpenPdf, onSaveToList }) {
     isRead: readPaperIds?.has(paper.id),
   }), [likedPaperIds, readPaperIds, savedPaperIds]);
 
-  // Restore scroll position instantly before browser paints
+  // Restore scroll position instantly before browser paints. Must run only once
+  // per mount: re-assigning scrollTop on later papers.length changes (infinite
+  // scroll appends) cancels any in-flight momentum and makes scrolling stutter.
+  const restoreAttemptedRef = useRef(false);
   useLayoutEffect(() => {
-    if (feedRef.current && papers.length > 0 && savedFeedScroll > 0) {
+    if (restoreAttemptedRef.current || papers.length === 0) return;
+    restoreAttemptedRef.current = true;
+    if (feedRef.current && savedFeedScroll > 0) {
       const el = feedRef.current;
       const prevBehavior = el.style.scrollBehavior;
       el.style.scrollBehavior = 'auto'; // Force instant jump
       el.scrollTop = savedFeedScroll;
-      
+
       requestAnimationFrame(() => {
         el.style.scrollBehavior = prevBehavior;
       });
