@@ -35,10 +35,13 @@ import {
   waitForInitialEnrichment,
 } from '../utils/feedEnrichment';
 import { resolveWithin, settleWithin } from '../utils/asyncTiming';
+import { shouldAbortFeedLoad } from '../utils/feedLoadGuard';
 
 const FeedContext = createContext(null);
 const PAGE_SIZE = 15;
-const FEED_SOURCE_RENDER_BUDGET_MS = 3500;
+// Covers the worker arXiv route timeout (4s) plus headroom, so a slow-but-alive
+// source lands inside the render budget instead of being counted as failed.
+const FEED_SOURCE_RENDER_BUDGET_MS = 5000;
 const OPTIONAL_SOURCE_RENDER_BUDGET_MS = 3500;
 const OPENALEX_FEED_REQUEST_TIMEOUT_MS = 6500;
 const OPENALEX_FEED_WAIT_BUDGET_MS = 4500;
@@ -178,6 +181,7 @@ export function FeedProvider({ children }) {
   const savedPaperIdsRef = useRef(savedPaperIds);
   const readPaperIdsRef = useRef(readPaperIds);
   const loadPapersRef = useRef(null);
+  const autoRetryUsedRef = useRef(false);
   const notInterestedIdsRef = useRef(notInterestedIds);
   const isTraversingNetwork = useRef(false);
   const feedRequestId = useRef(0);
@@ -635,6 +639,7 @@ export function FeedProvider({ children }) {
 
         // ─── STEP 3: Fetch from USER'S CATEGORIES ONLY ───
         let mainPapers = [];
+        let mainSourceResults = [];
         try {
           // Determine parent areas for each preference
           const getParentArea = (catId) => {
@@ -692,14 +697,12 @@ export function FeedProvider({ children }) {
           mainPapers = PaperBuilder.deduplicate(
             sourceResults.flatMap(result => result.status === 'fulfilled' ? result.value : [])
           );
-          if (mainPapers.length === 0 && sourceResults.some(result => result.status !== 'fulfilled')) {
-            throw new Error('No se pudieron cargar papers de tus fuentes. Reinténtalo en unos segundos.');
-          }
+          mainSourceResults = sourceResults;
         } catch (e) {
           console.error("Error fetching main papers:", e);
           throw e;
         }
-        
+
         mainPapers.forEach(p => { p._type = 'exploit'; });
 
         // ─── STEP 4: Graph/Related papers (semantically similar to liked) ───
@@ -708,6 +711,13 @@ export function FeedProvider({ children }) {
 
         // ─── STEP 5: Followed topics, authors, institutions and projects ───
         const followedPapers = await followedCandidatesPromise;
+
+        // Only give up when the OPTIONAL candidates cannot bootstrap the feed
+        // either: a dead arXiv must not blank a feed that graph/followed papers
+        // could populate on their own.
+        if (shouldAbortFeedLoad(mainSourceResults, mainPapers, graphPapers, followedPapers)) {
+          throw new Error('No se pudieron cargar papers de tus fuentes. Reinténtalo en unos segundos.');
+        }
 
         // ─── STEP 6: ADAPTIVE EXPLORATION (always baseline, more if bored) ───
         let explorationPapers = [];
@@ -1020,6 +1030,7 @@ export function FeedProvider({ children }) {
       setPapers(nextPapers);
       setPage(nextPage);
       setHasMore(nextHasMore);
+      autoRetryUsedRef.current = false; // successful load re-arms the safety retry
 
       // Save to cache
       feedCache.current[activeMode] = { papers: nextPapers, page: nextPage, hasMore: nextHasMore };
@@ -1044,6 +1055,17 @@ export function FeedProvider({ children }) {
     } catch (err) {
       if (requestId === feedRequestId.current) {
         setError(err.message);
+        // A transient multi-source failure used to require a manual reload.
+        // Retry ONCE per session automatically; further failures keep the
+        // error state with its manual "Reintentar" so there is no cascade.
+        if (reset && !autoRetryUsedRef.current) {
+          autoRetryUsedRef.current = true;
+          setTimeout(() => {
+            if (requestId === feedRequestId.current && feedSessionId.current === activeSessionId) {
+              loadPapersRef.current?.(true, activeMode);
+            }
+          }, 2500);
+        }
       }
     } finally {
       if (requestId === feedRequestId.current) {
@@ -1051,7 +1073,7 @@ export function FeedProvider({ children }) {
       }
     }
   }, [
-    userPreferences, page, papers, loading, feedMode, 
+    userPreferences, page, papers, loading, feedMode,
     categoryAffinities, relatedCandidates,
     calculateAndAttachScore, followedEntities, recommendationProfileReady
   ]);
