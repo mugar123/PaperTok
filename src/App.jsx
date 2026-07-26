@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { FeedProvider } from './context/FeedContext'
 import { FollowingProvider } from './context/FollowingContext'
 import { FollowingUpdatesProvider } from './context/FollowingUpdatesContext'
+import { EmailNotificationsProvider } from './context/EmailNotificationsContext'
 import LoginPage from './components/Auth/LoginPage'
 import ProtectedRoute from './components/Auth/ProtectedRoute'
 import OnboardingFlow from './components/Onboarding/OnboardingFlow'
@@ -132,7 +133,9 @@ function UserScopedAppContent() {
   return (
     <FollowingProvider key={user?.uid || 'signed-out'}>
       <FollowingUpdatesProvider>
-        <AppContent />
+        <EmailNotificationsProvider>
+          <AppContent />
+        </EmailNotificationsProvider>
       </FollowingUpdatesProvider>
     </FollowingProvider>
   )

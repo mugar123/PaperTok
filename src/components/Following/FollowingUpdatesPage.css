@@ -46,6 +46,8 @@
   flex-shrink: 0;
 }
 
+.following-updates-actions { flex-wrap: wrap; justify-content: flex-end; }
+
 .following-updates-actions button,
 .following-updates-empty button,
 .following-updates-error button {
@@ -81,6 +83,19 @@
 
 .following-updates-refresh {
   border-color: rgba(139, 92, 246, 0.45) !important;
+}
+
+.following-updates-email { position: relative; }
+.following-updates-email.is-active {
+  border-color: rgba(84, 217, 155, 0.45);
+  background: rgba(84, 217, 155, 0.08);
+}
+.following-updates-email-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #54d99b;
+  box-shadow: 0 0 8px rgba(84, 217, 155, 0.65);
 }
 
 .following-updates-refresh:disabled {

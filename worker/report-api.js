@@ -2,6 +2,13 @@ import { buildOpenAlexTrendFilter, normalizeReportFilters } from '../src/service
 import { buildScopusSearchQuery } from '../src/services/scopusQuery.js';
 import { AIExplanationError, checkAIProviderHealth, handleAIExplanation } from './ai-explanation.js';
 import {
+  checkEmailProviderHealth,
+  EmailNotificationError,
+  handleEmailNotificationRequest,
+  handleEmailUnsubscribe,
+  runEmailNotificationSchedule,
+} from './email-notifications.js';
+import {
   deduplicateCitationGraphPapers,
   extractCitationDoi,
   extractCitationOpenAlexId,
@@ -902,6 +909,25 @@ export default {
         },
       });
     }
+    if (url.pathname === '/notifications/unsubscribe' && ['GET', 'POST'].includes(request.method)) {
+      return handleEmailUnsubscribe(request, env);
+    }
+    if (url.pathname.startsWith('/notifications/')) {
+      if (origin && !allowedOrigins(env).has(origin)) return json({ code: 'EMAIL_ORIGIN_NOT_ALLOWED' }, 403);
+      try {
+        const payload = await handleEmailNotificationRequest(request, env, url.pathname);
+        return json(payload, 200, {
+          ...corsHeaders(origin, env),
+          'cache-control': 'private, no-store',
+        });
+      } catch (error) {
+        const knownError = error instanceof EmailNotificationError;
+        return json({ code: knownError ? error.code : 'EMAIL_UNAVAILABLE' }, knownError ? error.status : 502, {
+          ...corsHeaders(origin, env),
+          'cache-control': 'no-store',
+        });
+      }
+    }
     if (url.pathname === '/ai/explain') {
       if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405, corsHeaders(origin, env));
       if (origin && !allowedOrigins(env).has(origin)) return json({ error: 'Origin not allowed' }, 403);
@@ -931,7 +957,16 @@ export default {
         openAlexConfigured: Boolean(env.OPENALEX_API_KEY),
         adsConfigured: Boolean(env.NASA_ADS_API_TOKEN),
         scopusConfigured: Boolean(env.ELSEVIER_API_KEY),
+        emailConfigured: Boolean(env.RESEND_API_KEY && env.NOTIFICATION_STORE),
       }, 200, corsHeaders(origin, env));
+    }
+    if (url.pathname === '/health/email') {
+      if (origin && !allowedOrigins(env).has(origin)) return json({ error: 'Origin not allowed' }, 403);
+      const health = await checkEmailProviderHealth(env);
+      return json(health, health.available ? 200 : 503, {
+        ...corsHeaders(origin, env),
+        'cache-control': 'no-store',
+      });
     }
     if (url.pathname === '/health/ai') {
       if (origin && !allowedOrigins(env).has(origin)) return json({ error: 'Origin not allowed' }, 403);
@@ -992,5 +1027,8 @@ export default {
       }
     }
     return json({ error: 'Not found' }, 404, corsHeaders(origin, env));
+  },
+  async scheduled(controller, env, context) {
+    context.waitUntil(runEmailNotificationSchedule(env, controller.scheduledTime));
   },
 };

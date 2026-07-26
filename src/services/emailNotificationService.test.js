@@ -1,0 +1,34 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  serializeFollowForNotifications,
+  serializeUpdateForNotifications,
+} from './emailNotificationService.js';
+
+test('serializes only the follow metadata required by notification digests', () => {
+  assert.deepEqual(serializeFollowForNotifications({
+    type: 'institution',
+    canonicalId: 'I1',
+    displayName: 'University',
+    externalIds: { ror: '01', ignored: 'secret' },
+    metadata: { categoryIds: ['physics'], ignored: 'value' },
+  }), {
+    type: 'institution',
+    canonicalId: 'I1',
+    displayName: 'University',
+    externalIds: { ror: '01' },
+    metadata: { categoryIds: ['physics'] },
+  });
+});
+
+test('serializes a compact paper preview with follow reasons', () => {
+  const preview = serializeUpdateForNotifications({
+    id: 'paper-1',
+    title: 'A paper',
+    abstract: 'This must not be sent to the email scheduler.',
+    authors: [{ name: 'Ada' }],
+    _followedEntityMatches: [{ type: 'topic', canonicalId: 'T1', displayName: 'Physics' }],
+  });
+  assert.equal(preview.abstract, undefined);
+  assert.equal(preview.matches[0].displayName, 'Physics');
+});

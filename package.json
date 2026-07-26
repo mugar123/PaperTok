@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "test": "node --test src/**/*.test.js",
+    "test": "node --test src/**/*.test.js worker/**/*.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

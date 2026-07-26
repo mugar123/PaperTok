@@ -10,3 +10,12 @@ AI_FALLBACK_MODEL = "gemini-3.5-flash-lite"
 AI_DAILY_USER_LIMIT = "10"
 AI_DAILY_GLOBAL_LIMIT = "1000"
 FIREBASE_WEB_API_KEY = "AIzaSyAQKtRz0-PJH7_xOBrFhGeQdbIAHkzV4Q0"
+WORKER_PUBLIC_URL = "https://papertok-report-api.papertok-mugar123.workers.dev"
+EMAIL_DAILY_SEND_LIMIT = "90"
+
+[[kv_namespaces]]
+binding = "NOTIFICATION_STORE"
+id = "45c1519982dd48f8a0ea08403c159ae1"
+
+[triggers]
+crons = ["0 7 * * *"]

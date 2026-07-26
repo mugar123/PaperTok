@@ -8,6 +8,7 @@ import {
   CheckCheck,
   Clock3,
   FolderKanban,
+  Mail,
   RefreshCw,
   Sparkles,
   Tag,
@@ -18,6 +19,8 @@ import { useFollowingUpdates } from '../../context/FollowingUpdatesContext';
 import { useFeed } from '../../context/FeedContext';
 import { getFollowingUpdatePaperKey } from '../../utils/followingUpdates';
 import './FollowingUpdatesPage.css';
+import EmailNotificationModal from './EmailNotificationModal';
+import { useEmailNotifications } from '../../context/EmailNotificationsContext';
 
 const TYPE_CONFIG = {
   author: { label: 'Autores', singular: 'Autor', Icon: UserRound },
@@ -66,6 +69,8 @@ export default function FollowingUpdatesPage({ onOpenPdf }) {
   } = useFollowingUpdates();
   const { personalLibrary, toggleReadLater } = useFeed();
   const [activeType, setActiveType] = useState('all');
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const { preferences: emailPreferences } = useEmailNotifications();
 
   const availableTypes = useMemo(() => Object.keys(TYPE_CONFIG).filter(type => (
     followedEntities.some(entity => entity.type === type)
@@ -99,6 +104,13 @@ export default function FollowingUpdatesPage({ onOpenPdf }) {
               <CheckCheck size={18} /> Marcar todo como visto
             </button>
           )}
+          <button
+            className={`following-updates-secondary following-updates-email ${emailPreferences.enabled ? 'is-active' : ''}`}
+            onClick={() => setIsEmailModalOpen(true)}
+          >
+            <Mail size={18} /> Email
+            {emailPreferences.enabled && <span className="following-updates-email-dot" />}
+          </button>
           <button
             className="following-updates-refresh"
             onClick={() => refresh()}
@@ -254,6 +266,7 @@ export default function FollowingUpdatesPage({ onOpenPdf }) {
           Algunas fuentes no respondieron. Se muestran las novedades disponibles y puedes volver a actualizar.
         </p>
       )}
+      <EmailNotificationModal isOpen={isEmailModalOpen} onClose={() => setIsEmailModalOpen(false)} />
     </main>
   );
 }
