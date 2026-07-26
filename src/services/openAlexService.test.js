@@ -113,6 +113,36 @@ test('back-fills a missing institution and ORCID from a weaker duplicate', () =>
   assert.equal(deduped[0].orcid, 'https://orcid.org/0000-0002');
 });
 
+test('keeps same-name authors separate when their ORCIDs differ', () => {
+  const deduped = dedupeAuthors([
+    { id: 'D1', display_name: 'Juan García', works_count: 80, cited_by_count: 900, orcid: 'https://orcid.org/0000-0001', institution: null },
+    { id: 'D2', display_name: 'Juan García', works_count: 40, cited_by_count: 200, orcid: 'https://orcid.org/0000-0002', institution: null },
+  ]);
+
+  assert.equal(deduped.length, 2);
+});
+
+test('keeps same-name authors separate when their institutions differ', () => {
+  const deduped = dedupeAuthors([
+    { id: 'E1', display_name: 'Juan García', works_count: 80, cited_by_count: 900, orcid: null, institution: 'Universidad de Sevilla' },
+    { id: 'E2', display_name: 'Juan García', works_count: 40, cited_by_count: 200, orcid: null, institution: 'Universidad de Chile' },
+  ]);
+
+  assert.equal(deduped.length, 2);
+});
+
+test('still merges an identity-less fragment into a same-name profile with identity', () => {
+  const deduped = dedupeAuthors([
+    { id: 'F1', display_name: 'Juan García', works_count: 3, cited_by_count: 5, orcid: null, institution: null },
+    { id: 'F2', display_name: 'Juan García', works_count: 200, cited_by_count: 4000, orcid: 'https://orcid.org/0000-0003', institution: 'Universidad de Granada' },
+  ]);
+
+  // The bare fragment carries nothing that contradicts F2, so it folds in.
+  assert.equal(deduped.length, 1);
+  assert.equal(deduped[0].id, 'F2');
+  assert.equal(deduped[0].institution, 'Universidad de Granada');
+});
+
 test('keeps distinct authors with different names', () => {
   const deduped = dedupeAuthors([
     { id: 'C1', display_name: 'Yann LeCun', works_count: 300, cited_by_count: 400000, orcid: null, institution: 'NYU' },

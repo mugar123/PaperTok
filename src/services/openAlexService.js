@@ -533,13 +533,16 @@ export async function getAuthorProfileExact(authorName, arxivId) {
 /**
  * Collapse duplicate author entries returned by OpenAlex. The API often yields
  * several fragmented records for the same researcher (same name, frequently with
- * an unknown institution). We merge them by normalized name, keeping the richest
- * profile and back-filling a missing institution from a weaker duplicate.
+ * an unknown institution and no ORCID). Sharing a name alone does not prove
+ * identity, so two records only merge when nothing contradicts it: records with
+ * DIFFERENT ORCIDs or DIFFERENT institutions are kept apart as distinct people.
+ * The merged entry keeps the richest profile and back-fills missing identity
+ * fields from the weaker fragment.
  * @param {Array} authors
  * @returns {Array}
  */
 export function dedupeAuthors(authors) {
-  const normalizeName = (name) => (name || '')
+  const normalize = (value) => (value || '')
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
@@ -552,24 +555,38 @@ export function dedupeAuthors(authors) {
   const score = (author) => (author.works_count || 0) * 1e6
     + (author.cited_by_count || 0);
 
-  const byName = new Map();
+  const conflicts = (a, b) => (
+    (a.orcid && b.orcid && a.orcid !== b.orcid)
+    || (a.institution && b.institution && normalize(a.institution) !== normalize(b.institution))
+  );
+
+  // Same name can hold several genuinely distinct people, so each name maps to a
+  // LIST of identity clusters instead of a single winner.
+  const clustersByName = new Map();
+  const ordered = [];
   for (const author of authors) {
-    const key = normalizeName(author.display_name);
+    const key = normalize(author.display_name);
     if (!key) continue;
-    const existing = byName.get(key);
-    if (!existing) {
-      byName.set(key, author);
+    const clusters = clustersByName.get(key) || [];
+    if (!clustersByName.has(key)) clustersByName.set(key, clusters);
+
+    const compatible = clusters.find(cluster => !conflicts(cluster.author, author));
+    if (!compatible) {
+      const cluster = { author };
+      clusters.push(cluster);
+      ordered.push(cluster);
       continue;
     }
-    const winner = score(author) >= score(existing) ? author : existing;
-    const loser = winner === author ? existing : author;
-    // Preserve an institution if the stronger record is missing one.
+
+    const winner = score(author) >= score(compatible.author) ? author : compatible.author;
+    const loser = winner === author ? compatible.author : author;
+    // Preserve identity fields the stronger record is missing.
     if (!winner.institution && loser.institution) winner.institution = loser.institution;
     if (!winner.orcid && loser.orcid) winner.orcid = loser.orcid;
-    byName.set(key, winner);
+    compatible.author = winner;
   }
 
-  return Array.from(byName.values());
+  return ordered.map(cluster => cluster.author);
 }
 
 export async function searchAuthors(query) {
