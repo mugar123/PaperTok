@@ -137,6 +137,20 @@ async function fetchFollowedEntityCandidates(followedEntities, queryMode) {
     .slice(0, 6);
 }
 
+// Same clamp range as category affinities: without it, concept affinities grow
+// unbounded and the semantic component (x20 multiplier) drowns every other signal.
+const CONCEPT_AFFINITY_MIN = -10;
+const CONCEPT_AFFINITY_MAX = 100;
+
+function bumpConceptAffinities(conceptMap, paper, delta) {
+  (paper?.openAlex?.concepts || []).forEach((concept) => {
+    conceptMap[concept.id] = Math.max(
+      CONCEPT_AFFINITY_MIN,
+      Math.min(CONCEPT_AFFINITY_MAX, (conceptMap[concept.id] || 0) + delta),
+    );
+  });
+}
+
 export function FeedProvider({ children }) {
   const { user, userPreferences, followedAuthors } = useAuth();
   const { followedEntities, loading: followingLoading } = useFollowing();
@@ -515,6 +529,9 @@ export function FeedProvider({ children }) {
         
         if (cancelled) return;
 
+        Object.keys(conceptWeights).forEach((id) => {
+          conceptWeights[id] = Math.max(CONCEPT_AFFINITY_MIN, Math.min(CONCEPT_AFFINITY_MAX, conceptWeights[id]));
+        });
         conceptAffinities.current = conceptWeights;
         relatedCandidates.current = relatedArxivIds;
         reRankFeedRef.current();
@@ -1182,11 +1199,7 @@ export function FeedProvider({ children }) {
     } else {
       newLiked.add(paper.id);
       applyCategoryAffinityDelta(categoryAffinities.current, paper, 5);
-      if (paper.openAlex?.concepts) {
-        paper.openAlex.concepts.forEach(c => {
-           conceptAffinities.current[c.id] = (conceptAffinities.current[c.id] || 0) + 1;
-        });
-      }
+      bumpConceptAffinities(conceptAffinities.current, paper, 1);
       
       // Update temporal preference
       const daysOld = (Date.now() - new Date(paper.published).getTime()) / (1000 * 60 * 60 * 24);
@@ -1235,11 +1248,7 @@ export function FeedProvider({ children }) {
        applyCategoryAffinityDelta(categoryAffinities.current, paper, -10);
        categoryCooldowns.current[paper.primaryCategory] = Date.now();
     }
-    if (paper.openAlex?.concepts) {
-      paper.openAlex.concepts.forEach(c => {
-         conceptAffinities.current[c.id] = (conceptAffinities.current[c.id] || 0) - 2;
-      });
-    }
+    bumpConceptAffinities(conceptAffinities.current, paper, -2);
     reRankFeed(paper.id);
 
     if (IS_DEMO) {
@@ -1318,11 +1327,7 @@ export function FeedProvider({ children }) {
     
     // Instantly update local weights for real-time re-ranking
     applyCategoryAffinityDelta(categoryAffinities.current, paper, Math.min(timeInSeconds, 60) * 0.25);
-    if (paper.openAlex?.concepts) {
-      paper.openAlex.concepts.forEach(c => {
-         conceptAffinities.current[c.id] = (conceptAffinities.current[c.id] || 0) + (Math.min(timeInSeconds, 60) * 0.05);
-      });
-    }
+    bumpConceptAffinities(conceptAffinities.current, paper, Math.min(timeInSeconds, 60) * 0.05);
     // Update temporal preference and expand graph on high dwell time
     if (timeInSeconds >= 10) {
       const daysOld = (Date.now() - new Date(paper.published).getTime()) / (1000 * 60 * 60 * 24);
@@ -1357,11 +1362,7 @@ export function FeedProvider({ children }) {
     
     // Instantly update local weights for real-time re-ranking
     applyCategoryAffinityDelta(categoryAffinities.current, paper, 4);
-    if (paper.openAlex?.concepts) {
-      paper.openAlex.concepts.forEach(c => {
-         conceptAffinities.current[c.id] = (conceptAffinities.current[c.id] || 0) + 1;
-      });
-    }
+    bumpConceptAffinities(conceptAffinities.current, paper, 1);
     reRankFeed(paper.id);
 
     if (user && !IS_DEMO) {
@@ -1451,6 +1452,8 @@ export function FeedProvider({ children }) {
     nextSaved.add(paperId);
     savedPaperIdsRef.current = nextSaved;
     setSavedPaperIds(nextSaved);
+    // Saving is the strongest positive signal; react immediately like the rest.
+    reRankFeed(paperId);
 
     if (IS_DEMO) {
       demoSet('savedPaperIds', Array.from(nextSaved));
@@ -1476,7 +1479,7 @@ export function FeedProvider({ children }) {
         console.error('Error saving recommendation interaction:', err);
       }
     }
-  }, [papers, traverseAndExpandNetwork, user]);
+  }, [papers, reRankFeed, traverseAndExpandNetwork, user]);
 
   const unmarkAsRead = useCallback(async (paperId) => {
     if (!user) return;
