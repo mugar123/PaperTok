@@ -21,7 +21,11 @@ import {
 const CORPUS_CACHE = new Map();
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour in ms
 const DEGRADED_CACHE_TTL = 5 * 60 * 1000;
-const REPORT_SOURCE_TIMEOUT_MS = 6500;
+// Must exceed the arXiv fallback cascade's worst case (worker 4s + proxy 4.5s in
+// prod; dev direct 5s + proxy 4.5s), or this deadline marks the source
+// "unavailable" while a later fallback layer was about to succeed and the
+// degraded status then gets pinned in the corpus cache.
+const REPORT_SOURCE_TIMEOUT_MS = 10_000;
 
 function withSourceDeadline(promise, timeoutMs = REPORT_SOURCE_TIMEOUT_MS) {
   const unavailable = { papers: [], status: 'unavailable' };
@@ -225,15 +229,24 @@ async function fetchArxivCandidates(timeframe, page = 1, filters = {}, options =
     }
 
     const { fromStr, toStr } = getDateThresholds(timeframe);
-    const fromDate = fromStr.replaceAll('-', '');
-    const toDate = toStr.replaceAll('-', '');
     const categoryQuery = categories.map(category => `cat:${category}`).join(' OR ');
-    const query = `(${categoryQuery}) AND submittedDate:[${fromDate}0000 TO ${toDate}2359]`;
 
-    // A date-range query is necessary for long and custom editions. Sorting alone
-    // only returns the newest records and does not guarantee the requested window.
-    const maxResults = (timeframe === '24h' || timeframe === '7d') ? 80 : 200;
+    // arXiv answers newest-first queries in well under a second, but a
+    // submittedDate range makes the same query take 10-20s and blow through
+    // every proxy timeout — which is what kept flagging the source as
+    // unavailable. Short editions therefore fetch newest-first and trim to the
+    // window client-side (six popular categories produce far more than 50
+    // papers a week, so the window stays fully covered). Long and custom
+    // editions still need the range to sample the window at all.
+    // The Worker proxy also caps max_results at 50 and silently DROPS larger
+    // values (arXiv then defaults to 10), so 50 is the real upper bound.
+    const isShortWindow = timeframe === '24h' || timeframe === '7d';
+    const maxResults = 50;
     const offset = (page - 1) * maxResults;
+    const query = isShortWindow
+      ? `(${categoryQuery})`
+      : `(${categoryQuery}) AND submittedDate:[${fromStr.replaceAll('-', '')}0000 TO ${toStr.replaceAll('-', '')}2359]`;
+
     const papers = await fetchArxivPapers(
       query,
       offset,
@@ -242,7 +255,13 @@ async function fetchArxivCandidates(timeframe, page = 1, filters = {}, options =
       'submittedDate',
       { forceRefresh: options.forceRefresh },
     );
-    return { papers: papers || [], status: 'active' };
+    const windowFrom = new Date(`${fromStr}T00:00:00Z`).getTime();
+    const windowTo = new Date(`${toStr}T23:59:59Z`).getTime();
+    const withinWindow = (papers || []).filter((paper) => {
+      const published = Date.parse(paper.published || '');
+      return !Number.isFinite(published) || (published >= windowFrom && published <= windowTo);
+    });
+    return { papers: withinWindow, status: 'active' };
   } catch (err) {
     console.warn("Failed to fetch arXiv candidates for report", err);
     return { papers: [], status: 'unavailable' };

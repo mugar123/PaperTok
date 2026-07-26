@@ -10,6 +10,17 @@ import CATEGORIES from '../data/categories.js';
 const ARXIV_DEV = '/api/arxiv';
 const ARXIV_PROD = 'https://export.arxiv.org/api/query';
 const PAPER_API_BASE = import.meta.env?.VITE_PAPER_API_BASE_URL?.replace(/\/$/, '');
+
+/**
+ * The dev path is a relative Vite-proxy URL; public CORS proxies cannot resolve
+ * a relative URL, so every proxy fallback silently failed in dev. Rewrite it to
+ * the real arXiv endpoint before handing it to a third-party proxy.
+ */
+export function toAbsoluteArxivUrl(url) {
+  const value = String(url || '');
+  if (value.startsWith(ARXIV_DEV)) return ARXIV_PROD + value.slice(ARXIV_DEV.length);
+  return value;
+}
 const cache = new Map();
 const CACHE_TTL = 5 * 60 * 1000;
 const ARXIV_PREFIXES = ['cs', 'math', 'physics', 'eess', 'q-bio', 'q-fin', 'stat', 'econ', 'astro-ph', 'cond-mat', 'gr-qc', 'hep-ex', 'hep-lat', 'hep-ph', 'hep-th', 'nlin', 'nucl-ex', 'nucl-th', 'quant-ph', 'math-ph'];
@@ -166,15 +177,45 @@ function safeDateISO(dateStr) {
 }
 
 
+// arXiv asks clients for roughly one request every three seconds and reacts to
+// bursts by stalling every connection from the caller, which is how a report
+// query firing alongside feed queries froze the whole source for 20+ seconds.
+// Serializing requests with a small gap keeps us under the radar, and the
+// in-flight map stops identical concurrent requests from being sent twice.
+const ARXIV_REQUEST_GAP_MS = 350;
+let arxivRequestChain = Promise.resolve();
+const inflightArxivRequests = new Map();
+
+function scheduleArxivRequest(task) {
+  const run = arxivRequestChain.then(task, task);
+  arxivRequestChain = run.then(
+    () => new Promise(resolve => setTimeout(resolve, ARXIV_REQUEST_GAP_MS)),
+    () => new Promise(resolve => setTimeout(resolve, ARXIV_REQUEST_GAP_MS)),
+  );
+  return run;
+}
+
+async function fetchArxivData(url) {
+  const existing = inflightArxivRequests.get(url);
+  if (existing) return existing;
+  const request = scheduleArxivRequest(() => fetchArxivDataNow(url))
+    .finally(() => inflightArxivRequests.delete(url));
+  inflightArxivRequests.set(url, request);
+  return request;
+}
+
 /**
  * Helper to fetch and parse arXiv XML or JSON using cascading proxies in production
  */
-async function fetchArxivData(url) {
+async function fetchArxivDataNow(url) {
   // The PaperTok Worker avoids depending on unreliable public CORS proxies in production.
+  // Measured latency of the route is ~0.3s, so 4s is generous headroom; keeping the
+  // whole cascade under the report's per-source deadline is what makes the
+  // availability flag truthful.
   if (PAPER_API_BASE) {
     try {
-      const query = new URL(url).search;
-      const response = await fetchWithTimeout(`${PAPER_API_BASE}/arxiv${query}`, 5_500);
+      const query = new URL(url, 'https://export.arxiv.org').search;
+      const response = await fetchWithTimeout(`${PAPER_API_BASE}/arxiv${query}`, 4_000);
       if (!response.ok) throw new Error(`PaperTok arXiv API error: ${response.status}`);
       const parsed = parseArxivXml(await response.text());
       if (parsed.length > 0) return parsed;
@@ -185,7 +226,7 @@ async function fetchArxivData(url) {
 
   if (isDev) {
     try {
-      const response = await fetchWithTimeout(url, 10000);
+      const response = await fetchWithTimeout(url, 5_000);
       if (!response.ok) throw new Error(`arXiv API error: ${response.status}`);
       const xmlText = await response.text();
       return parseArxivXml(xmlText);
@@ -194,9 +235,10 @@ async function fetchArxivData(url) {
     }
   }
 
+  const absoluteUrl = toAbsoluteArxivUrl(url);
   const fallbackRequests = [
     (async () => {
-    const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(url)}`;
+      const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(absoluteUrl)}`;
       const response = await fetchWithTimeout(proxyUrl, 4_500);
       if (!response.ok) throw new Error(`corsproxy error: ${response.status}`);
       const parsed = parseArxivXml(await response.text());
@@ -204,7 +246,7 @@ async function fetchArxivData(url) {
       return parsed;
     })(),
     (async () => {
-      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+      const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(absoluteUrl)}`;
       const response = await fetchWithTimeout(proxyUrl, 4_500);
       if (!response.ok) throw new Error(`allorigins error: ${response.status}`);
       const data = await response.json();

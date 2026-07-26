@@ -7,7 +7,9 @@ export default defineConfig({
   server: {
     proxy: {
       '/api/arxiv': {
-        target: 'http://export.arxiv.org',
+        // arXiv 301-redirects http to https and the proxy does not follow
+        // redirects, so the http target made every dev request fail.
+        target: 'https://export.arxiv.org',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/arxiv/, '/api/query'),
       },

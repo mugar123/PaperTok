@@ -1,6 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assignRequestedCategories } from './arxivService.js';
+import { assignRequestedCategories, toAbsoluteArxivUrl } from './arxivService.js';
+
+test('rewrites the relative dev proxy URL to the real arXiv endpoint', () => {
+  assert.equal(
+    toAbsoluteArxivUrl('/api/arxiv?search_query=cat:cs.AI&max_results=5'),
+    'https://export.arxiv.org/api/query?search_query=cat:cs.AI&max_results=5',
+  );
+});
+
+test('leaves absolute arXiv URLs untouched', () => {
+  const absolute = 'https://export.arxiv.org/api/query?search_query=cat:quant-ph';
+  assert.equal(toAbsoluteArxivUrl(absolute), absolute);
+  assert.equal(toAbsoluteArxivUrl(''), '');
+});
 
 test('keeps an exact arXiv subcategory selected by the user', () => {
   const [paper] = assignRequestedCategories([{
