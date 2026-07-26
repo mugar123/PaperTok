@@ -198,7 +198,16 @@ export function FeedProvider({ children }) {
   const temporalPreference = useRef(0); // -1 (classic) to +1 (recent)
   const recommendationWeights = useRef(readRecommendationWeights());
   const boredomLevel = useRef(0); // 0 = happy, higher = more bored
-  const BOREDOM_THRESHOLD = 5; // After 5 consecutive fast skips, start exploring
+  // Cold users get more patience before the algorithm assumes boredom; returning
+  // users have a formed profile, so their bubble deserves earlier puncturing.
+  const COLD_BOREDOM_THRESHOLD = 5;
+  const RETURNING_BOREDOM_THRESHOLD = 3;
+  const getBoredomThreshold = () => {
+    const interactionCount = likedPaperIdsRef.current.size
+      + savedPaperIdsRef.current.size
+      + readPaperIdsRef.current.size;
+    return interactionCount > 0 ? RETURNING_BOREDOM_THRESHOLD : COLD_BOREDOM_THRESHOLD;
+  };
 
   // --- TIKTOK-STYLE SCORING & RE-RANKING ---
   const calculateAndAttachScore = useCallback((paper, recentPropsCount = {}) => {
@@ -719,9 +728,10 @@ export function FeedProvider({ children }) {
           .sort(() => 0.5 - Math.random())
           .slice(0, 3);
 
-        const exploreCount = currentBoredom >= BOREDOM_THRESHOLD
-          ? Math.min(6, Math.floor((currentBoredom - BOREDOM_THRESHOLD) / 2) + 4)
-          : 2; // Baseline of 2 exploration papers
+        const boredomThreshold = getBoredomThreshold();
+        const exploreCount = currentBoredom >= boredomThreshold
+          ? Math.min(8, Math.floor((currentBoredom - boredomThreshold) / 2) + 5)
+          : 5; // Baseline exploration: cold-start users deserve real serendipity
 
         // The first screen already has a broad multi-source candidate pool. Defer
         // extra exploration network calls to prefetched pages so initial entry is fast.
@@ -796,7 +806,7 @@ export function FeedProvider({ children }) {
         }
 
         // If highly bored, pull from completely random categories outside user areas
-        if (!reset && currentBoredom >= BOREDOM_THRESHOLD * 1.5) {
+        if (!reset && currentBoredom >= boredomThreshold * 1.5) {
           const randomCats = allCategories
             .filter(c => !userPreferences.includes(c.id) && !nearbyCats.includes(c.id))
             .map(c => c.id)
