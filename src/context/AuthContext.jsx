@@ -2,13 +2,16 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { IS_DEMO, auth, googleProvider, db } from '../services/firebase';
 import { onAuthStateChanged, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, getDocFromCache, setDoc } from 'firebase/firestore';
 import {
   DEFAULT_READING_PREFERENCES,
   normalizeReadingPreferences,
 } from '../utils/userSettings';
+import { settleWithin } from '../utils/asyncTiming';
 
 const AuthContext = createContext(null);
+const PROFILE_CACHE_TIMEOUT_MS = 800;
+const PROFILE_NETWORK_TIMEOUT_MS = 7000;
 
 // ── Demo mode storage helpers ──
 function demoGet(key, fallback) {
@@ -29,6 +32,8 @@ export function AuthProvider({ children }) {
   const [userPreferences, setUserPreferences] = useState(null);
   const [followedAuthors, setFollowedAuthors] = useState([]);
   const [readingPreferences, setReadingPreferences] = useState(DEFAULT_READING_PREFERENCES);
+  const [profileLoadError, setProfileLoadError] = useState(null);
+  const [profileReloadKey, setProfileReloadKey] = useState(0);
 
   useEffect(() => {
     if (IS_DEMO) {
@@ -48,9 +53,11 @@ export function AuthProvider({ children }) {
     }
 
     let authChangeId = 0;
+    let disposed = false;
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       const changeId = ++authChangeId;
       setLoading(true);
+      setProfileLoadError(null);
       setUser(currentUser);
       setOnboardingComplete(false);
       setUserPreferences(null);
@@ -58,28 +65,57 @@ export function AuthProvider({ children }) {
       setReadingPreferences(DEFAULT_READING_PREFERENCES);
 
       if (currentUser) {
-        // Fetch user data from firestore
-        try {
-          const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-          if (changeId !== authChangeId) return;
-          if (userDoc.exists()) {
-            const data = userDoc.data();
-            setOnboardingComplete(data.onboardingComplete || false);
-            setUserPreferences(data.preferences || data.selectedCategories || null);
-            setFollowedAuthors(data.followedAuthors || []);
-            setReadingPreferences(normalizeReadingPreferences(data.readingPreferences));
-          } else {
+        const userRef = doc(db, 'users', currentUser.uid);
+        const isCurrent = () => !disposed && changeId === authChangeId;
+        const applyProfile = (snapshot) => {
+          if (!snapshot?.exists() || !isCurrent()) return false;
+          const data = snapshot.data();
+          setOnboardingComplete(Boolean(data.onboardingComplete));
+          setUserPreferences(data.preferences || data.selectedCategories || null);
+          setFollowedAuthors(data.followedAuthors || []);
+          setReadingPreferences(normalizeReadingPreferences(data.readingPreferences));
+          return true;
+        };
+
+        const cached = await settleWithin(
+          getDocFromCache(userRef),
+          PROFILE_CACHE_TIMEOUT_MS,
+        );
+        if (!isCurrent()) return;
+
+        const hydratedFromCache = cached.status === 'fulfilled' && applyProfile(cached.value);
+        if (hydratedFromCache) setLoading(false);
+
+        const remote = await settleWithin(getDoc(userRef), PROFILE_NETWORK_TIMEOUT_MS);
+        if (!isCurrent()) return;
+
+        if (remote.status === 'fulfilled') {
+          if (!applyProfile(remote.value) && !hydratedFromCache) {
             setOnboardingComplete(false);
           }
-        } catch (err) {
-          if (changeId === authChangeId) console.error("Error fetching user data", err);
+        } else if (!hydratedFromCache) {
+          setProfileLoadError('No se pudo recuperar tu perfil. Comprueba la conexión e inténtalo de nuevo.');
+          if (remote.status === 'rejected') {
+            console.error('Error fetching user data', remote.reason);
+          } else {
+            console.warn('La carga del perfil superó el tiempo de espera');
+          }
         }
       }
-      if (changeId === authChangeId) setLoading(false);
+      if (!disposed && changeId === authChangeId) setLoading(false);
     });
 
-    return unsubscribe;
-  }, []);
+    return () => {
+      disposed = true;
+      authChangeId += 1;
+      unsubscribe();
+    };
+  }, [profileReloadKey]);
+
+  const retryProfileLoad = () => {
+    setProfileLoadError(null);
+    setProfileReloadKey(key => key + 1);
+  };
 
   const signInWithGoogle = async () => {
     setError(null);
@@ -203,6 +239,7 @@ export function AuthProvider({ children }) {
     userPreferences,
     followedAuthors,
     readingPreferences,
+    profileLoadError,
     signInWithGoogle,
     signOut,
     completeOnboarding,
@@ -210,6 +247,7 @@ export function AuthProvider({ children }) {
     setUserPreferences,
     toggleFollowAuthor,
     updateReadingPreferences,
+    retryProfileLoad,
     isDemo: IS_DEMO,
   };
 

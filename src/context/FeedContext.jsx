@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useCallback, useEffect, useRef, useLayoutEffect } from 'react';
 import { IS_DEMO, db } from '../services/firebase';
-import { collection, getDocs, doc, setDoc, updateDoc, deleteField, increment } from 'firebase/firestore';
+import { collection, getDocs, getDocsFromCache, doc, setDoc, updateDoc, deleteField, increment } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 import { useFollowing } from './FollowingContext';
 import { fetchPapers, clearCache, fetchPapersByIds, getAuthorPapers } from '../services/arxivService';
@@ -45,6 +45,9 @@ const FEED_SOURCE_RENDER_BUDGET_MS = 5000;
 const OPTIONAL_SOURCE_RENDER_BUDGET_MS = 3500;
 const OPENALEX_FEED_REQUEST_TIMEOUT_MS = 6500;
 const OPENALEX_FEED_WAIT_BUDGET_MS = 4500;
+const INTERACTIONS_CACHE_TIMEOUT_MS = 800;
+const INTERACTIONS_NETWORK_TIMEOUT_MS = 5000;
+const INTERACTIONS_CACHED_REFRESH_TIMEOUT_MS = 1500;
 const FEED_SNAPSHOT_TTL_MS = 15 * 60 * 1000;
 const FEED_SNAPSHOT_MAX_PAPERS = PAGE_SIZE * 2;
 
@@ -411,7 +414,21 @@ export function FeedProvider({ children }) {
     const loadInteractions = async () => {
       try {
         const interactionsRef = collection(db, 'users', userId, 'interactions');
-        const snapshot = await getDocs(interactionsRef);
+        const cached = await settleWithin(
+          getDocsFromCache(interactionsRef),
+          INTERACTIONS_CACHE_TIMEOUT_MS,
+        );
+        const cachedSnapshot = cached.status === 'fulfilled' ? cached.value : null;
+        const remote = await settleWithin(
+          getDocs(interactionsRef),
+          cachedSnapshot
+            ? INTERACTIONS_CACHED_REFRESH_TIMEOUT_MS
+            : INTERACTIONS_NETWORK_TIMEOUT_MS,
+        );
+        const snapshot = remote.status === 'fulfilled' ? remote.value : cachedSnapshot;
+        if (!snapshot) {
+          console.warn('El perfil de recomendación no respondió; se iniciará con señales neutrales');
+        }
         const liked = new Set();
         const notInterested = new Set();
         const saved = new Set();
@@ -420,7 +437,7 @@ export function FeedProvider({ children }) {
         const affinities = {};
         const cooldowns = {};
 
-        snapshot.forEach((doc) => {
+        snapshot?.forEach((doc) => {
           const data = doc.data();
           if (data.liked) liked.add(doc.id);
           if (data.notInterested) notInterested.add(doc.id);

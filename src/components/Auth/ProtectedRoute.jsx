@@ -3,7 +3,13 @@ import { useAuth } from '../../context/AuthContext';
 import AnimatedAtom from '../Feed/AnimatedAtom';
 
 export default function ProtectedRoute({ children, requireOnboarding = true }) {
-  const { user, loading, onboardingComplete } = useAuth();
+  const {
+    user,
+    loading,
+    onboardingComplete,
+    profileLoadError,
+    retryProfileLoad,
+  } = useAuth();
 
   if (loading) {
     return (
@@ -41,6 +47,61 @@ export default function ProtectedRoute({ children, requireOnboarding = true }) {
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (profileLoadError) {
+    return (
+      <div className="loading-screen">
+        <AnimatedAtom size={64} strokeWidth={1} className="loading-atom" />
+        <h2 className="loading-error-title">No se pudo cargar tu perfil</h2>
+        <p className="loading-text">{profileLoadError}</p>
+        <button className="loading-retry" onClick={retryProfileLoad}>Reintentar</button>
+        <style>{`
+          .loading-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            min-height: 100dvh;
+            padding: 24px;
+            background: var(--bg-primary);
+            gap: var(--space-4);
+            text-align: center;
+          }
+          .loading-atom {
+            color: var(--accent-primary);
+            filter: drop-shadow(0 0 15px var(--accent-primary));
+          }
+          .loading-text {
+            max-width: 520px;
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: var(--fs-sm);
+          }
+          .loading-error-title {
+            margin: 0;
+            color: var(--text-primary);
+            font-size: 22px;
+            letter-spacing: 0;
+          }
+          .loading-retry {
+            min-height: 44px;
+            padding: 0 22px;
+            border: 1px solid rgba(139, 92, 246, 0.5);
+            border-radius: 7px;
+            background: rgba(139, 92, 246, 0.14);
+            color: var(--text-primary);
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+          }
+          .loading-retry:hover {
+            background: rgba(139, 92, 246, 0.24);
+          }
+        `}</style>
+      </div>
+    );
   }
 
   if (requireOnboarding && !onboardingComplete) {
