@@ -856,7 +856,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
                     disabled={isFollowPending(followEntity)}
                     aria-pressed={isFollowing(followEntity)}
                   >
-                    {isFollowing(followEntity) || isFollowPending(followEntity)
+                    {isFollowing(followEntity)
                         ? <><Check size={14} /> <span>Siguiendo</span></>
                         : <span>Seguir</span>}
                   </button>

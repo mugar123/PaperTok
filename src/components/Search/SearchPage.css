@@ -293,7 +293,7 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.search-follow-btn.following:not(.is-pending) {
+.search-follow-btn.following {
   animation: followConfirmed 0.38s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -303,9 +303,19 @@
   pointer-events: none;
 }
 
+.search-follow-btn.is-pending:not(.following) {
+  animation: followReleased 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 @keyframes followConfirmed {
   0% { transform: scale(0.88); }
   55% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+@keyframes followReleased {
+  0% { transform: scale(1); }
+  45% { transform: scale(0.92); }
   100% { transform: scale(1); }
 }
 
@@ -474,7 +484,8 @@
 @media (prefers-reduced-motion: reduce) {
   .search-section,
   .search-progress,
-  .search-follow-btn.following:not(.is-pending) {
+  .search-follow-btn.following,
+  .search-follow-btn.is-pending:not(.following) {
     animation: none;
   }
 }
