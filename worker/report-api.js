@@ -903,7 +903,7 @@ export default {
         status: 204,
         headers: {
           ...corsHeaders(origin, env),
-          'access-control-allow-methods': 'GET, POST, OPTIONS',
+          'access-control-allow-methods': 'GET, POST, PUT, OPTIONS',
           'access-control-allow-headers': 'authorization, content-type',
           'access-control-max-age': '86400',
         },

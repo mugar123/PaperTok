@@ -1,6 +1,17 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { IS_DEMO, db } from '../../services/firebase';
-import { collection, getDocs, doc, deleteDoc, updateDoc, arrayRemove } from 'firebase/firestore';
+import {
+  collection,
+  getDocs,
+  getDocsFromCache,
+  query,
+  where,
+  documentId,
+  doc,
+  deleteDoc,
+  updateDoc,
+  arrayRemove,
+} from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { useFeed } from '../../context/FeedContext';
 import { getCategoryLabel } from '../../data/categories';
@@ -11,7 +22,9 @@ import { downloadCitationFile } from '../../utils/readingLibrary';
 import { settleWithin } from '../../utils/asyncTiming';
 import './ListsPage.css';
 
-const LISTS_LOAD_DEADLINE_MS = 10_000;
+const LISTS_LOAD_DEADLINE_MS = 2_500;
+const PAPER_METADATA_LOAD_DEADLINE_MS = 4_000;
+const PAPER_METADATA_BATCH_SIZE = 10;
 
 function demoGet(key, fallback) {
   try { const v = localStorage.getItem(`papertok_${key}`); return v ? JSON.parse(v) : fallback; }
@@ -27,33 +40,40 @@ function demoSet(key, value) {
 
 export default function ListsPage({ onOpenPdf, onEditPaper }) {
   const { user } = useAuth();
-  const { unmarkAsRead, toggleLike, personalLibrary, toggleReadLater } = useFeed();
+  const {
+    unmarkAsRead,
+    toggleLike,
+    personalLibrary,
+    toggleReadLater,
+    likedPaperIds,
+    readPaperIds,
+  } = useFeed();
   const [lists, setLists] = useState([]);
   const [savedPapers, setSavedPapers] = useState({});
   const [expandedList, setExpandedList] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [metadataLoadingListId, setMetadataLoadingListId] = useState(null);
+  const [metadataError, setMetadataError] = useState(null);
   const [error, setError] = useState(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const metadataRequestId = useRef(0);
+  const failedMetadataRequests = useRef(new Map());
 
   const displayLists = useMemo(() => {
+    const favoriteIds = Array.from(likedPaperIds || []);
+    const readIds = Array.from(readPaperIds || [])
+      .sort((a, b) => new Date(personalLibrary[b]?.readAt || 0) - new Date(personalLibrary[a]?.readAt || 0));
     const readLaterIds = Object.values(personalLibrary)
       .filter((record) => record.readLater)
       .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))
       .map((record) => record.paperId);
-    const normalized = lists.map((list) => list.id === '__read__'
-      ? {
-          ...list,
-          name: 'Historial de lectura',
-          paperIds: [...list.paperIds].sort((a, b) => new Date(personalLibrary[b]?.readAt || 0) - new Date(personalLibrary[a]?.readAt || 0)),
-        }
-      : list);
-    const insertAt = Math.min(1, normalized.length);
     return [
-      ...normalized.slice(0, insertAt),
+      { id: '__favorites__', name: 'Favoritos', emoji: 'Heart', paperIds: favoriteIds, createdAt: 'default' },
       { id: '__read_later__', name: 'Leer después', emoji: 'BookOpen', paperIds: readLaterIds, createdAt: 'default' },
-      ...normalized.slice(insertAt),
+      { id: '__read__', name: 'Historial de lectura', emoji: 'Eye', paperIds: readIds, createdAt: 'default' },
+      ...lists,
     ];
-  }, [lists, personalLibrary]);
+  }, [likedPaperIds, lists, personalLibrary, readPaperIds]);
 
   const getPaper = (paperId) => savedPapers[paperId] || personalLibrary[paperId]?.paper;
 
@@ -62,6 +82,7 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
 
     const loadData = async () => {
       if (!user) {
+        if (active) setLists([]);
         if (active) setLoading(false);
         return;
       }
@@ -69,73 +90,51 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
         setLoading(true);
         setError(null);
       }
+      const applySnapshot = (snapshot) => {
+        if (!active) return;
+        const customLists = [];
+        snapshot.forEach((item) => customLists.push({ id: item.id, ...item.data() }));
+        setLists(customLists);
+      };
+
       try {
-        let userLists = [];
-        let papers = {};
-        let likedPaperIds = [];
-        let readPaperIds = [];
-
         if (IS_DEMO) {
-          userLists = demoGet('lists', []);
-          papers = demoGet('savedPapersData', {});
-          likedPaperIds = demoGet('likedPaperIds', []);
-          readPaperIds = demoGet('readPaperIds', []);
-        } else {
-          // The three collections are independent: fetching them in parallel cuts
-          // the load to one round-trip, and the deadline guarantees the spinner
-          // can never outlive a hung Firestore connection.
-          const snapshots = await settleWithin(
-            Promise.all([
-              getDocs(collection(db, 'users', user.uid, 'lists')),
-              getDocs(collection(db, 'users', user.uid, 'savedPapers')),
-              getDocs(collection(db, 'users', user.uid, 'interactions')),
-            ]),
-            LISTS_LOAD_DEADLINE_MS,
-          );
-          if (snapshots.status !== 'fulfilled') {
-            throw snapshots.status === 'timed_out'
-              ? new Error('La conexión está tardando demasiado.')
-              : (snapshots.reason || new Error('No se pudieron cargar tus listas.'));
-          }
-          const [listsSnapshot, papersSnapshot, intSnapshot] = snapshots.value;
-
-          listsSnapshot.forEach((d) => { userLists.push({ id: d.id, ...d.data() }); });
-          papersSnapshot.forEach((d) => { papers[d.id] = paperLegacyAdapter({ id: d.id, ...d.data() }); });
-          intSnapshot.forEach((doc) => {
-            const data = doc.data();
-            if (data.liked) {
-              likedPaperIds.push(doc.id);
-              if (!papers[doc.id]) {
-                papers[doc.id] = paperLegacyAdapter({ id: doc.id, title: data.paperTitle || doc.id,
-                  authors: data.paperAuthors || [], primaryCategory: data.paperCategory || '',
-                  published: data.timestamp, arxivId: doc.id });
-              }
-            }
-            if (data.read) {
-              readPaperIds.push(doc.id);
-              if (!papers[doc.id]) {
-                papers[doc.id] = paperLegacyAdapter({ id: doc.id, title: data.paperTitle || doc.id,
-                  authors: data.paperAuthors || [], primaryCategory: data.paperCategory || '',
-                  published: data.timestamp, arxivId: doc.id });
-              }
-            }
-          });
+          if (active) setLists(demoGet('lists', []));
+          return;
         }
 
-        const allLists = [
-          { id: '__favorites__', name: 'Favoritos', emoji: 'Heart',
-            paperIds: likedPaperIds, createdAt: 'default' },
-          { id: '__read__', name: 'Leídos', emoji: 'Eye',
-            paperIds: readPaperIds, createdAt: 'default' },
-          ...userLists,
-        ];
-        
-        if (!active) return;
-        setLists(allLists);
-        setSavedPapers(papers);
+        const listsRef = collection(db, 'users', user.uid, 'lists');
+
+        // FeedContext already owns Favorites, Read and Read later. Custom lists
+        // paint from IndexedDB first while one network refresh runs behind them.
+        try {
+          const cached = await getDocsFromCache(listsRef);
+          applySnapshot(cached);
+        } catch {
+          // First visit on this device: nothing cached yet.
+        }
+
+        const networkRequest = getDocs(listsRef);
+        const snapshot = await settleWithin(networkRequest, LISTS_LOAD_DEADLINE_MS);
+        if (snapshot.status !== 'fulfilled') {
+          if (snapshot.status === 'timed_out') {
+            // Keep the original request alive. A late response can still refresh
+            // the cards without making the user press Retry.
+            networkRequest.then((lateSnapshot) => {
+              if (!active) return;
+              applySnapshot(lateSnapshot);
+              setError(null);
+            }).catch(() => {});
+          }
+          throw snapshot.status === 'timed_out'
+            ? new Error('La conexión está tardando demasiado.')
+            : (snapshot.reason || new Error('No se pudieron cargar tus listas.'));
+        }
+        applySnapshot(snapshot.value);
+        if (active) setError(null);
       } catch (err) {
         console.error('Error loading lists:', err);
-        if (active) setError('No se pudieron cargar tus listas. Comprueba tu conexión e inténtalo de nuevo.');
+        if (active) setError('No se pudieron actualizar tus listas personalizadas.');
       } finally {
         if (active) setLoading(false);
       }
@@ -144,6 +143,201 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
     loadData();
     return () => { active = false; };
   }, [user, reloadToken]);
+
+  const openList = useCallback(async (list, retryFailedOnly = false) => {
+    const requestId = ++metadataRequestId.current;
+    setExpandedList(list.id);
+    setMetadataError(null);
+
+    const paperIds = [...new Set(
+      (list.paperIds || []).filter((paperId) => typeof paperId === 'string' && paperId),
+    )];
+    const missingIds = paperIds.filter(
+      (paperId) => !savedPapers[paperId] && !personalLibrary[paperId]?.paper,
+    );
+    if (missingIds.length === 0) {
+      failedMetadataRequests.current.delete(list.id);
+      setMetadataLoadingListId(null);
+      return;
+    }
+
+    if (IS_DEMO) {
+      const demoPapers = demoGet('savedPapersData', {});
+      const requestedPapers = {};
+      missingIds.forEach((paperId) => {
+        if (demoPapers[paperId]) {
+          requestedPapers[paperId] = paperLegacyAdapter({ id: paperId, ...demoPapers[paperId] });
+        }
+      });
+      setSavedPapers((current) => ({ ...current, ...requestedPapers }));
+      failedMetadataRequests.current.delete(list.id);
+      setMetadataLoadingListId(null);
+      return;
+    }
+
+    if (!user) {
+      setMetadataLoadingListId(null);
+      return;
+    }
+    setMetadataLoadingListId(list.id);
+
+    try {
+      const missingIdSet = new Set(missingIds);
+      const retryRequests = retryFailedOnly
+        ? (failedMetadataRequests.current.get(list.id) || [])
+        : [];
+      failedMetadataRequests.current.delete(list.id);
+
+      const requestDefinitions = retryRequests.length > 0
+        ? retryRequests
+          .map((request) => ({
+            ...request,
+            paperIds: request.paperIds.filter((paperId) => missingIdSet.has(paperId)),
+          }))
+          .filter((request) => request.paperIds.length > 0)
+        : (() => {
+            const batches = [];
+            for (let index = 0; index < missingIds.length; index += PAPER_METADATA_BATCH_SIZE) {
+              batches.push(missingIds.slice(index, index + PAPER_METADATA_BATCH_SIZE));
+            }
+            return batches.flatMap((paperIds) => [
+              { source: 'interaction', paperIds },
+              { source: 'saved', paperIds },
+            ]);
+          })();
+
+      const resolvedIds = new Set();
+      const mergeSnapshot = (source, snapshot) => {
+        if (metadataRequestId.current !== requestId) return;
+        const loadedPapers = {};
+        snapshot.forEach((item) => {
+          const data = item.data();
+          const rawPaper = source === 'saved'
+            ? { id: item.id, ...data }
+            : data.paper
+              ? { id: item.id, ...data.paper }
+              : {
+                  id: item.id,
+                  title: data.paperTitle || item.id,
+                  authors: data.paperAuthors || [],
+                  primaryCategory: data.paperCategory || '',
+                  published: data.timestamp,
+                  arxivId: item.id,
+                };
+          const paper = paperLegacyAdapter(rawPaper);
+          loadedPapers[item.id] = paper;
+          if (paper.title && paper.title !== item.id) {
+            resolvedIds.add(item.id);
+          }
+        });
+
+        if (Object.keys(loadedPapers).length === 0) return;
+        setSavedPapers((current) => {
+          const next = { ...current };
+          Object.entries(loadedPapers).forEach(([paperId, paper]) => {
+            // savedPapers contains the canonical document and must win even if
+            // the lighter interaction record finishes later.
+            if (source === 'saved' || !next[paperId]) {
+              next[paperId] = paper;
+            }
+          });
+          return next;
+        });
+      };
+
+      const runRequest = async (requestDefinition) => {
+        const sourceCollection = requestDefinition.source === 'saved'
+          ? 'savedPapers'
+          : 'interactions';
+        const metadataQuery = query(
+          collection(db, 'users', user.uid, sourceCollection),
+          where(documentId(), 'in', requestDefinition.paperIds),
+        );
+
+        const cachedRequest = settleWithin(
+          getDocsFromCache(metadataQuery),
+          500,
+        ).then((cachedResult) => {
+          if (cachedResult.status === 'fulfilled') {
+            mergeSnapshot(requestDefinition.source, cachedResult.value);
+          }
+        });
+
+        const networkRequest = getDocs(metadataQuery);
+        const networkResultRequest = settleWithin(
+          networkRequest,
+          PAPER_METADATA_LOAD_DEADLINE_MS,
+        ).then((networkResult) => {
+          if (networkResult.status === 'fulfilled') {
+            mergeSnapshot(requestDefinition.source, networkResult.value);
+            return networkResult;
+          }
+
+          if (networkResult.status === 'timed_out') {
+            networkRequest.then((lateSnapshot) => {
+              mergeSnapshot(requestDefinition.source, lateSnapshot);
+              if (
+                metadataRequestId.current === requestId
+                && missingIds.every((paperId) => resolvedIds.has(paperId))
+              ) {
+                failedMetadataRequests.current.delete(list.id);
+                setMetadataError(null);
+              }
+            }).catch(() => {});
+          }
+          return networkResult;
+        });
+
+        const [, networkOutcome] = await Promise.allSettled([
+          cachedRequest,
+          networkResultRequest,
+        ]);
+        if (networkOutcome.status === 'rejected') {
+          throw networkOutcome.reason;
+        }
+        return networkOutcome.value;
+      };
+
+      // Every source/batch has its own deadline and paints as soon as it
+      // resolves. One slow Firestore query can no longer hold back the others.
+      const requestResults = await Promise.allSettled(
+        requestDefinitions.map((requestDefinition) => runRequest(requestDefinition)),
+      );
+      if (metadataRequestId.current !== requestId) return;
+
+      const failedRequests = requestResults.flatMap((result, index) => {
+        if (result.status === 'rejected' || result.value?.status !== 'fulfilled') {
+          return [requestDefinitions[index]];
+        }
+        return [];
+      });
+      const unresolvedIds = missingIds.filter((paperId) => !resolvedIds.has(paperId));
+
+      if (failedRequests.length > 0 && unresolvedIds.length > 0) {
+        failedMetadataRequests.current.set(list.id, failedRequests);
+        setMetadataError('No se pudieron cargar todos los datos de esta lista.');
+      } else {
+        failedMetadataRequests.current.delete(list.id);
+        setMetadataError(null);
+      }
+    } catch (metadataLoadError) {
+      console.error('Error loading list paper metadata:', metadataLoadError);
+      if (metadataRequestId.current === requestId) {
+        setMetadataError('No se pudieron cargar todos los datos de esta lista.');
+      }
+    } finally {
+      if (metadataRequestId.current === requestId) {
+        setMetadataLoadingListId(null);
+      }
+    }
+  }, [personalLibrary, savedPapers, user]);
+
+  const closeExpandedList = () => {
+    metadataRequestId.current += 1;
+    setExpandedList(null);
+    setMetadataLoadingListId(null);
+    setMetadataError(null);
+  };
 
   const handleDeleteList = async (listId) => {
     if (listId === '__favorites__' || listId === '__read__' || listId === '__read_later__') return;
@@ -203,40 +397,27 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
       return list;
     }));
   };
-
-
-
-  if (loading) {
-    return (
-      <div className="lists-page">
-        <div className="lists-loading">
+  return (
+    <div className="lists-page">
+      <div className="lists-header"><h1>Mis Listas</h1></div>
+      {loading && (
+        <div className="lists-inline-status" aria-live="polite">
           <div className="lists-loading-spinner" />
-          <p>Cargando tus listas...</p>
+          <span>Actualizando listas personales...</span>
         </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="lists-page">
-        <div className="lists-loading" role="alert">
-          <p>{error}</p>
+      )}
+      {error && (
+        <div className="lists-inline-status is-error" role="alert">
+          <span>{error}</span>
           <button className="lists-retry-btn" onClick={() => setReloadToken(token => token + 1)}>
             Reintentar
           </button>
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="lists-page">
-      <div className="lists-header"><h1>Mis Listas</h1></div>
+      )}
 
       {expandedList ? (
         <div className="lists-expanded">
-          <button className="lists-back-btn" onClick={() => setExpandedList(null)}>← Volver a listas</button>
+          <button className="lists-back-btn" onClick={closeExpandedList}>← Volver a listas</button>
           {(() => {
             const list = displayLists.find((l) => l.id === expandedList);
             if (!list) return null;
@@ -258,13 +439,27 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
                     </div>
                   )}
                 </div>
+                {metadataLoadingListId === list.id && (
+                  <div className="lists-metadata-status" aria-live="polite">
+                    <div className="lists-loading-spinner" />
+                    <span>Cargando los papers de esta lista...</span>
+                  </div>
+                )}
+                {metadataError && (
+                  <div className="lists-metadata-status is-error" role="alert">
+                    <span>{metadataError}</span>
+                    <button className="lists-retry-btn" onClick={() => openList(list, true)}>Reintentar</button>
+                  </div>
+                )}
                 <div className="lists-expanded-papers">
                   {(list.paperIds || []).map((paperId) => {
                     const paper = getPaper(paperId);
                     const record = personalLibrary[paperId];
                     if (!paper) return (
                       <div key={paperId} className="lists-paper-item">
-                        <p className="lists-paper-title">{paperId}</p>
+                        <p className="lists-paper-title lists-paper-placeholder">
+                          {metadataLoadingListId === list.id ? 'Cargando datos del paper...' : paperId}
+                        </p>
                       </div>
                     );
                     return (
@@ -331,7 +526,7 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
       ) : (
         <div className="lists-grid">
           {displayLists.map((list, idx) => (
-            <div key={list.id} className="list-card glass" onClick={() => setExpandedList(list.id)} style={{ '--stagger-index': idx }}>
+            <div key={list.id} className="list-card glass" onClick={() => openList(list)} style={{ '--stagger-index': idx }}>
               <div className="list-card-top">
                 <span className="list-card-emoji">
                   {(() => {
@@ -346,12 +541,13 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
               </div>
               <h3 className="list-card-name">{list.name}</h3>
               <span className="list-card-count">{list.paperIds?.length || 0} papers</span>
-              {list.paperIds && list.paperIds.length > 0 && (
+              {list.paperIds?.some((paperId) => getPaper(paperId)) && (
                 <div className="list-card-preview">
-                  {list.paperIds.slice(0, 2).map((paperId) => {
-                    const paper = getPaper(paperId);
-                    return <p key={paperId} className="list-card-preview-title">{paper?.title || paperId}</p>;
-                  })}
+                  {list.paperIds
+                    .map((paperId) => getPaper(paperId))
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((paper) => <p key={paper.id} className="list-card-preview-title">{paper.title}</p>)}
                 </div>
               )}
             </div>
