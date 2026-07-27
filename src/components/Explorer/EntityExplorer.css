@@ -180,6 +180,60 @@
   line-height: 1.3;
 }
 
+.ehc-author-institution-wrap {
+  min-width: 0;
+}
+
+.ehc-author-institution {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+  transition: color 160ms ease, transform 160ms ease;
+}
+
+.ehc-author-institution span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ehc-author-institution:hover:not(:disabled) {
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ehc-author-institution:active:not(:disabled) {
+  transform: translateX(1px);
+}
+
+.ehc-author-institution:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 4px;
+  border-radius: 3px;
+}
+
+.ehc-author-institution:disabled {
+  cursor: default;
+}
+
+.ehc-author-institution-error {
+  margin: 4px 0 0;
+  color: #fca5a5;
+  font-size: 0.75rem;
+}
+
 .ehc-institution-identity {
   display: flex;
   align-items: center;

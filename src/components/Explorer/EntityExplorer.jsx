@@ -89,6 +89,8 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
   const [isWikiDescriptionExpandable, setIsWikiDescriptionExpandable] = useState(false);
   const [resolvingParticipant, setResolvingParticipant] = useState(null);
   const [participantNavigationError, setParticipantNavigationError] = useState('');
+  const [isResolvingAuthorInstitution, setIsResolvingAuthorInstitution] = useState(false);
+  const [authorInstitutionNavigationError, setAuthorInstitutionNavigationError] = useState('');
   const [recentImpact, setRecentImpact] = useState(null);
   const [isLoadingRecentImpact, setIsLoadingRecentImpact] = useState(false);
   const [recentImpactError, setRecentImpactError] = useState(null);
@@ -683,6 +685,40 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
     }
   };
 
+  const openAuthorInstitution = async () => {
+    const knownInstitution = entity?.last_known_institutions?.[0];
+    const institutionName = entity?.institution || knownInstitution?.display_name;
+    const institutionId = knownInstitution?.id?.split('/').pop();
+    const rorId = knownInstitution?.ror?.split('/').pop();
+
+    if ((!institutionName && !institutionId && !rorId) || isResolvingAuthorInstitution) return;
+
+    setIsResolvingAuthorInstitution(true);
+    setAuthorInstitutionNavigationError('');
+    try {
+      if (institutionId || rorId) {
+        navigate(`/explorer/institution/${institutionId || rorId}`);
+        return;
+      }
+
+      const institution = await findInstitution({
+        name: institutionName,
+        aliases: [knownInstitution?.display_name, entity?.institution].filter(Boolean),
+      });
+
+      if (institution?.id) {
+        navigate(`/explorer/institution/${institution.id.split('/').pop()}`);
+      } else {
+        setAuthorInstitutionNavigationError('No encontramos el perfil de esta institución.');
+      }
+    } catch (error) {
+      console.error('Failed to resolve author institution', error);
+      setAuthorInstitutionNavigationError('No pudimos abrir esta institución. Inténtalo de nuevo.');
+    } finally {
+      setIsResolvingAuthorInstitution(false);
+    }
+  };
+
   if (isLoadingEntity) return (
       <div className="explorer-container">
         <div className="explorer-hero">
@@ -860,22 +896,22 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
                 </>
               )}
               {type === 'author' && (entity.institution || entity.last_known_institutions?.[0]?.display_name) && (
-                <p className="ehc-meta" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Building2 size={14} /> 
-                  {entity.last_known_institutions?.[0]?.id ? (
-                    <span 
-                      onClick={() => navigate(`/explorer/institution/${entity.last_known_institutions[0].id.split('/').pop()}`)}
-                      onKeyDown={(event) => handleActivationKey(event, () => navigate(`/explorer/institution/${entity.last_known_institutions[0].id.split('/').pop()}`))}
-                      role="link"
-                      tabIndex={0}
-                      style={{ cursor: 'pointer', textDecoration: 'underline' }}
-                    >
-                      {entity.institution || entity.last_known_institutions[0].display_name}
-                    </span>
-                  ) : (
+                <div className="ehc-author-institution-wrap">
+                  <button
+                    type="button"
+                    className="ehc-author-institution"
+                    onClick={openAuthorInstitution}
+                    disabled={isResolvingAuthorInstitution}
+                    title="Ver institución"
+                  >
+                    {isResolvingAuthorInstitution ? <Loader2 className="spinning" size={15} /> : <Building2 size={15} />}
                     <span>{entity.institution || entity.last_known_institutions[0].display_name}</span>
+                    <ChevronRight size={15} aria-hidden="true" />
+                  </button>
+                  {authorInstitutionNavigationError && (
+                    <p className="ehc-author-institution-error" role="alert">{authorInstitutionNavigationError}</p>
                   )}
-                </p>
+                </div>
               )}
               {type === 'project' && entity.funder && (
                 <p className="ehc-meta">
