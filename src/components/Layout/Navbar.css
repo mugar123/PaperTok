@@ -29,12 +29,7 @@
   display: flex;
   align-items: center;
   flex: 1;
-}
-
-.navbar-left {
-  display: flex;
-  align-items: center;
-  flex: 1;
+  min-width: 0;
 }
 
 .navbar-center-pill {
@@ -147,20 +142,29 @@
   justify-content: flex-end;
   gap: var(--space-2);
   flex: 1;
+  min-width: 0;
 }
 
 /* ── Profile ── */
 .navbar-profile {
   position: relative;
   margin-left: var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .navbar-avatar-btn {
+  width: 40px;
+  height: 40px;
   padding: 0;
   border: none;
   background: none;
   cursor: pointer;
   border-radius: 50%;
+  display: grid;
+  place-items: center;
+  line-height: 0;
 }
 
 .navbar-avatar-btn.active .navbar-avatar {
@@ -169,6 +173,7 @@
 }
 
 .navbar-avatar {
+  display: block;
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -311,6 +316,11 @@
   .navbar-avatar {
     width: 28px;
     height: 28px;
+  }
+
+  .navbar-avatar-btn {
+    width: 32px;
+    height: 32px;
   }
 }
 

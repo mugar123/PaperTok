@@ -28,15 +28,10 @@ function AppContent() {
   const [saveModalPaper, setSaveModalPaper] = useState(null)
   const location = useLocation()
 
-    const getRouteKey = (pathname) => {
-      if (pathname.startsWith('/explorer/')) return '/explorer';
-      return pathname;
-    };
-
     return (
       <FeedProvider>
-        <AnimatePresence mode="wait">
-          <Routes location={location} key={getRouteKey(location.pathname)}>
+        <AnimatePresence mode="wait" initial={false}>
+          <Routes location={location} key={location.pathname}>
           <Route path="/login" element={<PageTransition><LoginPage /></PageTransition>} />
           <Route
             path="/onboarding"
@@ -64,10 +59,10 @@ function AppContent() {
             path="/lists"
             element={
               <ProtectedRoute>
-                <>
+                <PageTransition>
                   <Navbar />
                   <ListsPage onOpenPdf={setPdfPaper} onEditPaper={setSaveModalPaper} />
-                </>
+                </PageTransition>
               </ProtectedRoute>
             }
           />

@@ -14,7 +14,7 @@ import {
   hasKnownPaperCitationCount,
   pinSourcePaper,
 } from '../../utils/entityExplorer';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { CATEGORIES } from '../../data/categories';
 import { useFollowing } from '../../context/FollowingContext';
 import { useFeed } from '../../context/FeedContext';
@@ -48,6 +48,7 @@ const ROR_RELATION_LABELS = {
 export default function EntityExplorer({ onSaveToList = () => {} }) {
   const { type, id } = useParams();
   const navigate = useNavigate();
+  const prefersReducedMotion = useReducedMotion();
   const [searchParams] = useSearchParams();
   const { isFollowing, isFollowPending, toggleFollow } = useFollowing();
   const {
@@ -1419,7 +1420,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
                   role="button"
                   tabIndex={0}
                   aria-label={`Abrir publicación: ${normalizeScientificMarkup(paper.title) || 'Sin título'}`}
-                  style={{ '--i': idx }}
+                  style={{ '--i': Math.min(idx, 8) }}
                 >
                   <div className="eli-header">
                     <span className="eli-cat">{paper.categories && paper.categories.length > 0 ? paper.categories[0] : 'Paper'}</span>
@@ -1677,39 +1678,49 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
       </AnimatePresence>
 
       {/* Paper Card Overlay */}
-      <AnimatePresence>
+      <AnimatePresence initial={false}>
         {selectedPaper && !pdfPaperToView && (
           <motion.div 
             className="explorer-overlay"
-            initial={{ opacity: 0, y: '100vh' }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: '100vh' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: prefersReducedMotion ? 0.1 : 0.2, ease: 'easeOut' }}
           >
-            <button 
-              className="explorer-overlay-close" 
-              onClick={() => setSelectedPaper(null)}
-              aria-label="Cerrar publicación"
-              title="Volver"
+            <motion.div
+              className="explorer-overlay-surface"
+              initial={prefersReducedMotion ? false : { opacity: 0, y: 26, scale: 0.985 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={prefersReducedMotion ? { opacity: 0 } : { opacity: 0, y: 18, scale: 0.99 }}
+              transition={prefersReducedMotion
+                ? { duration: 0.1 }
+                : { type: 'spring', damping: 30, stiffness: 330, mass: 0.72 }}
             >
-              <ArrowLeft size={22} />
-            </button>
-            <div className="explorer-overlay-content hide-scroll-hint">
-              <PaperCard 
-                paper={selectedPaper}
-                isLiked={likedPaperIds.has(selectedPaper.id)}
-                isSaved={savedPaperIds.has(selectedPaper.id)}
-                isRead={readPaperIds.has(selectedPaper.id)}
-                onLike={toggleLike}
-                onNotInterested={(paper) => { markNotInterested(paper); setSelectedPaper(null); }}
-                onMarkAsRead={markAsRead}
-                onOpenPdf={(paper) => setPdfPaperToView(paper)}
-                onSaveToList={onSaveToList}
-                getInteractionState={getInteractionState}
-                trackViewTime={trackViewTime}
-                trackSkip={trackSkip}
-              />
-            </div>
+              <button
+                className="explorer-overlay-close"
+                onClick={() => setSelectedPaper(null)}
+                aria-label="Cerrar publicación"
+                title="Volver"
+              >
+                <ArrowLeft size={22} />
+              </button>
+              <div className="explorer-overlay-content hide-scroll-hint">
+                <PaperCard
+                  paper={selectedPaper}
+                  isLiked={likedPaperIds.has(selectedPaper.id)}
+                  isSaved={savedPaperIds.has(selectedPaper.id)}
+                  isRead={readPaperIds.has(selectedPaper.id)}
+                  onLike={toggleLike}
+                  onNotInterested={(paper) => { markNotInterested(paper); setSelectedPaper(null); }}
+                  onMarkAsRead={markAsRead}
+                  onOpenPdf={(paper) => setPdfPaperToView(paper)}
+                  onSaveToList={onSaveToList}
+                  getInteractionState={getInteractionState}
+                  trackViewTime={trackViewTime}
+                  trackSkip={trackSkip}
+                />
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

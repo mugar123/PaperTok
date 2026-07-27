@@ -4,9 +4,7 @@
   flex-direction: column;
   background-color: var(--bg-primary, #0a0a0f);
   position: relative;
-  /* Page Entrance Animation */
   opacity: 1;
-  animation: pageReveal 1.2s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @keyframes pageReveal {
@@ -28,9 +26,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  /* Page Entrance Animation for loading screens */
   opacity: 1;
-  animation: pageReveal 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  animation: pageReveal 0.32s cubic-bezier(0.16, 1, 0.3, 1);
   color: var(--text-secondary);
   gap: 1rem;
   background: var(--bg-primary, #0a0a0f);
@@ -117,7 +114,7 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  animation: slideUpFade 1.0s ease-out forwards;
+  animation: slideUpFade 0.42s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .ehc-main {
@@ -770,11 +767,11 @@
   cursor: pointer;
   position: relative;
   overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  transition: background 0.22s ease, border-color 0.22s ease, transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease;
   /* Staggered animation values injected via style="--i: index" */
   opacity: 0;
-  animation: staggerFadeUp 4.0s cubic-bezier(0.19, 1, 0.22, 1) forwards;
-  animation-delay: calc(var(--i, 0) * 0.15s);
+  animation: staggerFadeUp 0.42s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: calc(var(--i, 0) * 0.035s);
 }
 
 /* Glass shine effect on hover */
@@ -1000,6 +997,15 @@
   background: rgba(10, 10, 15, 0.98);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  overflow: hidden;
+}
+
+.explorer-overlay-surface {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: rgba(10, 10, 15, 0.98);
+  transform-origin: 50% 55%;
 }
 
 .explorer-overlay-close {
@@ -1667,9 +1673,15 @@
   .ehc-wiki p,
   .ehc-wiki-toggle svg,
   .project-summary-box p,
-  .project-summary-toggle svg {
+  .project-summary-toggle svg,
+  .explorer-hero-content,
+  .explorer-list-item,
+  .explorer-error {
+    animation: none;
     transition: none;
   }
+
+  .explorer-list-item { opacity: 1; }
 }
 
 /* Section titles */
