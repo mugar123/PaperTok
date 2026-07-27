@@ -18,6 +18,11 @@ const ERROR_COPY = {
   EMAIL_UNAVAILABLE: 'El servicio de correo no está disponible ahora mismo.',
 };
 
+const MIN_TEST_SENDING_MS = 900;
+const TEST_SENT_VISIBLE_MS = 5000;
+
+const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+
 export default function EmailNotificationModal({ isOpen, onClose }) {
   const {
     preferences,
@@ -66,16 +71,19 @@ export default function EmailNotificationModal({ isOpen, onClose }) {
   };
 
   const handleTest = async () => {
+    const startedAt = Date.now();
     setFeedback(null);
     setTestState('sending');
     clearTimeout(testFeedbackTimerRef.current);
     try {
       const result = await sendTest({ ...draft, enabled: true });
+      const remainingSendingTime = MIN_TEST_SENDING_MS - (Date.now() - startedAt);
+      if (remainingSendingTime > 0) await wait(remainingSendingTime);
       const saved = result.preferences;
       setDraft(saved);
       setFeedback({ type: 'success', text: `Correo de prueba enviado a ${saved.email}.` });
       setTestState('sent');
-      testFeedbackTimerRef.current = setTimeout(() => setTestState('idle'), 2600);
+      testFeedbackTimerRef.current = setTimeout(() => setTestState('idle'), TEST_SENT_VISIBLE_MS);
     } catch (error) {
       setTestState('idle');
       setFeedback({ type: 'error', text: ERROR_COPY[error.code] || ERROR_COPY.EMAIL_UNAVAILABLE });
@@ -186,10 +194,11 @@ export default function EmailNotificationModal({ isOpen, onClose }) {
 
             <footer>
               <button
-                className={`email-notification-test ${testState === 'sent' ? 'is-sent' : ''}`}
+                className={`email-notification-test ${testState === 'sending' ? 'is-sending' : ''} ${testState === 'sent' ? 'is-sent' : ''}`}
                 onClick={handleTest}
                 disabled={saving || testing || loading || !notificationDataReady || !health.available || testState === 'sent'}
                 aria-live="polite"
+                aria-busy={testState === 'sending'}
               >
                 <AnimatePresence mode="wait" initial={false}>
                   {testState === 'sending' ? (

@@ -239,6 +239,12 @@
   justify-content: center;
   gap: 8px;
 }
+.email-notification-test.is-sending {
+  border-color: rgba(139, 92, 246, 0.55);
+  color: #c4b5fd;
+  background: rgba(124, 58, 237, 0.1);
+}
+.email-notification-test.is-sending:disabled { opacity: 1; }
 .email-notification-test.is-sent {
   border-color: rgba(52, 211, 153, 0.5);
   color: #78e5b4;
