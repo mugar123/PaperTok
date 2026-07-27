@@ -39,10 +39,15 @@ export default function EmailNotificationModal({ isOpen, onClose }) {
   const [testState, setTestState] = useState('idle');
   const preferencesRef = useRef(preferences);
   const testFeedbackTimerRef = useRef(null);
+  const onCloseRef = useRef(onClose);
 
   useEffect(() => {
     preferencesRef.current = preferences;
   }, [preferences]);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -51,14 +56,14 @@ export default function EmailNotificationModal({ isOpen, onClose }) {
       setFeedback(null);
       setTestState('idle');
     }, 0);
-    const closeOnEscape = event => event.key === 'Escape' && onClose();
+    const closeOnEscape = event => event.key === 'Escape' && onCloseRef.current();
     document.addEventListener('keydown', closeOnEscape);
     return () => {
       clearTimeout(timeoutId);
       clearTimeout(testFeedbackTimerRef.current);
       document.removeEventListener('keydown', closeOnEscape);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   const handleSave = async () => {
     setFeedback(null);
