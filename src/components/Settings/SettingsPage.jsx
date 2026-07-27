@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import {
   Bell,
   BookOpen,
-  Bookmark,
   Building2,
   BriefcaseBusiness,
   Camera,
@@ -391,29 +390,6 @@ export default function SettingsPage() {
                 </div>
                 <button className="settings-row-action" onClick={() => setIsNotificationsOpen(true)}>
                   Configurar <ChevronRight size={17} />
-                </button>
-              </div>
-            </div>
-          </section>
-
-          <section className="settings-section" aria-labelledby="library-heading">
-            <div className="settings-section-heading">
-              <Bookmark size={18} />
-              <div>
-                <h2 id="library-heading">Biblioteca</h2>
-                <p>Accede a tus papers guardados, notas e historial de lectura.</p>
-              </div>
-            </div>
-
-            <div className="settings-list">
-              <div className="settings-row" style={{ '--settings-index': 4 }}>
-                <span className="settings-row-icon is-cyan"><Bookmark size={20} /></span>
-                <div className="settings-row-content">
-                  <h3>Mis listas</h3>
-                  <p>Favoritos, leer después, historial y colecciones personalizadas</p>
-                </div>
-                <button className="settings-row-action" onClick={() => navigate('/lists')}>
-                  Abrir <ChevronRight size={17} />
                 </button>
               </div>
             </div>
