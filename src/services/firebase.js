@@ -7,12 +7,7 @@ export const IS_DEMO = false;
 
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import {
-  getFirestore,
-  initializeFirestore,
-  persistentLocalCache,
-  persistentMultipleTabManager,
-} from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
 import { getAnalytics } from "firebase/analytics";
 
 const firebaseConfig = {
@@ -29,20 +24,11 @@ const app = initializeApp(firebaseConfig);
 const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;
 const auth = getAuth(app);
 const googleProvider = new GoogleAuthProvider();
-// IndexedDB-backed cache: documents survive reloads, so pages can paint from
-// local data instantly and refresh from the network afterwards. The multi-tab
-// manager keeps several open PaperTok tabs consistent; on browsers without
-// IndexedDB the SDK silently degrades to the in-memory cache.
-let db;
-try {
-  db = initializeFirestore(app, {
-    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
-  });
-} catch {
-  // Hot reload or a browser without persistent IndexedDB support can leave an
-  // existing instance behind. Reuse it instead of failing the whole app.
-  db = getFirestore(app);
-}
+// Keep Firestore's default in-memory cache. Persistent multi-tab storage can
+// exhaust Safari's quota and turn an otherwise recoverable cache miss into a
+// fatal internal assertion. PaperTok already keeps its bounded feed snapshot
+// separately, so database persistence is unnecessary here.
+const db = getFirestore(app);
 
 export { auth, googleProvider, db, analytics };
 export default app;
