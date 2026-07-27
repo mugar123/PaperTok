@@ -41,9 +41,8 @@ function FollowButton({ entity, isFollowing, isPending, onToggle }) {
       disabled={pending}
       aria-pressed={following}
     >
-      {pending && <Loader2 className="spinning" size={14} />}
-      {!pending && following && <Check size={14} />}
-      <span>{pending ? 'Guardando...' : following ? 'Siguiendo' : 'Seguir'}</span>
+      {(following || pending) && <Check size={14} />}
+      <span>{following || pending ? 'Siguiendo' : 'Seguir'}</span>
     </button>
   );
 }
