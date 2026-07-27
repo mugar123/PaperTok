@@ -2,12 +2,13 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { IS_DEMO, auth, googleProvider, db } from '../services/firebase';
 import { onAuthStateChanged, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth';
-import { doc, getDoc, getDocFromCache, setDoc } from 'firebase/firestore';
+import { deleteField, doc, getDoc, getDocFromCache, setDoc } from 'firebase/firestore';
 import {
   DEFAULT_READING_PREFERENCES,
   normalizeReadingPreferences,
 } from '../utils/userSettings';
 import { settleWithin } from '../utils/asyncTiming';
+import { normalizeProfilePhoto } from '../utils/profileImage';
 
 const AuthContext = createContext(null);
 const PROFILE_CACHE_TIMEOUT_MS = 800;
@@ -32,6 +33,7 @@ export function AuthProvider({ children }) {
   const [userPreferences, setUserPreferences] = useState(null);
   const [followedAuthors, setFollowedAuthors] = useState([]);
   const [readingPreferences, setReadingPreferences] = useState(DEFAULT_READING_PREFERENCES);
+  const [profilePhoto, setProfilePhoto] = useState(null);
   const [profileLoadError, setProfileLoadError] = useState(null);
   const [profileReloadKey, setProfileReloadKey] = useState(0);
 
@@ -46,6 +48,7 @@ export function AuthProvider({ children }) {
           setUserPreferences(demoGet('selectedCategories', null));
           setFollowedAuthors(demoGet('followedAuthors', []));
           setReadingPreferences(normalizeReadingPreferences(demoGet('readingPreferences', {})));
+          setProfilePhoto(normalizeProfilePhoto(demoGet('profilePhoto', null)));
         }
         setLoading(false);
       }, 0);
@@ -63,6 +66,7 @@ export function AuthProvider({ children }) {
       setUserPreferences(null);
       setFollowedAuthors([]);
       setReadingPreferences(DEFAULT_READING_PREFERENCES);
+      setProfilePhoto(null);
 
       if (currentUser) {
         const userRef = doc(db, 'users', currentUser.uid);
@@ -74,6 +78,7 @@ export function AuthProvider({ children }) {
           setUserPreferences(data.preferences || data.selectedCategories || null);
           setFollowedAuthors(data.followedAuthors || []);
           setReadingPreferences(normalizeReadingPreferences(data.readingPreferences));
+          setProfilePhoto(normalizeProfilePhoto(data.profilePhoto));
           return true;
         };
 
@@ -146,6 +151,7 @@ export function AuthProvider({ children }) {
       setUserPreferences(null);
       setFollowedAuthors([]);
       setReadingPreferences(DEFAULT_READING_PREFERENCES);
+      setProfilePhoto(null);
       localStorage.removeItem('papertok_user');
       return;
     }
@@ -231,6 +237,30 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const updateProfilePhoto = async (value) => {
+    const previous = profilePhoto;
+    const next = normalizeProfilePhoto(value);
+    if (value && !next) throw new Error('La imagen procesada no es válida.');
+    setProfilePhoto(next);
+
+    try {
+      if (IS_DEMO) {
+        demoSet('profilePhoto', next);
+        return next;
+      }
+
+      if (user) {
+        await setDoc(doc(db, 'users', user.uid), {
+          profilePhoto: next || deleteField(),
+        }, { merge: true });
+      }
+      return next;
+    } catch (updateError) {
+      setProfilePhoto(previous);
+      throw updateError;
+    }
+  };
+
   const value = {
     user,
     loading,
@@ -239,6 +269,7 @@ export function AuthProvider({ children }) {
     userPreferences,
     followedAuthors,
     readingPreferences,
+    profilePhoto,
     profileLoadError,
     signInWithGoogle,
     signOut,
@@ -247,6 +278,7 @@ export function AuthProvider({ children }) {
     setUserPreferences,
     toggleFollowAuthor,
     updateReadingPreferences,
+    updateProfilePhoto,
     retryProfileLoad,
     isDemo: IS_DEMO,
   };

@@ -55,12 +55,19 @@ export function FollowingProvider({ children }) {
     }
 
     const followsCollection = collection(db, 'users', user.uid, 'following');
-    return onSnapshot(followsCollection, async (snapshot) => {
+    const loadingTimeout = window.setTimeout(() => {
+      setLoading(false);
+    }, 6500);
+    const unsubscribe = onSnapshot(followsCollection, async (snapshot) => {
       const current = snapshot.docs.map((item) => ({ ...item.data(), followKey: item.id }));
       const shouldMigrateLegacy = followedAuthors.length > 0 && !legacyMigrationAttempted.current;
       const missingLegacy = shouldMigrateLegacy
         ? migrateLegacyAuthors(followedAuthors).filter((legacy) => !followsEntity(current, legacy))
         : [];
+
+      window.clearTimeout(loadingTimeout);
+      setFollowedEntities(current);
+      setLoading(false);
 
       if (shouldMigrateLegacy) {
         legacyMigrationAttempted.current = true;
@@ -78,15 +85,17 @@ export function FollowingProvider({ children }) {
           console.warn('No se pudieron migrar todos los seguimientos', migrationError);
         }
       }
-
-      setFollowedEntities(current);
-      setLoading(false);
     }, (snapshotError) => {
+      window.clearTimeout(loadingTimeout);
       console.error('Error loading follows', snapshotError);
       setError(snapshotError);
       setFollowedEntities(migrateLegacyAuthors(followedAuthors));
       setLoading(false);
     });
+    return () => {
+      window.clearTimeout(loadingTimeout);
+      unsubscribe();
+    };
   }, [user?.uid, followedAuthors]);
 
   const isFollowing = useCallback((entity) => followsEntity(followedEntities, entity), [followedEntities]);

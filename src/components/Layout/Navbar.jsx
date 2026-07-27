@@ -7,7 +7,7 @@ import { Bookmark, LogOut, Settings2, RotateCw, Search } from 'lucide-react';
 import './Navbar.css';
 
 export default function Navbar() {
-  const { user, signOut } = useAuth();
+  const { user, profilePhoto, signOut } = useAuth();
   const { feedMode, setFeedMode, refreshFeed, isRefreshing } = useFeed();
   const { unreadCount, refresh: refreshFollowing, refreshing: isFollowingRefreshing } = useFollowingUpdates();
   const navigate = useNavigate();
@@ -136,8 +136,8 @@ export default function Navbar() {
                   setShowDropdown(!showDropdown);
                 }}
               >
-                {user.photoURL ? (
-                  <img src={user.photoURL} alt="Profile" className="navbar-avatar" referrerPolicy="no-referrer" />
+                {profilePhoto || user.photoURL ? (
+                  <img src={profilePhoto || user.photoURL} alt="Profile" className="navbar-avatar" referrerPolicy="no-referrer" />
                 ) : (
                   <div className="navbar-avatar navbar-avatar--fallback">
                     {user.email?.charAt(0).toUpperCase() || 'U'}

@@ -20,6 +20,7 @@ import EntityExplorer from './components/Explorer/EntityExplorer'
 import ScientificReport from './components/Report/ScientificReport'
 import FollowingFeedPage from './components/Following/FollowingFeedPage'
 import SettingsPage from './components/Settings/SettingsPage'
+import FollowingSettingsPage from './components/Settings/FollowingSettingsPage'
 import './App.css'
 
 function AppContent() {
@@ -115,6 +116,17 @@ function AppContent() {
                 <PageTransition>
                   <Navbar />
                   <SettingsPage />
+                </PageTransition>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings/following"
+            element={
+              <ProtectedRoute>
+                <PageTransition>
+                  <Navbar />
+                  <FollowingSettingsPage />
                 </PageTransition>
               </ProtectedRoute>
             }
