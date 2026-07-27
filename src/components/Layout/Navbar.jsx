@@ -3,9 +3,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useFeed } from '../../context/FeedContext';
 import { useFollowingUpdates } from '../../context/FollowingUpdatesContext';
-import { Bell, Bookmark, LogOut, Settings2, RotateCw, Search } from 'lucide-react';
-import EditInterestsModal from '../Settings/EditInterestsModal';
-import EmailNotificationModal from '../Following/EmailNotificationModal';
+import { Bookmark, LogOut, Settings2, RotateCw, Search } from 'lucide-react';
 import './Navbar.css';
 
 export default function Navbar() {
@@ -15,8 +13,6 @@ export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const [showDropdown, setShowDropdown] = useState(false);
-  const [isEditInterestsOpen, setIsEditInterestsOpen] = useState(false);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isReportRefreshing, setIsReportRefreshing] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -114,7 +110,7 @@ export default function Navbar() {
 
           {/* Slider indicator */}
           <div
-            className="navbar-slider"
+            className={`navbar-slider ${!isHomeActive && !isResearchActive && !isFollowingActive ? 'is-hidden' : ''}`}
             style={{
               transform: sliderTransform
             }}
@@ -133,7 +129,8 @@ export default function Navbar() {
           {user && (
             <div className="navbar-profile" ref={dropdownRef}>
               <button
-                className="navbar-avatar-btn"
+                className={`navbar-avatar-btn ${location.pathname === '/settings' ? 'active' : ''}`}
+                aria-label="Abrir menú de usuario"
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowDropdown(!showDropdown);
@@ -164,17 +161,10 @@ export default function Navbar() {
                   </button>
                   <button
                     className="navbar-dropdown-item"
-                    onClick={() => { setIsNotificationsOpen(true); setShowDropdown(false); }}
-                  >
-                    <Bell size={16} strokeWidth={2} style={{ display: 'inline-block', verticalAlign: 'text-bottom', marginRight: '8px' }} />
-                    Notificaciones
-                  </button>
-                  <button
-                    className="navbar-dropdown-item"
-                    onClick={() => { setIsEditInterestsOpen(true); setShowDropdown(false); }}
+                    onClick={() => { navigate('/settings'); setShowDropdown(false); }}
                   >
                     <Settings2 size={16} strokeWidth={2} style={{ display: 'inline-block', verticalAlign: 'text-bottom', marginRight: '8px' }} />
-                    Editar intereses
+                    Ajustes
                   </button>
                   <button
                     className="navbar-dropdown-item navbar-dropdown-item--danger"
@@ -190,14 +180,6 @@ export default function Navbar() {
         </div>
       </nav>
 
-      <EditInterestsModal
-        isOpen={isEditInterestsOpen}
-        onClose={() => setIsEditInterestsOpen(false)}
-      />
-      <EmailNotificationModal
-        isOpen={isNotificationsOpen}
-        onClose={() => setIsNotificationsOpen(false)}
-      />
     </>
   );
 }

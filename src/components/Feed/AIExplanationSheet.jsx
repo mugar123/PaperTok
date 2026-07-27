@@ -21,6 +21,7 @@ import {
   explainPaper,
   formatAIModelLabel,
 } from '../../services/aiExplanationService.js';
+import { useAuth } from '../../context/AuthContext';
 import ScientificText from '../ScientificText';
 import { normalizeAIExplanationMath } from '../../utils/aiExplanationMath.js';
 import { formatQuotaCountdown, formatQuotaResetTime } from '../../utils/aiQuota.js';
@@ -135,7 +136,8 @@ function ExplanationContent({ result }) {
 }
 
 export default function AIExplanationSheet({ paper, onClose }) {
-  const [level, setLevel] = useState('university');
+  const { readingPreferences } = useAuth();
+  const [level, setLevel] = useState(readingPreferences.aiExplanationLevel);
   const [results, setResults] = useState({});
   const [loadingLevel, setLoadingLevel] = useState(null);
   const [error, setError] = useState(null);

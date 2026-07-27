@@ -81,8 +81,14 @@
   width: 110px;
   background: rgba(255, 255, 255, 0.1);
   border-radius: 20px;
-  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+  transition:
+    transform 0.3s cubic-bezier(0.25, 1, 0.5, 1),
+    opacity 0.2s ease;
   pointer-events: none;
+}
+
+.navbar-slider.is-hidden {
+  opacity: 0;
 }
 
 .navbar-action-btn {
@@ -154,6 +160,12 @@
   border: none;
   background: none;
   cursor: pointer;
+  border-radius: 50%;
+}
+
+.navbar-avatar-btn.active .navbar-avatar {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.16);
 }
 
 .navbar-avatar {

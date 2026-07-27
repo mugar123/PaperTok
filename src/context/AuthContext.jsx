@@ -3,6 +3,10 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import { IS_DEMO, auth, googleProvider, db } from '../services/firebase';
 import { onAuthStateChanged, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import {
+  DEFAULT_READING_PREFERENCES,
+  normalizeReadingPreferences,
+} from '../utils/userSettings';
 
 const AuthContext = createContext(null);
 
@@ -24,6 +28,7 @@ export function AuthProvider({ children }) {
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [userPreferences, setUserPreferences] = useState(null);
   const [followedAuthors, setFollowedAuthors] = useState([]);
+  const [readingPreferences, setReadingPreferences] = useState(DEFAULT_READING_PREFERENCES);
 
   useEffect(() => {
     if (IS_DEMO) {
@@ -35,6 +40,7 @@ export function AuthProvider({ children }) {
           setOnboardingComplete(demoGet('onboardingComplete', false));
           setUserPreferences(demoGet('selectedCategories', null));
           setFollowedAuthors(demoGet('followedAuthors', []));
+          setReadingPreferences(normalizeReadingPreferences(demoGet('readingPreferences', {})));
         }
         setLoading(false);
       }, 0);
@@ -49,6 +55,7 @@ export function AuthProvider({ children }) {
       setOnboardingComplete(false);
       setUserPreferences(null);
       setFollowedAuthors([]);
+      setReadingPreferences(DEFAULT_READING_PREFERENCES);
 
       if (currentUser) {
         // Fetch user data from firestore
@@ -60,6 +67,7 @@ export function AuthProvider({ children }) {
             setOnboardingComplete(data.onboardingComplete || false);
             setUserPreferences(data.preferences || data.selectedCategories || null);
             setFollowedAuthors(data.followedAuthors || []);
+            setReadingPreferences(normalizeReadingPreferences(data.readingPreferences));
           } else {
             setOnboardingComplete(false);
           }
@@ -101,6 +109,7 @@ export function AuthProvider({ children }) {
       setOnboardingComplete(false);
       setUserPreferences(null);
       setFollowedAuthors([]);
+      setReadingPreferences(DEFAULT_READING_PREFERENCES);
       localStorage.removeItem('papertok_user');
       return;
     }
@@ -163,6 +172,29 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const updateReadingPreferences = async (updates) => {
+    const previous = readingPreferences;
+    const next = normalizeReadingPreferences({ ...readingPreferences, ...updates });
+    setReadingPreferences(next);
+
+    try {
+      if (IS_DEMO) {
+        demoSet('readingPreferences', next);
+        return next;
+      }
+
+      if (user) {
+        await setDoc(doc(db, 'users', user.uid), {
+          readingPreferences: next,
+        }, { merge: true });
+      }
+      return next;
+    } catch (updateError) {
+      setReadingPreferences(previous);
+      throw updateError;
+    }
+  };
+
   const value = {
     user,
     loading,
@@ -170,12 +202,14 @@ export function AuthProvider({ children }) {
     onboardingComplete,
     userPreferences,
     followedAuthors,
+    readingPreferences,
     signInWithGoogle,
     signOut,
     completeOnboarding,
     updatePreferences,
     setUserPreferences,
     toggleFollowAuthor,
+    updateReadingPreferences,
     isDemo: IS_DEMO,
   };
 

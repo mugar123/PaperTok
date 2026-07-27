@@ -19,6 +19,7 @@ import SearchPage from './components/Search/SearchPage'
 import EntityExplorer from './components/Explorer/EntityExplorer'
 import ScientificReport from './components/Report/ScientificReport'
 import FollowingFeedPage from './components/Following/FollowingFeedPage'
+import SettingsPage from './components/Settings/SettingsPage'
 import './App.css'
 
 function AppContent() {
@@ -104,6 +105,17 @@ function AppContent() {
             element={
               <ProtectedRoute>
                 <PageTransition><SearchPage onSaveToList={setSaveModalPaper} /></PageTransition>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <PageTransition>
+                  <Navbar />
+                  <SettingsPage />
+                </PageTransition>
               </ProtectedRoute>
             }
           />
