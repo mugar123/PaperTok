@@ -856,9 +856,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
                     disabled={isFollowPending(followEntity)}
                     aria-pressed={isFollowing(followEntity)}
                   >
-                    {isFollowPending(followEntity)
-                      ? <><Loader2 className="spinning" size={14} /> <span>Guardando...</span></>
-                      : isFollowing(followEntity)
+                    {isFollowing(followEntity) || isFollowPending(followEntity)
                         ? <><Check size={14} /> <span>Siguiendo</span></>
                         : <span>Seguir</span>}
                   </button>
@@ -906,7 +904,6 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
                   >
                     {isResolvingAuthorInstitution ? <Loader2 className="spinning" size={15} /> : <Building2 size={15} />}
                     <span>{entity.institution || entity.last_known_institutions[0].display_name}</span>
-                    <ChevronRight size={15} aria-hidden="true" />
                   </button>
                   {authorInstitutionNavigationError && (
                     <p className="ehc-author-institution-error" role="alert">{authorInstitutionNavigationError}</p>
