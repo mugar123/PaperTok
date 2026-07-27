@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import { useFollowing } from './FollowingContext';
 import { useFollowingUpdates } from './FollowingUpdatesContext';
 import {
+  EmailNotificationServiceError,
   getEmailNotificationPreferences,
   getEmailNotificationHealth,
   saveEmailNotificationPreferences,
@@ -43,6 +44,7 @@ export function EmailNotificationsProvider({ children }) {
   const userId = user?.uid || null;
   const followSignature = useMemo(() => getFollowingSignature(followedEntities), [followedEntities]);
   const previewSignature = useMemo(() => items.slice(0, 20).map(item => item.updateKey || item.id || item.doi).join('|'), [items]);
+  const notificationDataReady = !followsLoading;
 
   useEffect(() => {
     if (!userId) return undefined;
@@ -66,6 +68,7 @@ export function EmailNotificationsProvider({ children }) {
   }, [userEmail, userId]);
 
   const savePreferences = useCallback(async (nextPreferences) => {
+    if (!notificationDataReady) throw new EmailNotificationServiceError('EMAIL_DATA_LOADING');
     setSaving(true);
     setError(null);
     try {
@@ -79,22 +82,32 @@ export function EmailNotificationsProvider({ children }) {
     } finally {
       setSaving(false);
     }
-  }, [followedEntities, items, userEmail]);
+  }, [followedEntities, items, notificationDataReady, userEmail]);
 
-  const sendTest = useCallback(async () => {
+  const sendTest = useCallback(async (nextPreferences = preferences) => {
+    if (!notificationDataReady) throw new EmailNotificationServiceError('EMAIL_DATA_LOADING');
     setTesting(true);
     setError(null);
     try {
+      const saved = await saveEmailNotificationPreferences(
+        { ...nextPreferences, enabled: true },
+        followedEntities,
+        items,
+      );
+      const normalized = { ...DEFAULT_PREFERENCES, ...saved, email: saved.email || userEmail };
+      setPreferences(normalized);
       const result = await sendEmailNotificationTest();
-      if (result.preferences) setPreferences(current => ({ ...current, ...result.preferences }));
-      return result;
+      if (result.preferences) {
+        setPreferences(current => ({ ...current, ...result.preferences }));
+      }
+      return { ...result, preferences: result.preferences || normalized };
     } catch (testError) {
       setError(testError);
       throw testError;
     } finally {
       setTesting(false);
     }
-  }, []);
+  }, [followedEntities, items, notificationDataReady, preferences, userEmail]);
 
   useEffect(() => {
     if (!preferences.enabled || !userId || followsLoading || updatesLoading || loadedForUser.current !== userId) return undefined;
@@ -112,9 +125,10 @@ export function EmailNotificationsProvider({ children }) {
     testing,
     error,
     health,
+    notificationDataReady,
     savePreferences,
     sendTest,
-  }), [error, health, loading, preferences, savePreferences, saving, sendTest, testing]);
+  }), [error, health, loading, notificationDataReady, preferences, savePreferences, saving, sendTest, testing]);
 
   return <EmailNotificationsContext.Provider value={value}>{children}</EmailNotificationsContext.Provider>;
 }

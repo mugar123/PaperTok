@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { emailNotificationInternals, checkEmailProviderHealth } from './email-notifications.js';
+import {
+  emailNotificationInternals,
+  checkEmailProviderHealth,
+  runEmailNotificationSchedule,
+} from './email-notifications.js';
 
 const {
   buildResendIdempotencyKey,
@@ -23,6 +27,34 @@ function jsonResponse(status, body) {
     status,
     ok: status >= 200 && status < 300,
     json: async () => body,
+  };
+}
+
+function createMemoryKv(entries = {}) {
+  const values = new Map(Object.entries(entries).map(([key, value]) => [
+    key,
+    typeof value === 'string' ? value : JSON.stringify(value),
+  ]));
+
+  return {
+    values,
+    async get(key, type) {
+      const value = values.get(key);
+      if (value === undefined) return null;
+      return type === 'json' ? JSON.parse(value) : value;
+    },
+    async put(key, value) {
+      values.set(key, String(value));
+    },
+    async delete(key) {
+      values.delete(key);
+    },
+    async list({ prefix = '' } = {}) {
+      return {
+        keys: [...values.keys()].filter(key => key.startsWith(prefix)).map(name => ({ name })),
+        list_complete: true,
+      };
+    },
   };
 }
 
@@ -62,6 +94,120 @@ test('sends daily subscriptions once per day and weekly subscriptions on Monday'
   assert.equal(isSubscriptionDue({ enabled: true, frequency: 'daily' }, monday), true);
   assert.equal(isSubscriptionDue({ enabled: true, frequency: 'weekly' }, monday), true);
   assert.equal(isSubscriptionDue({ enabled: true, frequency: 'weekly' }, tuesday), false);
+});
+
+test('scheduled digest fetches and emails papers from every followed entity type', async () => {
+  const now = new Date();
+  now.setUTCHours(7, 0, 0, 0);
+  const publicationDate = now.toISOString().slice(0, 10);
+  const subscriptionKey = 'notification:subscription:user-1';
+  const kv = createMemoryKv({
+    [subscriptionKey]: {
+      uid: 'user-1',
+      email: 'reader@example.com',
+      displayName: 'Reader',
+      enabled: true,
+      frequency: 'daily',
+      maxPapers: 10,
+      unsubscribeToken: 'unsubscribe-token',
+      follows: [
+        { type: 'author', canonicalId: 'A1', displayName: 'Ada Author', externalIds: {}, metadata: { categoryIds: [] } },
+        { type: 'institution', canonicalId: 'I2', displayName: 'Research University', externalIds: {}, metadata: { categoryIds: [] } },
+        { type: 'topic', canonicalId: 'T3', displayName: 'Cosmology', externalIds: {}, metadata: { categoryIds: [] } },
+        { type: 'project', canonicalId: 'project-4', displayName: 'Discovery Project', externalIds: {}, metadata: { categoryIds: [] } },
+      ],
+      previewItems: [],
+    },
+  });
+  const requests = [];
+  let resendPayload;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, options = {}) => {
+    const url = new URL(String(input));
+    requests.push(url.toString());
+
+    if (url.hostname === 'api.openaire.eu') {
+      return jsonResponse(200, {
+        response: {
+          results: {
+            result: [{
+              metadata: {
+                'oaf:entity': {
+                  'oaf:result': {
+                    pid: [{ '@classname': 'doi', $: '10.1234/project-paper' }],
+                  },
+                },
+              },
+            }],
+          },
+        },
+      });
+    }
+
+    if (url.hostname === 'api.openalex.org') {
+      const filter = url.searchParams.get('filter') || '';
+      const source = filter.includes('author.id:A1')
+        ? 'Author'
+        : filter.includes('institutions.id:I2')
+          ? 'Institution'
+          : filter.includes('topics.id:T3')
+            ? 'Topic'
+            : 'Project';
+      return jsonResponse(200, {
+        results: [{
+          id: `https://openalex.org/W${source.length}`,
+          doi: `https://doi.org/10.1234/${source.toLowerCase()}`,
+          display_name: `${source} followed paper`,
+          publication_date: publicationDate,
+          cited_by_count: source.length,
+          authorships: [{ author: { display_name: `${source} Researcher` } }],
+          primary_location: {
+            source: { display_name: 'PaperTok Journal' },
+            landing_page_url: `https://example.com/${source.toLowerCase()}`,
+          },
+          open_access: { is_oa: true },
+        }],
+      });
+    }
+
+    if (url.hostname === 'api.resend.com' && url.pathname === '/emails') {
+      resendPayload = JSON.parse(options.body);
+      return jsonResponse(200, { id: 'email-provider-id' });
+    }
+
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  try {
+    const result = await runEmailNotificationSchedule({
+      NOTIFICATION_STORE: kv,
+      RESEND_API_KEY: 're_test',
+    }, now.getTime());
+
+    assert.deepEqual(result, { sent: 1, failed: 0 });
+    assert.deepEqual(resendPayload.to, ['reader@example.com']);
+    assert.equal(resendPayload.subject, '4 novedades científicas para ti');
+    assert.equal(
+      resendPayload.headers['List-Unsubscribe'],
+      '<https://papertok-report-api.papertok-mugar123.workers.dev/notifications/unsubscribe?token=unsubscribe-token>',
+    );
+    ['Author', 'Institution', 'Topic', 'Project'].forEach(source => {
+      assert.equal(resendPayload.html.includes(`${source} followed paper`), true);
+    });
+    assert.equal(requests.filter(url => url.startsWith('https://api.openalex.org/works')).length, 4);
+    assert.equal(requests.filter(url => url.startsWith('https://api.openaire.eu/')).length, 1);
+    assert.equal(requests.filter(url => url.startsWith('https://api.resend.com/emails')).length, 1);
+
+    const storedSubscription = await kv.get(subscriptionKey, 'json');
+    assert.equal(storedSubscription.lastSentAt, now.toISOString());
+    assert.equal(storedSubscription.lastCheckedAt, now.toISOString());
+    assert.equal(
+      [...kv.values.entries()].some(([key, value]) => key.startsWith('notification:send-count:') && value === '1'),
+      true,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('uses a fresh idempotency key for each allowed email test window', () => {

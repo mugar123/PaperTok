@@ -226,8 +226,36 @@
 }
 
 .email-notification-modal footer button:disabled { opacity: 0.55; cursor: default; }
-.email-notification-test { border: 1px solid var(--border-default); color: var(--text-primary); background: transparent; }
+.email-notification-test {
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  background: transparent;
+  min-width: 142px;
+  transition: color 180ms ease, border-color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+.email-notification-test > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.email-notification-test.is-sent {
+  border-color: rgba(52, 211, 153, 0.5);
+  color: #78e5b4;
+  background: rgba(16, 185, 129, 0.12);
+}
+.email-notification-test.is-sent:disabled { opacity: 1; }
+.email-notification-test-spinner { animation: emailNotificationSpin 0.8s linear infinite; }
 .email-notification-save { border: 1px solid #8b5cf6; color: #fff; background: #7c3aed; }
+
+@keyframes emailNotificationSpin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .email-notification-test,
+  .email-notification-test-spinner { animation: none; transition: none; }
+}
 
 @media (max-width: 520px) {
   .email-notification-backdrop { align-items: end; padding: 0; }

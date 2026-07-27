@@ -425,7 +425,7 @@ async function sendDigest(subscription, papers, env, { test = false } = {}) {
   if (!env.RESEND_API_KEY) throw new EmailNotificationError('EMAIL_NOT_CONFIGURED', 503);
   const sendState = await assertDailySendAvailable(env);
   const from = await resolveSender(env);
-  const workerBase = cleanText(env.WORKER_PUBLIC_URL, 500) || 'https://papertok-report-api.nicomg60.workers.dev';
+  const workerBase = cleanText(env.WORKER_PUBLIC_URL, 500) || 'https://papertok-report-api.papertok-mugar123.workers.dev';
   const unsubscribeUrl = `${workerBase}/notifications/unsubscribe?token=${encodeURIComponent(subscription.unsubscribeToken)}`;
   const content = renderDigest(subscription, papers, unsubscribeUrl, test);
   const response = await fetch(`${RESEND_API}/emails`, {
@@ -471,7 +471,13 @@ async function testSubscription(env, identity) {
   const providerId = await sendDigest(subscription, papers, env, { test: true });
   const updated = { ...subscription, lastTestAt: new Date().toISOString() };
   await env.NOTIFICATION_STORE.put(key, JSON.stringify(updated));
-  return { ok: true, providerId, preferences: publicSubscription(updated, identity.email) };
+  return {
+    ok: true,
+    providerId,
+    paperCount: papers.length,
+    followCount: subscription.follows?.length || 0,
+    preferences: publicSubscription(updated, identity.email),
+  };
 }
 
 export async function handleEmailNotificationRequest(request, env, pathname) {

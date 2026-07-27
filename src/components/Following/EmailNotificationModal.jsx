@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, Clock3, Mail, Send, X } from 'lucide-react';
+import { Check, CheckCircle2, Clock3, Loader2, Mail, Send, X } from 'lucide-react';
 import { useEmailNotifications } from '../../context/EmailNotificationsContext';
 import './EmailNotificationModal.css';
 
@@ -11,16 +11,28 @@ const ERROR_COPY = {
   EMAIL_PROVIDER_LIMIT: 'Se ha alcanzado temporalmente el límite de envío.',
   EMAIL_TEST_RATE_LIMIT: 'Espera un minuto antes de enviar otra prueba.',
   EMAIL_TEST_RECIPIENT_RESTRICTED: 'Resend está en modo de prueba y sólo permite enviar al correo propietario de la cuenta. Para otros destinatarios necesitas verificar un dominio.',
+  EMAIL_DATA_LOADING: 'Estamos terminando de cargar tus seguimientos. Inténtalo de nuevo en unos segundos.',
   EMAIL_SEND_FAILED: 'No se ha podido enviar el correo de prueba.',
   EMAIL_TIMEOUT: 'El servicio de correo está tardando demasiado.',
   EMAIL_UNAVAILABLE: 'El servicio de correo no está disponible ahora mismo.',
 };
 
 export default function EmailNotificationModal({ isOpen, onClose }) {
-  const { preferences, health, loading, saving, testing, savePreferences, sendTest } = useEmailNotifications();
+  const {
+    preferences,
+    health,
+    loading,
+    saving,
+    testing,
+    notificationDataReady,
+    savePreferences,
+    sendTest,
+  } = useEmailNotifications();
   const [draft, setDraft] = useState(preferences);
   const [feedback, setFeedback] = useState(null);
+  const [testState, setTestState] = useState('idle');
   const preferencesRef = useRef(preferences);
+  const testFeedbackTimerRef = useRef(null);
 
   useEffect(() => {
     preferencesRef.current = preferences;
@@ -31,11 +43,13 @@ export default function EmailNotificationModal({ isOpen, onClose }) {
     const timeoutId = setTimeout(() => {
       setDraft(preferencesRef.current);
       setFeedback(null);
+      setTestState('idle');
     }, 0);
     const closeOnEscape = event => event.key === 'Escape' && onClose();
     document.addEventListener('keydown', closeOnEscape);
     return () => {
       clearTimeout(timeoutId);
+      clearTimeout(testFeedbackTimerRef.current);
       document.removeEventListener('keydown', closeOnEscape);
     };
   }, [isOpen, onClose]);
@@ -52,12 +66,17 @@ export default function EmailNotificationModal({ isOpen, onClose }) {
 
   const handleTest = async () => {
     setFeedback(null);
+    setTestState('sending');
+    clearTimeout(testFeedbackTimerRef.current);
     try {
-      const saved = await savePreferences({ ...draft, enabled: true });
+      const result = await sendTest({ ...draft, enabled: true });
+      const saved = result.preferences;
       setDraft(saved);
-      await sendTest();
       setFeedback({ type: 'success', text: `Correo de prueba enviado a ${saved.email}.` });
+      setTestState('sent');
+      testFeedbackTimerRef.current = setTimeout(() => setTestState('idle'), 2600);
     } catch (error) {
+      setTestState('idle');
       setFeedback({ type: 'error', text: ERROR_COPY[error.code] || ERROR_COPY.EMAIL_UNAVAILABLE });
     }
   };
@@ -163,10 +182,29 @@ export default function EmailNotificationModal({ isOpen, onClose }) {
             </div>
 
             <footer>
-              <button className="email-notification-test" onClick={handleTest} disabled={saving || testing || loading || !health.available}>
-                <Send size={16} /> {testing ? 'Enviando...' : 'Enviar prueba'}
+              <button
+                className={`email-notification-test ${testState === 'sent' ? 'is-sent' : ''}`}
+                onClick={handleTest}
+                disabled={saving || testing || loading || !notificationDataReady || !health.available || testState === 'sent'}
+                aria-live="polite"
+              >
+                <AnimatePresence mode="wait" initial={false}>
+                  {testState === 'sending' ? (
+                    <motion.span key="sending" initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -3 }}>
+                      <Loader2 className="email-notification-test-spinner" size={16} /> Enviando…
+                    </motion.span>
+                  ) : testState === 'sent' ? (
+                    <motion.span key="sent" initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
+                      <CheckCircle2 size={17} /> Enviado
+                    </motion.span>
+                  ) : (
+                    <motion.span key="idle" initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -3 }}>
+                      <Send size={16} /> Enviar prueba
+                    </motion.span>
+                  )}
+                </AnimatePresence>
               </button>
-              <button className="email-notification-save" onClick={handleSave} disabled={saving || testing || loading || (draft.enabled && !health.available)}>
+              <button className="email-notification-save" onClick={handleSave} disabled={saving || testing || loading || !notificationDataReady || (draft.enabled && !health.available)}>
                 {saving ? 'Guardando...' : 'Guardar cambios'}
               </button>
             </footer>
