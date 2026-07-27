@@ -7,6 +7,7 @@ const MAX_QUERIED_FOLLOWS = 24;
 const MAX_PREVIEW_ITEMS = 20;
 const DEFAULT_DAILY_SEND_LIMIT = 90;
 const SEND_COUNT_PREFIX = 'notification:send-count:';
+const TEST_IDEMPOTENCY_WINDOW_MS = 60_000;
 
 export class EmailNotificationError extends Error {
   constructor(code, status = 400, message = code) {
@@ -338,7 +339,7 @@ async function resolveSender(env) {
   return 'PaperTok <onboarding@resend.dev>';
 }
 
-async function reserveDailySend(env) {
+async function dailySendState(env) {
   if (!env.NOTIFICATION_STORE) throw new EmailNotificationError('EMAIL_NOT_CONFIGURED', 503);
   const configuredLimit = Number(env.EMAIL_DAILY_SEND_LIMIT);
   const limit = Number.isFinite(configuredLimit) && configuredLimit > 0
@@ -347,8 +348,46 @@ async function reserveDailySend(env) {
   const dateKey = new Date().toISOString().slice(0, 10);
   const key = `${SEND_COUNT_PREFIX}${dateKey}`;
   const current = Number(await env.NOTIFICATION_STORE.get(key)) || 0;
-  if (current >= limit) throw new EmailNotificationError('EMAIL_PROVIDER_LIMIT', 429);
-  await env.NOTIFICATION_STORE.put(key, String(current + 1), { expirationTtl: 172_800 });
+  return { current, key, limit };
+}
+
+async function assertDailySendAvailable(env) {
+  const state = await dailySendState(env);
+  if (state.current >= state.limit) throw new EmailNotificationError('EMAIL_PROVIDER_LIMIT', 429);
+  return state;
+}
+
+async function recordSuccessfulSend(env, state) {
+  if (!env.NOTIFICATION_STORE) throw new EmailNotificationError('EMAIL_NOT_CONFIGURED', 503);
+  const latest = Number(await env.NOTIFICATION_STORE.get(state.key)) || 0;
+  await env.NOTIFICATION_STORE.put(
+    state.key,
+    String(Math.min(latest + 1, state.limit)),
+    { expirationTtl: 172_800 },
+  );
+}
+
+function buildResendIdempotencyKey(subscription, { test = false, now = Date.now() } = {}) {
+  const timestamp = Number.isFinite(Number(now)) ? Number(now) : Date.now();
+  const sendWindow = test
+    ? Math.floor(timestamp / TEST_IDEMPOTENCY_WINDOW_MS)
+    : new Date(timestamp).toISOString().slice(0, 10);
+  const uid = cleanText(subscription?.uid, 160).replace(/[^a-zA-Z0-9_-]/g, '') || 'unknown';
+  return `${test ? 'test' : 'digest'}-${uid}-${sendWindow}`.slice(0, 256);
+}
+
+function resendSendErrorCode(status, payload = {}) {
+  const providerMessage = cleanText(`${payload?.name || ''} ${payload?.message || ''}`, 1_000);
+  const testRecipientRestricted = status === 403 && (
+    /only send testing emails/i.test(providerMessage)
+    || /own email address/i.test(providerMessage)
+    || /verify a domain/i.test(providerMessage)
+    || /resend\.dev/i.test(providerMessage)
+  );
+  if (testRecipientRestricted) return 'EMAIL_TEST_RECIPIENT_RESTRICTED';
+  if (status === 401 || status === 403) return 'EMAIL_PROVIDER_AUTH_FAILED';
+  if (status === 429) return 'EMAIL_PROVIDER_LIMIT';
+  return 'EMAIL_SEND_FAILED';
 }
 
 function paperReason(paper) {
@@ -384,19 +423,18 @@ function renderDigest(subscription, papers, unsubscribeUrl, test) {
 
 async function sendDigest(subscription, papers, env, { test = false } = {}) {
   if (!env.RESEND_API_KEY) throw new EmailNotificationError('EMAIL_NOT_CONFIGURED', 503);
-  await reserveDailySend(env);
+  const sendState = await assertDailySendAvailable(env);
   const from = await resolveSender(env);
   const workerBase = cleanText(env.WORKER_PUBLIC_URL, 500) || 'https://papertok-report-api.nicomg60.workers.dev';
   const unsubscribeUrl = `${workerBase}/notifications/unsubscribe?token=${encodeURIComponent(subscription.unsubscribeToken)}`;
   const content = renderDigest(subscription, papers, unsubscribeUrl, test);
-  const dateKey = new Date().toISOString().slice(0, 10);
   const response = await fetch(`${RESEND_API}/emails`, {
     method: 'POST',
     headers: {
       authorization: `Bearer ${env.RESEND_API_KEY}`,
       'content-type': 'application/json',
       'user-agent': 'PaperTok/1.0',
-      'idempotency-key': `${test ? 'test' : 'digest'}-${subscription.uid}-${dateKey}`.slice(0, 256),
+      'idempotency-key': buildResendIdempotencyKey(subscription, { test }),
     },
     body: JSON.stringify({
       from,
@@ -413,11 +451,10 @@ async function sendDigest(subscription, papers, env, { test = false } = {}) {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     console.error('Resend rejected digest', response.status, payload?.message || payload?.name || 'unknown');
-    const code = response.status === 401 || response.status === 403
-      ? 'EMAIL_PROVIDER_AUTH_FAILED'
-      : response.status === 429 ? 'EMAIL_PROVIDER_LIMIT' : 'EMAIL_SEND_FAILED';
+    const code = resendSendErrorCode(response.status, payload);
     throw new EmailNotificationError(code, response.status === 429 ? 429 : 502);
   }
+  await recordSuccessfulSend(env, sendState);
   return payload?.id || null;
 }
 
@@ -558,10 +595,12 @@ export async function runEmailNotificationSchedule(env, scheduledTime = Date.now
 }
 
 export const emailNotificationInternals = {
+  buildResendIdempotencyKey,
   sanitizeFollow,
   sanitizePaper,
   sanitizePreferences,
   mergePapers,
   isSubscriptionDue,
+  resendSendErrorCode,
   renderDigest,
 };

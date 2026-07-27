@@ -10,6 +10,7 @@ const ERROR_COPY = {
   EMAIL_PROVIDER_AUTH_FAILED: 'Resend ha rechazado la credencial configurada.',
   EMAIL_PROVIDER_LIMIT: 'Se ha alcanzado temporalmente el límite de envío.',
   EMAIL_TEST_RATE_LIMIT: 'Espera un minuto antes de enviar otra prueba.',
+  EMAIL_TEST_RECIPIENT_RESTRICTED: 'Resend está en modo de prueba y sólo permite enviar al correo propietario de la cuenta. Para otros destinatarios necesitas verificar un dominio.',
   EMAIL_SEND_FAILED: 'No se ha podido enviar el correo de prueba.',
   EMAIL_TIMEOUT: 'El servicio de correo está tardando demasiado.',
   EMAIL_UNAVAILABLE: 'El servicio de correo no está disponible ahora mismo.',

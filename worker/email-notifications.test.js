@@ -2,7 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { emailNotificationInternals, checkEmailProviderHealth } from './email-notifications.js';
 
-const { sanitizeFollow, sanitizePreferences, mergePapers, isSubscriptionDue, renderDigest } = emailNotificationInternals;
+const {
+  buildResendIdempotencyKey,
+  sanitizeFollow,
+  sanitizePreferences,
+  mergePapers,
+  isSubscriptionDue,
+  resendSendErrorCode,
+  renderDigest,
+} = emailNotificationInternals;
 
 function stubFetch(response) {
   const original = globalThis.fetch;
@@ -54,6 +62,31 @@ test('sends daily subscriptions once per day and weekly subscriptions on Monday'
   assert.equal(isSubscriptionDue({ enabled: true, frequency: 'daily' }, monday), true);
   assert.equal(isSubscriptionDue({ enabled: true, frequency: 'weekly' }, monday), true);
   assert.equal(isSubscriptionDue({ enabled: true, frequency: 'weekly' }, tuesday), false);
+});
+
+test('uses a fresh idempotency key for each allowed email test window', () => {
+  const subscription = { uid: 'user-123' };
+  const first = buildResendIdempotencyKey(subscription, { test: true, now: Date.parse('2026-07-27T18:05:10Z') });
+  const retry = buildResendIdempotencyKey(subscription, { test: true, now: Date.parse('2026-07-27T18:05:50Z') });
+  const nextAttempt = buildResendIdempotencyKey(subscription, { test: true, now: Date.parse('2026-07-27T18:06:11Z') });
+  assert.equal(first, retry);
+  assert.notEqual(first, nextAttempt);
+});
+
+test('keeps scheduled digest idempotency stable for the UTC day', () => {
+  const subscription = { uid: 'user-123' };
+  const morning = buildResendIdempotencyKey(subscription, { now: Date.parse('2026-07-27T07:00:00Z') });
+  const evening = buildResendIdempotencyKey(subscription, { now: Date.parse('2026-07-27T20:00:00Z') });
+  assert.equal(morning, evening);
+});
+
+test('reports the resend.dev recipient restriction instead of an invalid credential', () => {
+  const code = resendSendErrorCode(403, {
+    name: 'validation_error',
+    message: 'You can only send testing emails to your own email address. Please verify a domain.',
+  });
+  assert.equal(code, 'EMAIL_TEST_RECIPIENT_RESTRICTED');
+  assert.equal(resendSendErrorCode(403, { name: 'forbidden', message: 'Account suspended' }), 'EMAIL_PROVIDER_AUTH_FAILED');
 });
 
 test('treats a restricted (send-only) Resend key as available, not an auth failure', async () => {
