@@ -7,7 +7,9 @@ import {
 } from './email-notifications.js';
 
 const {
+  brevoSendErrorCode,
   buildResendIdempotencyKey,
+  configuredEmailProvider,
   sanitizeFollow,
   sanitizePreferences,
   mergePapers,
@@ -120,7 +122,7 @@ test('scheduled digest fetches and emails papers from every followed entity type
     },
   });
   const requests = [];
-  let resendPayload;
+  let brevoPayload;
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input, options = {}) => {
     const url = new URL(String(input));
@@ -170,9 +172,9 @@ test('scheduled digest fetches and emails papers from every followed entity type
       });
     }
 
-    if (url.hostname === 'api.resend.com' && url.pathname === '/emails') {
-      resendPayload = JSON.parse(options.body);
-      return jsonResponse(200, { id: 'email-provider-id' });
+    if (url.hostname === 'api.brevo.com' && url.pathname === '/v3/smtp/email') {
+      brevoPayload = JSON.parse(options.body);
+      return jsonResponse(201, { messageId: 'email-provider-id' });
     }
 
     throw new Error(`Unexpected request: ${url}`);
@@ -181,22 +183,25 @@ test('scheduled digest fetches and emails papers from every followed entity type
   try {
     const result = await runEmailNotificationSchedule({
       NOTIFICATION_STORE: kv,
-      RESEND_API_KEY: 're_test',
+      EMAIL_PROVIDER: 'brevo',
+      BREVO_API_KEY: 'xkeysib-test',
+      BREVO_FROM_EMAIL: 'papertok@example.com',
     }, now.getTime());
 
     assert.deepEqual(result, { sent: 1, failed: 0 });
-    assert.deepEqual(resendPayload.to, ['reader@example.com']);
-    assert.equal(resendPayload.subject, '4 novedades científicas para ti');
+    assert.deepEqual(brevoPayload.sender, { name: 'PaperTok', email: 'papertok@example.com' });
+    assert.deepEqual(brevoPayload.to, [{ email: 'reader@example.com', name: 'Reader' }]);
+    assert.equal(brevoPayload.subject, '4 novedades científicas para ti');
     assert.equal(
-      resendPayload.headers['List-Unsubscribe'],
-      '<https://papertok-report-api.papertok-mugar123.workers.dev/notifications/unsubscribe?token=unsubscribe-token>',
+      brevoPayload.htmlContent.includes('https://papertok-report-api.papertok-mugar123.workers.dev/notifications/unsubscribe?token=unsubscribe-token'),
+      true,
     );
     ['Author', 'Institution', 'Topic', 'Project'].forEach(source => {
-      assert.equal(resendPayload.html.includes(`${source} followed paper`), true);
+      assert.equal(brevoPayload.htmlContent.includes(`${source} followed paper`), true);
     });
     assert.equal(requests.filter(url => url.startsWith('https://api.openalex.org/works')).length, 4);
     assert.equal(requests.filter(url => url.startsWith('https://api.openaire.eu/')).length, 1);
-    assert.equal(requests.filter(url => url.startsWith('https://api.resend.com/emails')).length, 1);
+    assert.equal(requests.filter(url => url.startsWith('https://api.brevo.com/v3/smtp/email')).length, 1);
 
     const storedSubscription = await kv.get(subscriptionKey, 'json');
     assert.equal(storedSubscription.lastSentAt, now.toISOString());
@@ -233,6 +238,54 @@ test('reports the resend.dev recipient restriction instead of an invalid credent
   });
   assert.equal(code, 'EMAIL_TEST_RECIPIENT_RESTRICTED');
   assert.equal(resendSendErrorCode(403, { name: 'forbidden', message: 'Account suspended' }), 'EMAIL_PROVIDER_AUTH_FAILED');
+});
+
+test('prefers a fully configured Brevo provider and keeps Resend as fallback', () => {
+  assert.equal(configuredEmailProvider({
+    BREVO_API_KEY: 'xkeysib-test',
+    BREVO_FROM_EMAIL: 'papertok@example.com',
+    RESEND_API_KEY: 're_test',
+  }), 'brevo');
+  assert.equal(configuredEmailProvider({ RESEND_API_KEY: 're_test' }), 'resend');
+  assert.equal(configuredEmailProvider({
+    EMAIL_PROVIDER: 'brevo',
+    RESEND_API_KEY: 're_test',
+  }), '');
+});
+
+test('maps Brevo authentication, sender and quota failures', () => {
+  assert.equal(brevoSendErrorCode(401, { code: 'unauthorized' }), 'EMAIL_PROVIDER_AUTH_FAILED');
+  assert.equal(brevoSendErrorCode(400, { message: 'Sender not valid' }), 'EMAIL_SENDER_NOT_VERIFIED');
+  assert.equal(brevoSendErrorCode(429, { code: 'rate_limit' }), 'EMAIL_PROVIDER_LIMIT');
+});
+
+test('reports Brevo as available only when the configured sender is active', async () => {
+  const restore = stubFetch(jsonResponse(200, {
+    senders: [
+      { active: true, email: 'papertok@example.com' },
+      { active: false, email: 'disabled@example.com' },
+    ],
+  }));
+  try {
+    const health = await checkEmailProviderHealth({
+      EMAIL_PROVIDER: 'brevo',
+      BREVO_API_KEY: 'xkeysib-test',
+      BREVO_FROM_EMAIL: 'papertok@example.com',
+    });
+    assert.equal(health.available, true);
+    assert.equal(health.provider, 'brevo');
+    assert.equal(health.senderMode, 'brevo-verified-sender');
+
+    const inactiveHealth = await checkEmailProviderHealth({
+      EMAIL_PROVIDER: 'brevo',
+      BREVO_API_KEY: 'xkeysib-test',
+      BREVO_FROM_EMAIL: 'missing@example.com',
+    });
+    assert.equal(inactiveHealth.available, false);
+    assert.equal(inactiveHealth.code, 'EMAIL_SENDER_NOT_VERIFIED');
+  } finally {
+    restore();
+  }
 });
 
 test('treats a restricted (send-only) Resend key as available, not an auth failure', async () => {
@@ -326,7 +379,7 @@ test('marks a verified domain as available with a full-access key', async () => 
   }
 });
 
-test('is not configured without a Resend API key', async () => {
+test('is not configured without an email provider key', async () => {
   const health = await checkEmailProviderHealth({});
   assert.equal(health.configured, false);
   assert.equal(health.available, false);

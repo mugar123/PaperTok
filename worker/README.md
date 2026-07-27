@@ -10,10 +10,16 @@ npx wrangler secret put UNPAYWALL_EMAIL
 npx wrangler secret put GEMINI_API_KEY
 npx wrangler secret put CORE_API_KEY # optional, raises CORE rate limits
 npx wrangler secret put NASA_ADS_API_TOKEN # optional; INSPIRE is used until configured
+npx wrangler secret put BREVO_API_KEY
+npx wrangler secret put BREVO_FROM_EMAIL
 npx wrangler secret put RESEND_API_KEY
 npx wrangler secret put RESEND_FROM_EMAIL # optional after verifying a custom domain
 npx wrangler deploy
 ```
+
+Brevo is the primary notification provider when `EMAIL_PROVIDER = "brevo"`.
+`BREVO_FROM_EMAIL` must match an active sender in the Brevo account. Resend remains
+available as a fallback by changing `EMAIL_PROVIDER` to `resend`.
 
 After deployment, set the GitHub Actions repository variable `VITE_PAPER_API_BASE_URL` to:
 

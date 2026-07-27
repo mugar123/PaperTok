@@ -7,7 +7,8 @@ import './EmailNotificationModal.css';
 const ERROR_COPY = {
   EMAIL_NOT_CONFIGURED: 'Los avisos por email todavía no están configurados.',
   EMAIL_AUTH_REQUIRED: 'Vuelve a iniciar sesión para configurar los avisos.',
-  EMAIL_PROVIDER_AUTH_FAILED: 'Resend ha rechazado la credencial configurada.',
+  EMAIL_PROVIDER_AUTH_FAILED: 'El proveedor de correo ha rechazado la credencial configurada.',
+  EMAIL_SENDER_NOT_VERIFIED: 'El remitente de Brevo todavía no está verificado.',
   EMAIL_PROVIDER_LIMIT: 'Se ha alcanzado temporalmente el límite de envío.',
   EMAIL_TEST_RATE_LIMIT: 'Espera un minuto antes de enviar otra prueba.',
   EMAIL_TEST_RECIPIENT_RESTRICTED: 'Resend está en modo de prueba y sólo permite enviar al correo propietario de la cuenta. Para otros destinatarios necesitas verificar un dominio.',
@@ -115,17 +116,19 @@ export default function EmailNotificationModal({ isOpen, onClose }) {
                 <div className="email-notification-provider-warning">
                   <strong>Envío pendiente de configuración</strong>
                   <span>{health.code === 'EMAIL_PROVIDER_AUTH_FAILED'
-                    ? 'Resend no ha aceptado la credencial guardada.'
-                    : 'El proveedor de correo no está disponible en este momento.'}</span>
+                    ? 'El proveedor de correo no ha aceptado la credencial guardada.'
+                    : health.code === 'EMAIL_SENDER_NOT_VERIFIED'
+                      ? 'Brevo todavía no reconoce el remitente configurado como activo.'
+                      : 'El proveedor de correo no está disponible en este momento.'}</span>
                 </div>
               )}
-              {!loading && health.available && health.senderMode === 'resend-test' && (
+              {!loading && health.available && health.provider === 'resend' && health.senderMode === 'resend-test' && (
                 <div className="email-notification-provider-warning is-info">
                   <strong>Modo de prueba de Resend</strong>
                   <span>Sin un dominio verificado, Resend sólo entregará correos a la dirección propietaria de tu cuenta.</span>
                 </div>
               )}
-              {!loading && health.available && health.permissionLimited && health.senderMode !== 'resend-test' && (
+              {!loading && health.available && health.provider === 'resend' && health.permissionLimited && health.senderMode !== 'resend-test' && (
                 <div className="email-notification-provider-warning is-info">
                   <strong>Clave de envío restringida</strong>
                   <span>La credencial de Resend sólo tiene permiso de envío, así que no podemos comprobar el estado del dominio desde aquí. El envío funciona con normalidad.</span>

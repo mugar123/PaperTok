@@ -87,6 +87,7 @@ export async function getEmailNotificationHealth() {
     return {
       configured: Boolean(payload.configured),
       available: Boolean(payload.available),
+      provider: payload.provider || null,
       senderMode: payload.senderMode || null,
       permissionLimited: Boolean(payload.permissionLimited),
       code: payload.code || (response.ok ? null : 'EMAIL_PROVIDER_UNAVAILABLE'),
@@ -95,6 +96,7 @@ export async function getEmailNotificationHealth() {
     return {
       configured: false,
       available: false,
+      provider: null,
       senderMode: null,
       permissionLimited: false,
       code: error?.name === 'AbortError' ? 'EMAIL_TIMEOUT' : 'EMAIL_UNAVAILABLE',

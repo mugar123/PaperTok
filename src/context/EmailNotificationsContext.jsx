@@ -36,6 +36,7 @@ export function EmailNotificationsProvider({ children }) {
   const [health, setHealth] = useState({
     configured: false,
     available: false,
+    provider: null,
     code: null,
     senderMode: null,
     permissionLimited: false,

@@ -957,7 +957,10 @@ export default {
         openAlexConfigured: Boolean(env.OPENALEX_API_KEY),
         adsConfigured: Boolean(env.NASA_ADS_API_TOKEN),
         scopusConfigured: Boolean(env.ELSEVIER_API_KEY),
-        emailConfigured: Boolean(env.RESEND_API_KEY && env.NOTIFICATION_STORE),
+        emailConfigured: Boolean(
+          env.NOTIFICATION_STORE
+          && ((env.BREVO_API_KEY && env.BREVO_FROM_EMAIL) || env.RESEND_API_KEY),
+        ),
       }, 200, corsHeaders(origin, env));
     }
     if (url.pathname === '/health/email') {

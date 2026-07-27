@@ -11,7 +11,8 @@ AI_DAILY_USER_LIMIT = "10"
 AI_DAILY_GLOBAL_LIMIT = "1000"
 FIREBASE_WEB_API_KEY = "AIzaSyAQKtRz0-PJH7_xOBrFhGeQdbIAHkzV4Q0"
 WORKER_PUBLIC_URL = "https://papertok-report-api.papertok-mugar123.workers.dev"
-EMAIL_DAILY_SEND_LIMIT = "90"
+EMAIL_PROVIDER = "brevo"
+EMAIL_DAILY_SEND_LIMIT = "290"
 
 [[kv_namespaces]]
 binding = "NOTIFICATION_STORE"

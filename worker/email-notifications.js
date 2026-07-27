@@ -1,11 +1,12 @@
 const SUBSCRIPTION_PREFIX = 'notification:subscription:';
 const UNSUBSCRIBE_PREFIX = 'notification:unsubscribe:';
+const BREVO_API = 'https://api.brevo.com/v3';
 const RESEND_API = 'https://api.resend.com';
 const PAPER_TOK_URL = 'https://mugar123.github.io/papertok/#/following';
 const MAX_FOLLOWS = 40;
 const MAX_QUERIED_FOLLOWS = 24;
 const MAX_PREVIEW_ITEMS = 20;
-const DEFAULT_DAILY_SEND_LIMIT = 90;
+const DEFAULT_DAILY_SEND_LIMIT = 290;
 const SEND_COUNT_PREFIX = 'notification:send-count:';
 const TEST_IDEMPOTENCY_WINDOW_MS = 60_000;
 
@@ -334,7 +335,29 @@ async function collectDigestPapers(subscription, env, { test = false } = {}) {
     .slice(0, subscription.maxPapers || 5);
 }
 
-async function resolveSender(env) {
+function requestedEmailProvider(env) {
+  const requested = cleanText(env.EMAIL_PROVIDER, 20).toLowerCase();
+  if (requested === 'brevo' || requested === 'resend') return requested;
+  if (env.BREVO_API_KEY) return 'brevo';
+  if (env.RESEND_API_KEY) return 'resend';
+  return '';
+}
+
+function configuredEmailProvider(env) {
+  const provider = requestedEmailProvider(env);
+  if (provider === 'brevo' && env.BREVO_API_KEY && env.BREVO_FROM_EMAIL) return provider;
+  if (provider === 'resend' && env.RESEND_API_KEY) return provider;
+  return '';
+}
+
+function resolveBrevoSender(env) {
+  return {
+    name: cleanText(env.BREVO_FROM_NAME, 70) || 'PaperTok',
+    email: cleanText(env.BREVO_FROM_EMAIL, 320),
+  };
+}
+
+async function resolveResendSender(env) {
   if (env.RESEND_FROM_EMAIL) return cleanText(env.RESEND_FROM_EMAIL, 320);
   return 'PaperTok <onboarding@resend.dev>';
 }
@@ -390,6 +413,16 @@ function resendSendErrorCode(status, payload = {}) {
   return 'EMAIL_SEND_FAILED';
 }
 
+function brevoSendErrorCode(status, payload = {}) {
+  const providerMessage = cleanText(`${payload?.code || ''} ${payload?.message || ''}`, 1_000);
+  if (status === 401 || status === 403) return 'EMAIL_PROVIDER_AUTH_FAILED';
+  if (status === 429) return 'EMAIL_PROVIDER_LIMIT';
+  if (status === 400 && /sender|not valid|not verified|unauthorized/i.test(providerMessage)) {
+    return 'EMAIL_SENDER_NOT_VERIFIED';
+  }
+  return 'EMAIL_SEND_FAILED';
+}
+
 function paperReason(paper) {
   const names = (paper.matches || []).map(match => match.displayName).filter(Boolean);
   return names.length ? `Porque sigues ${names.slice(0, 2).join(' y ')}` : 'De tus seguimientos en PaperTok';
@@ -421,13 +454,39 @@ function renderDigest(subscription, papers, unsubscribeUrl, test) {
   return { html, text, subject: test ? 'PaperTok: correo de prueba' : title };
 }
 
-async function sendDigest(subscription, papers, env, { test = false } = {}) {
-  if (!env.RESEND_API_KEY) throw new EmailNotificationError('EMAIL_NOT_CONFIGURED', 503);
-  const sendState = await assertDailySendAvailable(env);
-  const from = await resolveSender(env);
-  const workerBase = cleanText(env.WORKER_PUBLIC_URL, 500) || 'https://papertok-report-api.papertok-mugar123.workers.dev';
-  const unsubscribeUrl = `${workerBase}/notifications/unsubscribe?token=${encodeURIComponent(subscription.unsubscribeToken)}`;
-  const content = renderDigest(subscription, papers, unsubscribeUrl, test);
+async function sendWithBrevo(subscription, content, env, { test = false } = {}) {
+  const sender = resolveBrevoSender(env);
+  const response = await fetch(`${BREVO_API}/smtp/email`, {
+    method: 'POST',
+    headers: {
+      'api-key': env.BREVO_API_KEY,
+      accept: 'application/json',
+      'content-type': 'application/json',
+      'user-agent': 'PaperTok/1.0',
+    },
+    body: JSON.stringify({
+      sender,
+      to: [{
+        email: subscription.email,
+        ...(subscription.displayName ? { name: cleanText(subscription.displayName, 160) } : {}),
+      }],
+      subject: content.subject,
+      htmlContent: content.html,
+      textContent: content.text,
+      tags: [test ? 'papertok-test' : 'papertok-following-digest'],
+    }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    console.error('Brevo rejected digest', response.status, payload?.message || payload?.code || 'unknown');
+    const code = brevoSendErrorCode(response.status, payload);
+    throw new EmailNotificationError(code, response.status === 429 ? 429 : 502);
+  }
+  return payload?.messageId || payload?.messageIds?.[0] || null;
+}
+
+async function sendWithResend(subscription, content, unsubscribeUrl, env, { test = false } = {}) {
+  const from = await resolveResendSender(env);
   const response = await fetch(`${RESEND_API}/emails`, {
     method: 'POST',
     headers: {
@@ -454,8 +513,21 @@ async function sendDigest(subscription, papers, env, { test = false } = {}) {
     const code = resendSendErrorCode(response.status, payload);
     throw new EmailNotificationError(code, response.status === 429 ? 429 : 502);
   }
-  await recordSuccessfulSend(env, sendState);
   return payload?.id || null;
+}
+
+async function sendDigest(subscription, papers, env, { test = false } = {}) {
+  const provider = configuredEmailProvider(env);
+  if (!provider) throw new EmailNotificationError('EMAIL_NOT_CONFIGURED', 503);
+  const sendState = await assertDailySendAvailable(env);
+  const workerBase = cleanText(env.WORKER_PUBLIC_URL, 500) || 'https://papertok-report-api.papertok-mugar123.workers.dev';
+  const unsubscribeUrl = `${workerBase}/notifications/unsubscribe?token=${encodeURIComponent(subscription.unsubscribeToken)}`;
+  const content = renderDigest(subscription, papers, unsubscribeUrl, test);
+  const providerId = provider === 'brevo'
+    ? await sendWithBrevo(subscription, content, env, { test })
+    : await sendWithResend(subscription, content, unsubscribeUrl, env, { test });
+  await recordSuccessfulSend(env, sendState);
+  return providerId;
 }
 
 async function testSubscription(env, identity) {
@@ -514,7 +586,46 @@ export async function handleEmailUnsubscribe(request, env) {
 }
 
 export async function checkEmailProviderHealth(env) {
-  if (!env.RESEND_API_KEY) return { configured: false, available: false, code: 'EMAIL_NOT_CONFIGURED' };
+  const provider = requestedEmailProvider(env);
+  if (!configuredEmailProvider(env)) {
+    return { configured: false, available: false, provider: provider || null, code: 'EMAIL_NOT_CONFIGURED' };
+  }
+
+  if (provider === 'brevo') {
+    try {
+      const response = await fetch(`${BREVO_API}/senders`, {
+        headers: {
+          'api-key': env.BREVO_API_KEY,
+          accept: 'application/json',
+          'user-agent': 'PaperTok/1.0',
+        },
+      });
+      if (response.status === 401 || response.status === 403) {
+        return { configured: true, available: false, provider, code: 'EMAIL_PROVIDER_AUTH_FAILED' };
+      }
+      if (!response.ok) {
+        return { configured: true, available: false, provider, code: 'EMAIL_PROVIDER_UNAVAILABLE' };
+      }
+      const payload = await response.json().catch(() => ({}));
+      const senderEmail = cleanText(env.BREVO_FROM_EMAIL, 320).toLowerCase();
+      const activeSender = (payload?.senders || []).some(sender => (
+        sender?.active && cleanText(sender.email, 320).toLowerCase() === senderEmail
+      ));
+      if (!activeSender) {
+        return { configured: true, available: false, provider, code: 'EMAIL_SENDER_NOT_VERIFIED' };
+      }
+      return {
+        configured: true,
+        available: true,
+        provider,
+        senderMode: 'brevo-verified-sender',
+        permissionLimited: false,
+      };
+    } catch {
+      return { configured: true, available: false, provider, code: 'EMAIL_PROVIDER_UNAVAILABLE' };
+    }
+  }
+
   try {
     const response = await fetch(`${RESEND_API}/domains?limit=1`, {
       headers: {
@@ -538,19 +649,25 @@ export async function checkEmailProviderHealth(env) {
         return {
           configured: true,
           available: true,
+          provider,
           senderMode: env.RESEND_FROM_EMAIL ? 'verified-domain' : 'resend-test',
           permissionLimited: true,
         };
       }
       console.warn('Resend health probe rejected', response.status, errorPayload?.name || 'unknown');
-      return { configured: true, available: false, code: 'EMAIL_PROVIDER_AUTH_FAILED' };
+      return { configured: true, available: false, provider, code: 'EMAIL_PROVIDER_AUTH_FAILED' };
     }
-    if (!response.ok) return { configured: true, available: false, code: 'EMAIL_PROVIDER_UNAVAILABLE' };
+    if (!response.ok) return { configured: true, available: false, provider, code: 'EMAIL_PROVIDER_UNAVAILABLE' };
     const payload = await response.json().catch(() => ({}));
     const verified = (payload?.data || []).some(domain => domain.status === 'verified');
-    return { configured: true, available: true, senderMode: env.RESEND_FROM_EMAIL || verified ? 'verified-domain' : 'resend-test' };
+    return {
+      configured: true,
+      available: true,
+      provider,
+      senderMode: env.RESEND_FROM_EMAIL || verified ? 'verified-domain' : 'resend-test',
+    };
   } catch {
-    return { configured: true, available: false, code: 'EMAIL_PROVIDER_UNAVAILABLE' };
+    return { configured: true, available: false, provider, code: 'EMAIL_PROVIDER_UNAVAILABLE' };
   }
 }
 
@@ -582,7 +699,7 @@ async function processScheduledSubscription(env, key, now) {
 }
 
 export async function runEmailNotificationSchedule(env, scheduledTime = Date.now()) {
-  if (!env.NOTIFICATION_STORE || !env.RESEND_API_KEY) return { sent: 0, skipped: true };
+  if (!env.NOTIFICATION_STORE || !configuredEmailProvider(env)) return { sent: 0, skipped: true };
   const now = new Date(scheduledTime);
   let cursor;
   let sent = 0;
@@ -601,7 +718,9 @@ export async function runEmailNotificationSchedule(env, scheduledTime = Date.now
 }
 
 export const emailNotificationInternals = {
+  brevoSendErrorCode,
   buildResendIdempotencyKey,
+  configuredEmailProvider,
   sanitizeFollow,
   sanitizePaper,
   sanitizePreferences,
