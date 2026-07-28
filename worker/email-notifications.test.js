@@ -13,8 +13,10 @@ const {
   sanitizeFollow,
   sanitizePreferences,
   mergePapers,
+  selectDigestPapers,
   isSubscriptionDue,
   resendSendErrorCode,
+  renderScientificHtml,
   renderDigest,
 } = emailNotificationInternals;
 
@@ -88,6 +90,68 @@ test('deduplicates digest papers while preserving every follow reason', () => {
   assert.equal(papers.length, 1);
   assert.equal(papers[0].citationCount, 8);
   assert.deepEqual(papers[0].matches.map(match => match.type), ['author', 'topic']);
+});
+
+test('deduplicates newsletter records with different provider ids by title and author', () => {
+  const papers = mergePapers([
+    {
+      id: 'openalex:W1',
+      title: 'On the Origin of the Universe',
+      authors: ['Francisco Anderson de Sousa Oliveira'],
+      matches: [{ type: 'topic', canonicalId: 'T1', displayName: 'Astrophysics' }],
+    },
+    {
+      id: 'zenodo:1',
+      title: 'On the Origin of the Universe',
+      authors: ['Francisco Anderson de Sousa Oliveira'],
+      citationCount: 4,
+      matches: [{ type: 'institution', canonicalId: 'I1', displayName: 'CERN' }],
+    },
+  ]);
+
+  assert.equal(papers.length, 1);
+  assert.equal(papers[0].id, 'openalex:W1');
+  assert.equal(papers[0].citationCount, 4);
+  assert.deepEqual(papers[0].matches.map(match => match.type), ['topic', 'institution']);
+});
+
+test('treats the configured paper count as a maximum and does not backfill weak results', () => {
+  const now = Date.parse('2026-07-28T07:00:00Z');
+  const followedMatch = [{ type: 'topic', canonicalId: 'T1', displayName: 'Astrophysics' }];
+  const qualityPaper = {
+    authors: ['Ada Lovelace'],
+    published: '2026-07-28',
+    url: 'https://example.com/paper',
+    matches: followedMatch,
+  };
+  const selected = selectDigestPapers([
+    { ...qualityPaper, id: 'one', title: 'First strong paper', citationCount: 3 },
+    { ...qualityPaper, id: 'duplicate-provider', title: 'First strong paper', citationCount: 8 },
+    { ...qualityPaper, id: 'two', title: 'Second strong paper', citationCount: 2 },
+    { ...qualityPaper, id: 'future', title: 'Future metadata error', published: '2028-01-01', citationCount: 99 },
+    { ...qualityPaper, id: 'missing-link', title: 'Incomplete paper', url: '', citationCount: 99 },
+    { ...qualityPaper, id: 'unfollowed', title: 'Unrelated paper', matches: [], citationCount: 99 },
+  ], { limit: 5, now });
+
+  assert.deepEqual(selected.map(paper => paper.title), ['First strong paper', 'Second strong paper']);
+});
+
+test('only admits a bounded exploration paper with a strong scientific signal', () => {
+  const now = Date.parse('2026-07-28T07:00:00Z');
+  const base = {
+    authors: ['Grace Hopper'],
+    published: '2026-07-28',
+    journal: 'Relevant Journal',
+    url: 'https://example.com/discovery',
+    matches: [],
+  };
+  assert.equal(selectDigestPapers([
+    { ...base, id: 'strong', title: 'Strong discovery', citationCount: 12 },
+    { ...base, id: 'weak', title: 'Weak discovery', citationCount: 0 },
+  ], { limit: 1, now, exploration: true })[0].id, 'strong');
+  assert.deepEqual(selectDigestPapers([
+    { ...base, id: 'weak', title: 'Weak discovery', citationCount: 0 },
+  ], { limit: 1, now, exploration: true }), []);
 });
 
 test('sends daily subscriptions once per day and weekly subscriptions on Monday', () => {
@@ -199,13 +263,14 @@ test('scheduled digest fetches and emails papers from every followed entity type
     ['Author', 'Institution', 'Topic', 'Project'].forEach(source => {
       assert.equal(brevoPayload.htmlContent.includes(`${source} followed paper`), true);
     });
-    assert.equal(requests.filter(url => url.startsWith('https://api.openalex.org/works')).length, 4);
+    assert.equal(requests.filter(url => url.startsWith('https://api.openalex.org/works')).length, 5);
     assert.equal(requests.filter(url => url.startsWith('https://api.openaire.eu/')).length, 1);
     assert.equal(requests.filter(url => url.startsWith('https://api.brevo.com/v3/smtp/email')).length, 1);
 
     const storedSubscription = await kv.get(subscriptionKey, 'json');
     assert.equal(storedSubscription.lastSentAt, now.toISOString());
     assert.equal(storedSubscription.lastCheckedAt, now.toISOString());
+    assert.equal(storedSubscription.sentPaperKeys.includes('doi:10.1234/author'), true);
     assert.equal(
       [...kv.values.entries()].some(([key, value]) => key.startsWith('notification:send-count:') && value === '1'),
       true,
@@ -394,4 +459,19 @@ test('escapes paper metadata in email HTML', () => {
   }], 'https://example.com/unsubscribe', true);
   assert.equal(digest.html.includes('<script>alert(1)</script>'), false);
   assert.equal(digest.html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'), true);
+});
+
+test('renders common LaTeX in email-safe HTML without exposing delimiters', () => {
+  const rendered = renderScientificHtml('High-Resolution ($2560^3$) with $\\Omega_m$');
+  assert.equal(rendered.includes('$'), false);
+  assert.equal(rendered.includes('2560<sup>3</sup>'), true);
+  assert.equal(rendered.includes('Ω<sub>m</sub>'), true);
+
+  const digest = renderDigest({ frequency: 'daily' }, [{
+    title: 'High-Resolution ($2560^3$) Simulation',
+    authors: ['Ada'],
+    matches: [],
+  }], 'https://example.com/unsubscribe', false);
+  assert.equal(digest.html.includes('2560<sup>3</sup>'), true);
+  assert.equal(digest.text.includes('$2560^3$'), false);
 });

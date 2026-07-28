@@ -6,9 +6,15 @@ const PAPER_TOK_URL = 'https://mugar123.github.io/papertok/#/following';
 const MAX_FOLLOWS = 40;
 const MAX_QUERIED_FOLLOWS = 24;
 const MAX_PREVIEW_ITEMS = 20;
+const MAX_SENT_PAPER_KEYS = 120;
 const DEFAULT_DAILY_SEND_LIMIT = 290;
 const SEND_COUNT_PREFIX = 'notification:send-count:';
 const TEST_IDEMPOTENCY_WINDOW_MS = 60_000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const FUTURE_DATE_TOLERANCE_MS = DAY_MS;
+const FOLLOWED_PAPER_MIN_SCORE = 55;
+const EXPLORATION_PAPER_MIN_SCORE = 70;
+const EXPLORATION_MIN_CITATIONS = 3;
 
 export class EmailNotificationError extends Error {
   constructor(code, status = 400, message = code) {
@@ -32,6 +38,183 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
+const EMAIL_LATEX_DELIMITERS = [
+  { left: '$$', right: '$$' },
+  { left: '\\[', right: '\\]' },
+  { left: '\\(', right: '\\)' },
+  { left: '$', right: '$' },
+];
+
+const EMAIL_LATEX_SYMBOLS = {
+  alpha: 'α',
+  beta: 'β',
+  gamma: 'γ',
+  delta: 'δ',
+  epsilon: 'ε',
+  theta: 'θ',
+  lambda: 'λ',
+  mu: 'μ',
+  nu: 'ν',
+  pi: 'π',
+  rho: 'ρ',
+  sigma: 'σ',
+  tau: 'τ',
+  phi: 'φ',
+  chi: 'χ',
+  psi: 'ψ',
+  omega: 'ω',
+  Gamma: 'Γ',
+  Delta: 'Δ',
+  Theta: 'Θ',
+  Lambda: 'Λ',
+  Sigma: 'Σ',
+  Phi: 'Φ',
+  Psi: 'Ψ',
+  Omega: 'Ω',
+  pm: '±',
+  mp: '∓',
+  times: '×',
+  cdot: '·',
+  leq: '≤',
+  le: '≤',
+  geq: '≥',
+  ge: '≥',
+  neq: '≠',
+  approx: '≈',
+  sim: '∼',
+  infty: '∞',
+  partial: '∂',
+  nabla: '∇',
+  sum: '∑',
+  prod: '∏',
+  int: '∫',
+  odot: '⊙',
+  ell: 'ℓ',
+};
+
+function isEscaped(text, index) {
+  let slashCount = 0;
+  for (let cursor = index - 1; cursor >= 0 && text[cursor] === '\\'; cursor -= 1) slashCount += 1;
+  return slashCount % 2 === 1;
+}
+
+function findEmailLatexDelimiter(text, startIndex) {
+  let next = null;
+  EMAIL_LATEX_DELIMITERS.forEach((delimiter) => {
+    let index = text.indexOf(delimiter.left, startIndex);
+    while (index !== -1 && isEscaped(text, index)) {
+      index = text.indexOf(delimiter.left, index + delimiter.left.length);
+    }
+    if (index !== -1 && (!next || index < next.index || (
+      index === next.index && delimiter.left.length > next.delimiter.left.length
+    ))) {
+      next = { index, delimiter };
+    }
+  });
+  return next;
+}
+
+function splitEmailScientificText(value) {
+  const text = cleanText(value, 5_000);
+  const chunks = [];
+  let cursor = 0;
+  while (cursor < text.length) {
+    const match = findEmailLatexDelimiter(text, cursor);
+    if (!match) {
+      chunks.push({ type: 'text', value: text.slice(cursor) });
+      break;
+    }
+    if (match.index > cursor) chunks.push({ type: 'text', value: text.slice(cursor, match.index) });
+    const contentStart = match.index + match.delimiter.left.length;
+    let contentEnd = text.indexOf(match.delimiter.right, contentStart);
+    while (contentEnd !== -1 && isEscaped(text, contentEnd)) {
+      contentEnd = text.indexOf(match.delimiter.right, contentEnd + match.delimiter.right.length);
+    }
+    if (contentEnd === -1) {
+      chunks.push({ type: 'text', value: text.slice(match.index) });
+      break;
+    }
+    chunks.push({ type: 'math', value: text.slice(contentStart, contentEnd) });
+    cursor = contentEnd + match.delimiter.right.length;
+  }
+  return chunks;
+}
+
+function simplifyEmailLatex(value) {
+  let expression = String(value || '');
+  for (let pass = 0; pass < 4; pass += 1) {
+    const previous = expression;
+    expression = expression
+      .replace(/\\frac\{([^{}]*)\}\{([^{}]*)\}/g, '($1)/($2)')
+      .replace(/\\sqrt\{([^{}]*)\}/g, '√($1)')
+      .replace(/\\(?:text|mathrm|mathbf|mathit|operatorname)\{([^{}]*)\}/g, '$1');
+    if (expression === previous) break;
+  }
+  return expression
+    .replace(/\\(?:left|right)\b/g, '')
+    .replace(/\\([A-Za-z]+)/g, (match, command) => EMAIL_LATEX_SYMBOLS[command] || command)
+    .replace(/\\[,;:!]/g, ' ')
+    .replace(/\\([{}_%&#])/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function renderEmailMath(value) {
+  const expression = simplifyEmailLatex(value);
+  let html = '';
+  let plain = '';
+  let cursor = 0;
+
+  const appendText = (text) => {
+    html += escapeHtml(text);
+    plain += text;
+  };
+
+  while (cursor < expression.length) {
+    const character = expression[cursor];
+    if (character !== '^' && character !== '_') {
+      if (character !== '{' && character !== '}') appendText(character);
+      cursor += 1;
+      continue;
+    }
+
+    const tag = character === '^' ? 'sup' : 'sub';
+    const marker = character;
+    cursor += 1;
+    let token;
+    if (expression[cursor] === '{') {
+      const end = expression.indexOf('}', cursor + 1);
+      if (end === -1) {
+        appendText(marker);
+        continue;
+      }
+      token = expression.slice(cursor + 1, end);
+      cursor = end + 1;
+    } else {
+      const match = expression.slice(cursor).match(/^[^\s+\-*/=(),]+/);
+      token = match?.[0] || expression[cursor] || '';
+      cursor += token.length || 1;
+    }
+    html += `<${tag}>${escapeHtml(token)}</${tag}>`;
+    plain += `${marker}${token}`;
+  }
+
+  return { html, plain };
+}
+
+function renderScientificHtml(value) {
+  return splitEmailScientificText(value).map((chunk) => {
+    if (chunk.type === 'text') return escapeHtml(chunk.value);
+    return `<span style="font-family:Arial,sans-serif;white-space:nowrap">${renderEmailMath(chunk.value).html}</span>`;
+  }).join('');
+}
+
+function renderScientificText(value) {
+  return splitEmailScientificText(value).map(chunk => (
+    chunk.type === 'text' ? cleanText(chunk.value, 5_000) : renderEmailMath(chunk.value).plain
+  )).join('');
+}
+
 function safeUrl(value) {
   try {
     const url = new URL(value);
@@ -46,6 +229,24 @@ function normalizeId(value) {
     .replace(/^https?:\/\/(?:api\.)?openalex\.org\//i, '')
     .replace(/^https?:\/\/ror\.org\//i, '')
     .replace(/^\/+|\/+$/g, '');
+}
+
+function normalizePaperTitle(value) {
+  return cleanText(value, 500)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function normalizePaperAuthor(value) {
+  return cleanText(value, 160)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
 }
 
 function sanitizeFollow(input = {}) {
@@ -70,11 +271,29 @@ function sanitizeFollow(input = {}) {
   };
 }
 
+function normalizePaperDoi(value) {
+  return cleanText(value, 300).toLowerCase().replace(/^https?:\/\/(?:dx\.)?doi\.org\//, '');
+}
+
+function paperWorkKey(paper = {}) {
+  const title = normalizePaperTitle(paper.title);
+  const firstAuthor = normalizePaperAuthor(paper.authors?.[0]?.name || paper.authors?.[0]);
+  return title && firstAuthor ? `work:${title}|${firstAuthor}` : '';
+}
+
+function paperIdentityKeys(paper = {}) {
+  const doi = normalizePaperDoi(paper.doi);
+  const id = cleanText(paper.id, 300).toLowerCase();
+  return [...new Set([
+    doi ? `doi:${doi}` : '',
+    paperWorkKey(paper),
+    id ? `id:${id}` : '',
+  ].filter(Boolean))];
+}
+
 function paperKey(paper = {}) {
-  const doi = cleanText(paper.doi, 300).toLowerCase().replace(/^https?:\/\/(?:dx\.)?doi\.org\//, '');
-  if (doi) return `doi:${doi}`;
-  if (paper.id) return `id:${cleanText(paper.id, 300).toLowerCase()}`;
-  return `title:${cleanText(paper.title, 500).toLowerCase().replace(/[^a-z0-9]+/g, '')}`;
+  const identities = paperIdentityKeys(paper);
+  return identities[0] || `title:${normalizePaperTitle(paper.title)}`;
 }
 
 function sanitizePaper(input = {}) {
@@ -213,15 +432,16 @@ function mapOpenAlexPaper(work, follow) {
     citationCount: work?.cited_by_count,
     openAccess: work?.open_access?.is_oa,
     landingPageUrl: work?.best_oa_location?.landing_page_url || work?.primary_location?.landing_page_url,
-    _followedEntityMatches: [follow],
+    _followedEntityMatches: follow ? [follow] : [],
   });
 }
 
-async function fetchOpenAlexUpdates(follow, env) {
+async function fetchOpenAlexUpdates(follow, env, now = Date.now()) {
   const id = normalizeId(follow.canonicalId);
   const url = addOpenAlexCredentials(new URL('https://api.openalex.org/works'), env);
-  const cutoff = new Date(Date.now() - 9 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  let filter = `from_publication_date:${cutoff}`;
+  const cutoff = new Date(now - 9 * DAY_MS).toISOString().slice(0, 10);
+  const today = new Date(now).toISOString().slice(0, 10);
+  let filter = `from_publication_date:${cutoff},to_publication_date:${today}`;
 
   if (follow.type === 'author' && /^A\d+$/i.test(id)) filter += `,author.id:${id}`;
   else if (follow.type === 'institution') {
@@ -240,6 +460,25 @@ async function fetchOpenAlexUpdates(follow, env) {
   if (!response.ok) throw new Error(`OpenAlex digest error: ${response.status}`);
   const payload = await response.json();
   return (payload?.results || []).map(work => mapOpenAlexPaper(work, follow)).filter(Boolean);
+}
+
+async function fetchExplorationUpdates(env, now = Date.now()) {
+  const url = addOpenAlexCredentials(new URL('https://api.openalex.org/works'), env);
+  const cutoff = new Date(now - 4 * DAY_MS).toISOString().slice(0, 10);
+  const today = new Date(now).toISOString().slice(0, 10);
+  url.searchParams.set(
+    'filter',
+    `from_publication_date:${cutoff},to_publication_date:${today},is_retracted:false`,
+  );
+  url.searchParams.set('sort', 'cited_by_count:desc');
+  url.searchParams.set('per-page', '8');
+  const response = await fetch(url, { headers: { accept: 'application/json' } });
+  if (!response.ok) {
+    console.warn('OpenAlex digest exploration unavailable', response.status);
+    return [];
+  }
+  const payload = await response.json().catch(() => ({}));
+  return (payload?.results || []).map(work => mapOpenAlexPaper(work, null)).filter(Boolean);
 }
 
 async function fetchProjectUpdates(follow, env) {
@@ -296,43 +535,171 @@ function publicationTime(paper) {
   return Number.isFinite(value) ? value : 0;
 }
 
-function mergePapers(papers) {
-  const merged = new Map();
-  papers.filter(Boolean).forEach((paper) => {
-    const key = paperKey(paper);
-    const current = merged.get(key);
-    if (!current) {
-      merged.set(key, paper);
-      return;
-    }
-    const matches = [...(current.matches || []), ...(paper.matches || [])];
-    merged.set(key, {
-      ...current,
-      ...paper,
-      citationCount: Math.max(current.citationCount || 0, paper.citationCount || 0),
-      matches: matches.filter((match, index) => matches.findIndex(candidate => (
-        candidate.type === match.type && candidate.canonicalId === match.canonicalId
-      )) === index),
-    });
-  });
-  return [...merged.values()].sort((a, b) => publicationTime(b) - publicationTime(a));
+function mergePaperRecords(current, paper) {
+  const matches = [...(current.matches || []), ...(paper.matches || [])];
+  return {
+    ...current,
+    ...paper,
+    id: current.id || paper.id,
+    doi: current.doi || paper.doi,
+    title: current.title?.length >= (paper.title?.length || 0) ? current.title : paper.title,
+    authors: current.authors?.length >= (paper.authors?.length || 0) ? current.authors : paper.authors,
+    published: current.published || paper.published,
+    journal: current.journal || paper.journal,
+    url: current.url || paper.url,
+    openAccess: Boolean(current.openAccess || paper.openAccess),
+    citationCount: Math.max(current.citationCount || 0, paper.citationCount || 0),
+    matches: matches.filter((match, index) => matches.findIndex(candidate => (
+      candidate.type === match.type && candidate.canonicalId === match.canonicalId
+    )) === index),
+  };
 }
 
-async function collectDigestPapers(subscription, env, { test = false } = {}) {
+function mergePapers(papers) {
+  const mergedByIdentity = new Map();
+  papers.filter(Boolean).forEach((paper) => {
+    const identityKeys = paperIdentityKeys(paper);
+    const existingRecords = [...new Set(identityKeys
+      .map(key => mergedByIdentity.get(key))
+      .filter(Boolean))];
+    if (!existingRecords.length) {
+      identityKeys.forEach(key => mergedByIdentity.set(key, paper));
+      return;
+    }
+
+    const next = existingRecords.reduce(
+      (mergedPaper, current) => mergePaperRecords(current, mergedPaper),
+      paper,
+    );
+    const existingSet = new Set(existingRecords);
+    mergedByIdentity.forEach((value, key) => {
+      if (existingSet.has(value)) mergedByIdentity.set(key, next);
+    });
+    identityKeys.forEach(key => mergedByIdentity.set(key, next));
+  });
+  return [...new Set(mergedByIdentity.values())]
+    .sort((a, b) => publicationTime(b) - publicationTime(a));
+}
+
+function digestPaperScore(paper, now = Date.now()) {
+  const publishedAt = publicationTime(paper);
+  if (
+    !publishedAt
+    || publishedAt > now + FUTURE_DATE_TOLERANCE_MS
+    || !paper.authors?.length
+    || !paper.url
+  ) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  const ageDays = Math.max(0, (now - publishedAt) / DAY_MS);
+  const recencyScore = 48 * Math.exp(-ageDays / 10);
+  const citationScore = Math.min(22, Math.log1p(Math.max(0, paper.citationCount || 0)) * 6);
+  const matchCount = new Set((paper.matches || []).map(match => (
+    `${match.type}:${match.canonicalId}`
+  ))).size;
+  const followingScore = matchCount ? Math.min(48, 32 + (matchCount - 1) * 8) : 0;
+  const metadataScore = (paper.journal ? 4 : 0) + (paper.openAccess ? 2 : 0) + 6;
+  return recencyScore + citationScore + followingScore + metadataScore;
+}
+
+function getPaperFollowKeys(paper = {}) {
+  return [...new Set((paper.matches || []).map(match => (
+    `${match.type}:${match.canonicalId}`
+  )))];
+}
+
+function sharesFollow(left, right) {
+  const rightKeys = new Set(getPaperFollowKeys(right));
+  return getPaperFollowKeys(left).some(key => rightKeys.has(key));
+}
+
+function blockedFollowKeys(selected) {
+  if (selected.length < 2) return new Set();
+  const previous = new Set(getPaperFollowKeys(selected.at(-1)));
+  const beforePrevious = new Set(getPaperFollowKeys(selected.at(-2)));
+  return new Set([...previous].filter(key => beforePrevious.has(key)));
+}
+
+function selectDigestPapers(papers, {
+  limit = 5,
+  now = Date.now(),
+  exploration = false,
+  excludedKeys = [],
+} = {}) {
+  const excluded = excludedKeys instanceof Set ? excludedKeys : new Set(excludedKeys);
+  const minimumScore = exploration ? EXPLORATION_PAPER_MIN_SCORE : FOLLOWED_PAPER_MIN_SCORE;
+  const ranked = mergePapers(papers)
+    .filter(paper => !paperIdentityKeys(paper).some(key => excluded.has(key)))
+    .filter(paper => exploration ? !(paper.matches || []).length : (paper.matches || []).length > 0)
+    .map(paper => ({ paper, score: digestPaperScore(paper, now) }))
+    .filter(candidate => (
+      Number.isFinite(candidate.score)
+      && candidate.score >= minimumScore
+      && (!exploration || candidate.paper.citationCount >= EXPLORATION_MIN_CITATIONS)
+    ))
+    .sort((left, right) => (
+      right.score - left.score
+      || publicationTime(right.paper) - publicationTime(left.paper)
+      || paperKey(left.paper).localeCompare(paperKey(right.paper))
+    ));
+
+  if (exploration) return ranked.slice(0, Math.max(0, limit)).map(candidate => candidate.paper);
+
+  const selected = [];
+  while (ranked.length && selected.length < limit) {
+    const blocked = blockedFollowKeys(selected);
+    const hasAlternative = blocked.size > 0 && ranked.some(candidate => (
+      !getPaperFollowKeys(candidate.paper).some(key => blocked.has(key))
+    ));
+    let bestIndex = -1;
+    let bestScore = Number.NEGATIVE_INFINITY;
+    ranked.forEach((candidate, index) => {
+      if (hasAlternative && getPaperFollowKeys(candidate.paper).some(key => blocked.has(key))) return;
+      const adjustedScore = candidate.score - (sharesFollow(candidate.paper, selected.at(-1)) ? 8 : 0);
+      if (adjustedScore > bestScore) {
+        bestIndex = index;
+        bestScore = adjustedScore;
+      }
+    });
+    const [next] = ranked.splice(bestIndex >= 0 ? bestIndex : 0, 1);
+    selected.push(next.paper);
+  }
+  return selected;
+}
+
+async function collectDigestPapers(subscription, env, { test = false, now = Date.now() } = {}) {
   const follows = (subscription.follows || []).slice(0, MAX_QUERIED_FOLLOWS);
   const fresh = await mapWithConcurrency(follows, 4, follow => (
-    follow.type === 'project' ? fetchProjectUpdates(follow, env) : fetchOpenAlexUpdates(follow, env)
+    follow.type === 'project' ? fetchProjectUpdates(follow, env) : fetchOpenAlexUpdates(follow, env, now)
   ));
   const combined = mergePapers([...fresh, ...(subscription.previewItems || [])]);
-  if (test) return combined.slice(0, subscription.maxPapers || 5);
-
   const fallbackDays = subscription.frequency === 'weekly' ? 8 : 2;
   const cutoff = subscription.lastSentAt
     ? Date.parse(subscription.lastSentAt) - 60 * 60 * 1000
-    : Date.now() - fallbackDays * 24 * 60 * 60 * 1000;
-  return combined
-    .filter(paper => !publicationTime(paper) || publicationTime(paper) >= cutoff)
-    .slice(0, subscription.maxPapers || 5);
+    : now - fallbackDays * DAY_MS;
+  const maximum = subscription.maxPapers || 5;
+  const sentKeys = test ? new Set() : new Set(subscription.sentPaperKeys || []);
+  const followedSelection = selectDigestPapers(
+    combined.filter(paper => publicationTime(paper) >= cutoff),
+    { limit: maximum, now, excludedKeys: sentKeys },
+  );
+  if (test || !followedSelection.length || followedSelection.length >= maximum) {
+    return followedSelection;
+  }
+
+  const selectedKeys = new Set([
+    ...sentKeys,
+    ...followedSelection.flatMap(paperIdentityKeys),
+  ]);
+  const exploration = await fetchExplorationUpdates(env, now);
+  const discovery = selectDigestPapers(exploration, {
+    limit: 1,
+    now,
+    exploration: true,
+    excludedKeys: selectedKeys,
+  });
+  return [...followedSelection, ...discovery].slice(0, maximum);
 }
 
 function requestedEmailProvider(env) {
@@ -425,17 +792,25 @@ function brevoSendErrorCode(status, payload = {}) {
 
 function paperReason(paper) {
   const names = (paper.matches || []).map(match => match.displayName).filter(Boolean);
-  return names.length ? `Porque sigues ${names.slice(0, 2).join(' y ')}` : 'De tus seguimientos en PaperTok';
+  return names.length
+    ? `Porque sigues ${names.slice(0, 2).join(' y ')}`
+    : 'Descubrimiento destacado de PaperTok';
+}
+
+function digestTitle(paperCount) {
+  return paperCount === 1
+    ? '1 novedad científica para ti'
+    : `${paperCount} novedades científicas para ti`;
 }
 
 function renderDigest(subscription, papers, unsubscribeUrl, test) {
   const greeting = subscription.displayName ? `Hola, ${subscription.displayName.split(' ')[0]}` : 'Hola';
-  const title = test ? 'Tu correo de PaperTok funciona' : `${papers.length} novedades científicas para ti`;
+  const title = test ? 'Tu correo de PaperTok funciona' : digestTitle(papers.length);
   const paperHtml = papers.length
     ? papers.map(paper => `
       <div style="padding:20px 0;border-bottom:1px solid #2b2933">
         <div style="font-size:12px;color:#a98cf7;margin-bottom:7px">${escapeHtml(paperReason(paper))}</div>
-        <a href="${escapeHtml(paper.url || PAPER_TOK_URL)}" style="color:#f6f4fb;text-decoration:none;font-size:18px;font-weight:700;line-height:1.35">${escapeHtml(paper.title)}</a>
+        <a href="${escapeHtml(paper.url || PAPER_TOK_URL)}" style="color:#f6f4fb;text-decoration:none;font-size:18px;font-weight:700;line-height:1.35">${renderScientificHtml(paper.title)}</a>
         <div style="color:#a7a2b3;font-size:13px;margin-top:8px">${escapeHtml(paper.authors?.slice(0, 3).join(', ') || 'Autoría no disponible')}</div>
         <div style="color:#787381;font-size:12px;margin-top:6px">${escapeHtml([paper.published, paper.journal, paper.citationCount ? `${paper.citationCount} citas` : ''].filter(Boolean).join(' · '))}</div>
       </div>`).join('')
@@ -450,7 +825,7 @@ function renderDigest(subscription, papers, unsubscribeUrl, test) {
       <a href="${PAPER_TOK_URL}" style="display:inline-block;margin-top:24px;padding:12px 18px;background:#8b5cf6;color:white;text-decoration:none;border-radius:6px;font-weight:700">Abrir mi bandeja</a>
       <p style="color:#676270;font-size:11px;line-height:1.5;margin-top:34px">Recibes este correo porque activaste las novedades por email en PaperTok. <a href="${escapeHtml(unsubscribeUrl)}" style="color:#9b93a8">Darme de baja</a>.</p>
     </div></body></html>`;
-  const text = `${title}\n\n${greeting}.\n\n${papers.map(paper => `${paper.title}\n${paperReason(paper)}\n${paper.url || PAPER_TOK_URL}`).join('\n\n')}\n\nAbrir PaperTok: ${PAPER_TOK_URL}\nDarme de baja: ${unsubscribeUrl}`;
+  const text = `${title}\n\n${greeting}.\n\n${papers.map(paper => `${renderScientificText(paper.title)}\n${paperReason(paper)}\n${paper.url || PAPER_TOK_URL}`).join('\n\n')}\n\nAbrir PaperTok: ${PAPER_TOK_URL}\nDarme de baja: ${unsubscribeUrl}`;
   return { html, text, subject: test ? 'PaperTok: correo de prueba' : title };
 }
 
@@ -683,17 +1058,22 @@ function isSubscriptionDue(subscription, now) {
 async function processScheduledSubscription(env, key, now) {
   const subscription = await env.NOTIFICATION_STORE.get(key.name, 'json');
   if (!isSubscriptionDue(subscription, now)) return { skipped: true };
-  const papers = await collectDigestPapers(subscription, env);
+  const papers = await collectDigestPapers(subscription, env, { now: now.getTime() });
   const checkedAt = now.toISOString();
   if (!papers.length) {
     await env.NOTIFICATION_STORE.put(key.name, JSON.stringify({ ...subscription, lastCheckedAt: checkedAt }));
     return { empty: true };
   }
   await sendDigest(subscription, papers, env);
+  const sentPaperKeys = [...new Set([
+    ...(subscription.sentPaperKeys || []),
+    ...papers.flatMap(paperIdentityKeys),
+  ])].slice(-MAX_SENT_PAPER_KEYS);
   await env.NOTIFICATION_STORE.put(key.name, JSON.stringify({
     ...subscription,
     lastCheckedAt: checkedAt,
     lastSentAt: checkedAt,
+    sentPaperKeys,
   }));
   return { sent: true };
 }
@@ -725,7 +1105,9 @@ export const emailNotificationInternals = {
   sanitizePaper,
   sanitizePreferences,
   mergePapers,
+  selectDigestPapers,
   isSubscriptionDue,
   resendSendErrorCode,
+  renderScientificHtml,
   renderDigest,
 };

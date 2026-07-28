@@ -172,7 +172,7 @@ export default function EmailNotificationModal({ isOpen, onClose }) {
                 </fieldset>
 
                 <label className="email-notification-count">
-                  <span><strong>Papers por correo</strong><small>Priorizados por fecha y coincidencia</small></span>
+                  <span><strong>Máximo por correo</strong><small>PaperTok enviará menos si no encuentra suficiente calidad</small></span>
                   <select
                     value={draft.maxPapers || 5}
                     onChange={event => setDraft(current => ({ ...current, maxPapers: Number(event.target.value) }))}
