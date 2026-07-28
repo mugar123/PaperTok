@@ -3,6 +3,7 @@ import { IS_DEMO, db } from '../../services/firebase';
 import { collection, getDocs, doc, updateDoc, arrayUnion, arrayRemove, setDoc } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { useFeed } from '../../context/FeedContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { getIcon, AVAILABLE_ICONS } from '../../utils/icons';
 import { BookOpen, Download, StickyNote, Tags } from 'lucide-react';
 import { downloadCitationFile } from '../../utils/readingLibrary';
@@ -21,6 +22,7 @@ function demoSet(key, value) {
 
 export default function SaveToListModal({ paper, onClose }) {
   const { user } = useAuth();
+  const { isEnglish } = useLanguage();
   const { markSaved, personalLibrary, toggleReadLater, saveReadingMetadata } = useFeed();
   const [lists, setLists] = useState([]);
   const [paperLists, setPaperLists] = useState(new Set());
@@ -174,12 +176,12 @@ export default function SaveToListModal({ paper, onClose }) {
       onClick={(e) => { if (e.target === dialogRef.current) handleClose(); }}>
       <div className="save-modal glass-strong">
         <div className="save-modal-header">
-          <h2>Guardar y organizar</h2>
+          <h2>{isEnglish ? 'Save and organize' : 'Guardar y organizar'}</h2>
           <button className="save-modal-close" onClick={handleClose}>✕</button>
         </div>
         <p className="save-modal-paper-title">{paper.title}</p>
 
-        <section className="save-modal-personal" aria-label="Herramientas personales de lectura">
+        <section className="save-modal-personal" aria-label={isEnglish ? 'Personal reading tools' : 'Herramientas personales de lectura'}>
           <button
             className={`save-modal-read-later ${libraryRecord.readLater ? 'active' : ''}`}
             onClick={() => toggleReadLater(paper)}
@@ -187,38 +189,44 @@ export default function SaveToListModal({ paper, onClose }) {
           >
             <BookOpen size={19} />
             <span>
-              <strong>{libraryRecord.readLater ? 'En Leer después' : 'Añadir a Leer después'}</strong>
-              <small>{libraryRecord.readLater ? 'Guardado en tu cola personal' : 'Reserva este paper para otro momento'}</small>
+              <strong>{libraryRecord.readLater
+                ? (isEnglish ? 'In Read later' : 'En Leer después')
+                : (isEnglish ? 'Add to Read later' : 'Añadir a Leer después')}</strong>
+              <small>{libraryRecord.readLater
+                ? (isEnglish ? 'Saved in your personal queue' : 'Guardado en tu cola personal')
+                : (isEnglish ? 'Keep this paper for another time' : 'Reserva este paper para otro momento')}</small>
             </span>
           </button>
 
           <label className="save-modal-field">
-            <span><StickyNote size={16} /> Nota privada</span>
+            <span><StickyNote size={16} /> {isEnglish ? 'Private note' : 'Nota privada'}</span>
             <textarea
               value={note}
               onChange={(event) => setNote(event.target.value)}
-              placeholder="Ideas, dudas o conclusiones..."
+              placeholder={isEnglish ? 'Ideas, questions, or conclusions...' : 'Ideas, dudas o conclusiones...'}
               maxLength={3000}
             />
           </label>
           <label className="save-modal-field">
-            <span><Tags size={16} /> Etiquetas</span>
+            <span><Tags size={16} /> {isEnglish ? 'Tags' : 'Etiquetas'}</span>
             <input
               value={tags}
               onChange={(event) => setTags(event.target.value)}
-              placeholder="tesis, revisar, metodología"
+              placeholder={isEnglish ? 'thesis, review, methodology' : 'tesis, revisar, metodología'}
             />
-            <small>Sepáralas con comas</small>
+            <small>{isEnglish ? 'Separate them with commas' : 'Sepáralas con comas'}</small>
           </label>
           <div className="save-modal-personal-actions">
             <button className="save-modal-metadata-btn" onClick={handleSaveMetadata}>
-              {metadataSaved ? 'Guardado' : 'Guardar nota y etiquetas'}
+              {metadataSaved
+                ? (isEnglish ? 'Saved' : 'Guardado')
+                : (isEnglish ? 'Save note and tags' : 'Guardar nota y etiquetas')}
             </button>
-            <div className="save-modal-export" aria-label="Exportar cita">
-              <button onClick={() => downloadCitationFile([paper], 'bibtex', 'papertok-paper')} title="Exportar BibTeX">
+            <div className="save-modal-export" aria-label={isEnglish ? 'Export citation' : 'Exportar cita'}>
+              <button onClick={() => downloadCitationFile([paper], 'bibtex', 'papertok-paper')} title={isEnglish ? 'Export BibTeX' : 'Exportar BibTeX'}>
                 <Download size={15} /> BibTeX
               </button>
-              <button onClick={() => downloadCitationFile([paper], 'ris', 'papertok-paper')} title="Exportar RIS">
+              <button onClick={() => downloadCitationFile([paper], 'ris', 'papertok-paper')} title={isEnglish ? 'Export RIS' : 'Exportar RIS'}>
                 <Download size={15} /> RIS
               </button>
             </div>
@@ -226,10 +234,10 @@ export default function SaveToListModal({ paper, onClose }) {
         </section>
 
         {loading ? (
-          <div className="save-modal-loading">Cargando listas...</div>
+          <div className="save-modal-loading">{isEnglish ? 'Loading lists...' : 'Cargando listas...'}</div>
         ) : (
           <div className="save-modal-lists">
-            <p className="save-modal-section-title">Listas personalizadas</p>
+            <p className="save-modal-section-title">{isEnglish ? 'Custom lists' : 'Listas personalizadas'}</p>
             {lists.map((list) => (
               <label key={list.id} className="save-modal-list-item">
                 <input type="checkbox" checked={paperLists.has(list.id)}
@@ -246,7 +254,9 @@ export default function SaveToListModal({ paper, onClose }) {
               </label>
             ))}
             {lists.length === 0 && (
-              <p className="save-modal-empty">Aún no tienes listas. ¡Crea una!</p>
+              <p className="save-modal-empty">
+                {isEnglish ? 'You do not have any lists yet. Create one.' : 'Aún no tienes listas. ¡Crea una!'}
+              </p>
             )}
           </div>
         )}
@@ -265,12 +275,12 @@ export default function SaveToListModal({ paper, onClose }) {
             })}
           </div>
           <div className="save-modal-create-row">
-            <input type="text" placeholder="Nueva lista..." value={newListName}
+            <input type="text" placeholder={isEnglish ? 'New list...' : 'Nueva lista...'} value={newListName}
               onChange={(e) => setNewListName(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleCreateList()}
               className="save-modal-input" />
             <button className="save-modal-create-btn" onClick={handleCreateList}
-              disabled={!newListName.trim()}>Crear</button>
+              disabled={!newListName.trim()}>{isEnglish ? 'Create' : 'Crear'}</button>
           </div>
         </div>
       </div>

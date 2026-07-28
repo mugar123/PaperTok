@@ -8,6 +8,7 @@ import {
 import AnimatedAtom from './AnimatedAtom';
 import ScientificText from '../ScientificText';
 import { useFollowing } from '../../context/FollowingContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { getProjectForPaper } from '../../services/openAireService';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
@@ -18,6 +19,7 @@ import { getRelatedResearchResources } from '../../services/dataCiteService';
 import { resolvePaperTopic, topicExplorerPath } from '../../utils/topicNavigation';
 import AIExplanationSheet from './AIExplanationSheet';
 import { canExplainPaper } from '../../services/aiExplanationService';
+import { hasUsableAIAbstract } from '../../utils/aiExplanationAccess.js';
 import { buildPaperTopicTags } from '../../utils/paperTopicTags.js';
 import { buildFollowReasonLabel } from '../../utils/followingFeed.js';
 
@@ -38,10 +40,10 @@ const AREA_BG_ICONS = {
 };
 
 const RESOURCE_KIND_CONFIG = {
-  dataset: { label: 'Datos', Icon: Database },
-  software: { label: 'Código', Icon: Code2 },
-  material: { label: 'Material', Icon: PackageOpen },
-  version: { label: 'Versión', Icon: History },
+  dataset: { label: { es: 'Datos', en: 'Data' }, Icon: Database },
+  software: { label: { es: 'Código', en: 'Code' }, Icon: Code2 },
+  material: { label: { es: 'Material', en: 'Material' }, Icon: PackageOpen },
+  version: { label: { es: 'Versión', en: 'Version' }, Icon: History },
 };
 
 const PaperCard = memo(function PaperCard({ 
@@ -74,6 +76,7 @@ const PaperCard = memo(function PaperCard({
   const [linkedResources, setLinkedResources] = useState({ paperId: null, items: [] });
   const [isCardVisible, setIsCardVisible] = useState(false);
   const { followedByType, isFollowing } = useFollowing();
+  const { language, isEnglish } = useLanguage();
   const navigate = useNavigate();
   
   const hasFollowedAuthor = useMemo(() => {
@@ -227,7 +230,11 @@ const PaperCard = memo(function PaperCard({
   const getCategoryLabelText = () => {
     const cat = paper.primaryCategory || paper.categories?.[0] || '';
     const area = Object.values(CATEGORIES).find(a => a.subcategories && a.subcategories[cat]);
-    if (area) return area.subcategories[cat].label;
+    if (area) {
+      return isEnglish
+        ? area.subcategories[cat].labelEn || area.subcategories[cat].label
+        : area.subcategories[cat].label;
+    }
     if (cat) return cat;
     if (paper.journal) return paper.journal;
     return 'Research Paper';
@@ -236,16 +243,16 @@ const PaperCard = memo(function PaperCard({
   const areaInfo = getAreaInfo();
   const categoryLabel = getCategoryLabelText();
   const primaryTopic = useMemo(
-    () => resolvePaperTopic(paper.primaryCategory || paper.categories?.[0]),
-    [paper.categories, paper.primaryCategory]
+    () => resolvePaperTopic(paper.primaryCategory || paper.categories?.[0], language),
+    [language, paper.categories, paper.primaryCategory]
   );
   const paperTopicTags = useMemo(
     () => buildPaperTopicTags({
       categories: paper.categories,
       concepts: paper.concepts,
       primaryCategory: paper.primaryCategory,
-    }),
-    [paper.categories, paper.concepts, paper.primaryCategory]
+    }, 4, language),
+    [language, paper.categories, paper.concepts, paper.primaryCategory]
   );
 
   const openTopic = useCallback((event, topic) => {
@@ -361,9 +368,9 @@ const PaperCard = memo(function PaperCard({
   } : paper, [paper, resolvedOpenCopy]);
   const canRequestAIExplanation = canExplainPaper(aiExplanationPaper);
   const openAccessLabel = resolvedOpenCopy
-    ? 'Versión abierta disponible'
+    ? (isEnglish ? 'Open version available' : 'Versión abierta disponible')
     : paper.accessSource === 'europepmc'
-      ? 'Texto completo abierto'
+      ? (isEnglish ? 'Open full text' : 'Texto completo abierto')
       : 'Open Access';
   const bestAvailableUrl = resolvedOpenCopy?.pdfUrl
     || resolvedOpenCopy?.landingPageUrl
@@ -372,14 +379,14 @@ const PaperCard = memo(function PaperCard({
     || paper.landingPageUrl
     || (paper.doi ? `https://doi.org/${paper.doi}` : '');
   const primaryActionLabel = isResolvingAccess
-    ? 'Buscando acceso...'
+    ? (isEnglish ? 'Finding access...' : 'Buscando acceso...')
     : resolvedOpenCopy
-      ? 'Leer versión abierta'
+      ? (isEnglish ? 'Read open version' : 'Leer versión abierta')
       : paper.openAccessPdfUrl
-        ? 'Leer texto completo'
+        ? (isEnglish ? 'Read full text' : 'Leer texto completo')
         : (!paper.pdfUrl && !paper.arxivId)
-          ? 'Abrir fuente'
-          : 'Leer artículo';
+          ? (isEnglish ? 'Open source' : 'Abrir fuente')
+          : (isEnglish ? 'Read article' : 'Leer artículo');
   const showRankingDebug = typeof window !== 'undefined' && window.localStorage?.getItem('DEBUG_RANKING') === 'true';
 
   return (
@@ -449,6 +456,7 @@ const PaperCard = memo(function PaperCard({
         {showFollowReason && (() => {
           const reason = buildFollowReasonLabel(
             (paper._followedEntityMatches || []).filter(match => typeof match === 'object'),
+            language,
           );
           if (!reason) return null;
           return (
@@ -469,7 +477,7 @@ const PaperCard = memo(function PaperCard({
               type="button"
               className="pc-category-pill pc-topic-link"
               onClick={(event) => openTopic(event, primaryTopic)}
-              title={`Explorar ${primaryTopic.label}`}
+              title={`${isEnglish ? 'Explore' : 'Explorar'} ${categoryLabel}`}
             >
               {categoryLabel}
             </button>
@@ -480,7 +488,7 @@ const PaperCard = memo(function PaperCard({
             <>
               <span className="pc-meta-dot">·</span>
               <span className="pc-followed-badge">
-                <UserCheck size={12} /> Autor Seguido
+                <UserCheck size={12} /> {isEnglish ? 'Followed author' : 'Autor seguido'}
               </span>
             </>
           )}
@@ -498,13 +506,13 @@ const PaperCard = memo(function PaperCard({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(event) => event.stopPropagation()}
-                  aria-label={`${paper.citationCount} citas en Scopus`}
+                  aria-label={`${paper.citationCount} ${isEnglish ? 'citations on Scopus' : 'citas en Scopus'}`}
                 >
-                  {paper.citationCount} Citas en Scopus
+                  {paper.citationCount} {isEnglish ? 'Citations on Scopus' : 'Citas en Scopus'}
                 </a>
               ) : (
                 <span className="pc-citations" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  {paper.citationCount} Citas
+                  {paper.citationCount} {isEnglish ? 'Citations' : 'Citas'}
                 </span>
               )}
             </>
@@ -541,7 +549,7 @@ const PaperCard = memo(function PaperCard({
              </span>
           ) : (
              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#ef4444', background: 'rgba(239, 68, 68, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>
-               <Lock size={12} /> Subscription
+               <Lock size={12} /> {isEnglish ? 'Subscription' : 'Suscripción'}
              </span>
           )}
         </div>
@@ -549,7 +557,7 @@ const PaperCard = memo(function PaperCard({
         {paperTopicTags.length > 0 && (
           <div className="pc-semantic-tags" style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
             {paperTopicTags.map((tag) => {
-              const topic = resolvePaperTopic(tag.value);
+              const topic = resolvePaperTopic(tag.value, language);
               const TagElement = topic ? motion.button : motion.span;
               return (
                 <TagElement
@@ -557,7 +565,7 @@ const PaperCard = memo(function PaperCard({
                   type={topic ? 'button' : undefined}
                   className={`pc-semantic-tag ${topic ? 'pc-topic-link' : ''} ${tag.source === 'concept' && topic && !topic.reliable ? 'pc-topic-link--external' : ''}`}
                   onClick={topic ? (event) => openTopic(event, topic) : undefined}
-                  title={topic ? `Explorar ${topic.label}` : undefined}
+                  title={topic ? `${isEnglish ? 'Explore' : 'Explorar'} ${topic.label}` : undefined}
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
@@ -598,7 +606,10 @@ const PaperCard = memo(function PaperCard({
             }}
           >
             <Briefcase size={12} />
-            <span>{[project.funderLevel, project.funder].find(value => value && value !== 'Unknown Funder') || 'Proyecto'}: {project.acronym}</span>
+            <span>
+              {[project.funderLevel, project.funder].find(value => value && value !== 'Unknown Funder')
+                || (isEnglish ? 'Project' : 'Proyecto')}: {project.acronym}
+            </span>
           </motion.div>
         )}
 
@@ -647,16 +658,21 @@ const PaperCard = memo(function PaperCard({
           className={`pc-abstract ${expanded ? 'pc-abstract--open' : ''}`}
           onClick={(e) => toggleExpanded(e, !expanded)}
         >
-          <p><ScientificText>{paper.abstract}</ScientificText></p>
+          <p>
+            {hasUsableAIAbstract(paper.abstract)
+              ? <ScientificText>{paper.abstract}</ScientificText>
+              : (isEnglish ? 'Abstract unavailable.' : 'Resumen no disponible.')}
+          </p>
         </div>
 
         {researchResources.length > 0 && (
-          <div className="pc-linked-resources" aria-label="Recursos de investigación asociados">
-            <span className="pc-linked-resources-label"><Database size={14} /> Recursos</span>
+          <div className="pc-linked-resources" aria-label={isEnglish ? 'Associated research resources' : 'Recursos de investigación asociados'}>
+            <span className="pc-linked-resources-label"><Database size={14} /> {isEnglish ? 'Resources' : 'Recursos'}</span>
             <div className="pc-linked-resources-list">
               {researchResources.map(resource => {
                 const config = RESOURCE_KIND_CONFIG[resource.kind] || RESOURCE_KIND_CONFIG.material;
                 const ResourceIcon = config.Icon;
+                const resourceLabel = config.label[language];
                 return (
                   <a
                     key={resource.id}
@@ -666,10 +682,10 @@ const PaperCard = memo(function PaperCard({
                     rel="noopener noreferrer"
                     onClick={(event) => event.stopPropagation()}
                     title={resource.title}
-                    aria-label={`${config.label}: ${resource.title}`}
+                    aria-label={`${resourceLabel}: ${resource.title}`}
                   >
                     <ResourceIcon size={13} />
-                    <span>{config.label}</span>
+                    <span>{resourceLabel}</span>
                     <ExternalLink size={11} />
                   </a>
                 );
@@ -705,26 +721,28 @@ const PaperCard = memo(function PaperCard({
             }}
             style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
           >
-            {copied ? <><Check size={16} /><span className="pc-share-label">Copiado</span></> : <><Share2 size={16} /><span className="pc-share-label">Compartir</span></>}
+            {copied
+              ? <><Check size={16} /><span className="pc-share-label">{isEnglish ? 'Copied' : 'Copiado'}</span></>
+              : <><Share2 size={16} /><span className="pc-share-label">{isEnglish ? 'Share' : 'Compartir'}</span></>}
           </button>
           {canRequestAIExplanation && (
             <button
               className="pc-ai-btn"
               onClick={(event) => { event.stopPropagation(); setShowAIExplanation(true); }}
-              aria-label="Explicar este paper con IA"
-              title="Explicar con IA"
+              aria-label={isEnglish ? 'Explain this paper with AI' : 'Explicar este paper con IA'}
+              title={isEnglish ? 'Explain with AI' : 'Explicar con IA'}
             >
               <Sparkles size={17} />
-              <span className="pc-ai-label pc-ai-label--full">Explicar con IA</span>
-              <span className="pc-ai-label pc-ai-label--short">Explicar</span>
+              <span className="pc-ai-label pc-ai-label--full">{isEnglish ? 'Explain with AI' : 'Explicar con IA'}</span>
+              <span className="pc-ai-label pc-ai-label--short">{isEnglish ? 'Explain' : 'Explicar'}</span>
             </button>
           )}
           {(paper.doi || paper.arxivId || paper.semanticScholarId) && (
             <button
               className="pc-related-btn"
               onClick={(event) => { event.stopPropagation(); setShowRelated(true); }}
-              aria-label="Ver papers relacionados"
-              title="Papers relacionados"
+              aria-label={isEnglish ? 'View related papers' : 'Ver papers relacionados'}
+              title={isEnglish ? 'Related papers' : 'Papers relacionados'}
             >
               <Network size={18} />
             </button>
@@ -740,7 +758,7 @@ const PaperCard = memo(function PaperCard({
               <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
             </svg>
           </div>
-          <span style={isLiked ? { color: '#ff2d55' } : {}}>Me gusta</span>
+          <span style={isLiked ? { color: '#ff2d55' } : {}}>{isEnglish ? 'Like' : 'Me gusta'}</span>
         </button>
 
         <button className={`pc-side-btn ${isSaved ? 'pc-side-btn--saved' : ''}`} onClick={(e) => { e.stopPropagation(); onSaveToList(paper); }}>
@@ -749,7 +767,7 @@ const PaperCard = memo(function PaperCard({
               <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
             </svg>
           </div>
-          <span style={isSaved ? { color: '#ffd60a' } : {}}>Guardar</span>
+          <span style={isSaved ? { color: '#ffd60a' } : {}}>{isEnglish ? 'Save' : 'Guardar'}</span>
         </button>
 
         <button className={`pc-side-btn ${isReadActive ? 'pc-side-btn--read' : ''}`} onClick={handleMarkAsRead}>
@@ -757,7 +775,13 @@ const PaperCard = memo(function PaperCard({
             {isReadActive ? <CheckCircle2 size={24} color="#10b981" /> : <Eye size={24} />}
           </div>
           <span style={{ fontSize: '10px', textAlign: 'center', lineHeight: '1.2' }}>
-            {resolvedOpenCopy || paper.openAccessPdfUrl ? 'Versión abierta' : paper.pdfUrl ? 'Leer artículo' : (paper.landingPageUrl || paper.doi ? 'Abrir fuente' : 'Leer')}
+            {resolvedOpenCopy || paper.openAccessPdfUrl
+              ? (isEnglish ? 'Open version' : 'Versión abierta')
+              : paper.pdfUrl
+                ? (isEnglish ? 'Read article' : 'Leer artículo')
+                : (paper.landingPageUrl || paper.doi
+                  ? (isEnglish ? 'Open source' : 'Abrir fuente')
+                  : (isEnglish ? 'Read' : 'Leer'))}
           </span>
         </button>
 
@@ -768,7 +792,7 @@ const PaperCard = memo(function PaperCard({
               <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
             </svg>
           </div>
-          <span>Pasar</span>
+          <span>{isEnglish ? 'Skip' : 'Pasar'}</span>
         </button>
       </div>
 
@@ -811,7 +835,7 @@ const PaperCard = memo(function PaperCard({
               onClick={(e) => e.stopPropagation()}
             >
               <div className="pc-authors-modal-header">
-                <h3>Autores</h3>
+                <h3>{isEnglish ? 'Authors' : 'Autores'}</h3>
                 <button onClick={() => setShowAuthorsModal(false)}>
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
@@ -858,8 +882,8 @@ const PaperCard = memo(function PaperCard({
           <button
             className="related-card-back"
             onClick={closeRelatedCard}
-            aria-label="Volver al paper anterior"
-            title="Volver"
+            aria-label={isEnglish ? 'Back to previous paper' : 'Volver al paper anterior'}
+            title={isEnglish ? 'Back' : 'Volver'}
           >
             <ArrowLeft size={22} />
           </button>

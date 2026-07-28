@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { CATEGORIES } from '../../data/categories';
 import './OnboardingFlow.css';
 
@@ -8,9 +9,9 @@ export default function OnboardingFlow() {
   const [step, setStep] = useState(1);
   const [selectedAreas, setSelectedAreas] = useState(new Set());
   const [selectedSubcategories, setSelectedSubcategories] = useState(new Set());
-  const [animatingChip, setAnimatingChip] = useState(null);
   const [saving, setSaving] = useState(false);
   const { completeOnboarding } = useAuth();
+  const { isEnglish } = useLanguage();
   const navigate = useNavigate();
 
   const toggleArea = (areaKey) => {
@@ -33,11 +34,6 @@ export default function OnboardingFlow() {
   };
 
   const toggleSubcategory = (catId) => {
-    setAnimatingChip(catId);
-    setTimeout(() => {
-      setAnimatingChip((prev) => (prev === catId ? null : prev));
-    }, 400);
-
     setSelectedSubcategories((prev) => {
       const next = new Set(prev);
       if (next.has(catId)) next.delete(catId);
@@ -46,7 +42,7 @@ export default function OnboardingFlow() {
     });
   };
 
-  const selectAllInArea = async (areaKey) => {
+  const selectAllInArea = (areaKey) => {
     const area = CATEGORIES[areaKey];
     const ids = Object.keys(area.subcategories);
     
@@ -62,14 +58,6 @@ export default function OnboardingFlow() {
       });
       return next;
     });
-
-    // Run sequential chip glow animation
-    for (let i = 0; i < ids.length; i++) {
-      const id = ids[i];
-      setAnimatingChip(id);
-      await new Promise(resolve => setTimeout(resolve, 30));
-    }
-    setTimeout(() => setAnimatingChip(null), 150);
   };
 
   const handleNext = () => {
@@ -116,10 +104,12 @@ export default function OnboardingFlow() {
       {step === 1 && (
         <div className="onboarding-step" key="step1">
           <h1 className="onboarding-title">
-            Elige tus áreas de interés
+            {isEnglish ? 'Choose your areas of interest' : 'Elige tus áreas de interés'}
           </h1>
           <p className="onboarding-subtitle">
-            Selecciona las áreas científicas que te apasionan
+            {isEnglish
+              ? 'Select the scientific areas that interest you'
+              : 'Selecciona las áreas científicas que te apasionan'}
           </p>
           <div className="onboarding-areas-grid">
             {Object.entries(CATEGORIES).map(([key, area], index) => (
@@ -133,8 +123,8 @@ export default function OnboardingFlow() {
                 }}
               >
                 <span className="area-card-icon"><area.icon size={36} strokeWidth={1.5} /></span>
-                <span className="area-card-label">{area.label}</span>
-                <span className="area-card-desc">{area.description}</span>
+                <span className="area-card-label">{isEnglish ? area.labelEn : area.label}</span>
+                <span className="area-card-desc">{isEnglish ? area.descriptionEn : area.description}</span>
                 {selectedAreas.has(key) && (
                   <span className="area-card-check">✓</span>
                 )}
@@ -147,9 +137,11 @@ export default function OnboardingFlow() {
       {/* Step 2: Select subcategories */}
       {step === 2 && (
         <div className="onboarding-step" key="step2">
-          <h1 className="onboarding-title">Afina tus intereses</h1>
+          <h1 className="onboarding-title">{isEnglish ? 'Refine your interests' : 'Afina tus intereses'}</h1>
           <p className="onboarding-subtitle">
-            Selecciona las subcategorías específicas — {selectedSubcategories.size} seleccionadas
+            {isEnglish
+              ? `Select specific subcategories — ${selectedSubcategories.size} selected`
+              : `Selecciona las subcategorías específicas — ${selectedSubcategories.size} seleccionadas`}
           </p>
           <div className="onboarding-subcategories">
             {Array.from(selectedAreas).map((areaKey) => {
@@ -160,23 +152,25 @@ export default function OnboardingFlow() {
                 <div key={areaKey} className="subcat-section">
                   <div className="subcat-section-header">
                     <span className="subcat-section-icon"><area.icon size={28} strokeWidth={1.5} /></span>
-                    <h2 className="subcat-section-title">{area.label}</h2>
+                    <h2 className="subcat-section-title">{isEnglish ? area.labelEn : area.label}</h2>
                     <button
                       className={`subcat-select-all ${allSelected ? 'subcat-select-all--active' : ''}`}
                       onClick={() => selectAllInArea(areaKey)}
                     >
-                      {allSelected ? 'Deseleccionar todo' : 'Seleccionar todo'}
+                      {allSelected
+                        ? (isEnglish ? 'Deselect all' : 'Deseleccionar todo')
+                        : (isEnglish ? 'Select all' : 'Seleccionar todo')}
                     </button>
                   </div>
                   <div className="subcat-chips">
                     {Object.entries(area.subcategories).map(([catId, cat]) => (
                       <button
                         key={catId}
-                        className={`subcat-chip ${selectedSubcategories.has(catId) ? 'subcat-chip--selected' : ''} ${animatingChip === catId ? 'subcat-chip--animating' : ''}`}
+                        className={`subcat-chip ${selectedSubcategories.has(catId) ? 'subcat-chip--selected' : ''}`}
                         onClick={() => toggleSubcategory(catId)}
                         style={{ '--area-gradient': area.gradient }}
                       >
-                        {cat.label}
+                        {isEnglish ? cat.labelEn || cat.label : cat.label}
                       </button>
                     ))}
                   </div>
@@ -202,9 +196,11 @@ export default function OnboardingFlow() {
               </defs>
             </svg>
           </div>
-          <h1 className="onboarding-title">¡Tu feed está listo!</h1>
+          <h1 className="onboarding-title">{isEnglish ? 'Your feed is ready!' : '¡Tu feed está listo!'}</h1>
           <p className="onboarding-subtitle">
-            Hemos configurado {selectedSubcategories.size} subcategorías para tu feed personalizado
+            {isEnglish
+              ? `We configured ${selectedSubcategories.size} subcategories for your personalized feed`
+              : `Hemos configurado ${selectedSubcategories.size} subcategorías para tu feed personalizado`}
           </p>
           <div className="confirm-summary">
             {Array.from(selectedAreas).map((areaKey) => {
@@ -216,7 +212,7 @@ export default function OnboardingFlow() {
               return (
                 <span key={areaKey} className="confirm-badge" style={{ '--area-gradient': area.gradient }}>
                   <area.icon size={16} strokeWidth={2} style={{ display: 'inline-block', verticalAlign: 'text-bottom', marginRight: '4px' }} />
-                  {area.label} ({count})
+                  {isEnglish ? area.labelEn : area.label} ({count})
                 </span>
               );
             })}
@@ -229,7 +225,7 @@ export default function OnboardingFlow() {
             {saving ? (
               <span className="onboarding-spinner" />
             ) : (
-              'Empezar a explorar 🚀'
+              (isEnglish ? 'Start exploring' : 'Empezar a explorar')
             )}
           </button>
         </div>
@@ -240,7 +236,7 @@ export default function OnboardingFlow() {
         <div className="onboarding-nav">
           {step > 1 && (
             <button className="onboarding-nav-btn onboarding-nav-btn--back" onClick={handleBack}>
-              ← Atrás
+              {isEnglish ? '← Back' : '← Atrás'}
             </button>
           )}
           <button
@@ -248,7 +244,7 @@ export default function OnboardingFlow() {
             onClick={handleNext}
             disabled={!canProceed}
           >
-            Siguiente →
+            {isEnglish ? 'Next →' : 'Siguiente →'}
           </button>
         </div>
       )}

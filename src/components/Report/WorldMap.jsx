@@ -1,18 +1,20 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ComposableMap, Geographies, Geography, ZoomableGroup } from '@vnedyalk0v/react19-simple-maps';
-import { COUNTRIES } from '../../data/countries';
+import { getCountryName } from '../../data/countries';
 import isoMapping from '../../data/isoMapping.json';
 import geoData from '../../data/world-110m.json';
+import { useLanguage } from '../../context/LanguageContext';
 import './WorldMap.css';
 
 export default function WorldMap({ selectedCountries = [], onToggleCountry }) {
+  const { language, isEnglish } = useLanguage();
   const [tooltipContent, setTooltipContent] = useState('');
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
 
   const handleMouseEnter = (geo, e) => {
     const alpha2 = isoMapping.numericToAlpha2[geo.id];
-    const name = alpha2 ? (COUNTRIES[alpha2] || geo.properties.name) : geo.properties.name;
+    const name = alpha2 ? getCountryName(alpha2, language) : geo.properties.name;
     
     setTooltipContent(name);
     setTooltipPos({ x: e.clientX, y: e.clientY });
@@ -64,7 +66,7 @@ export default function WorldMap({ selectedCountries = [], onToggleCountry }) {
               geographies.map((geo) => {
                 const alpha2 = isoMapping.numericToAlpha2[geo.id];
                 const isSelected = alpha2 && selectedCountries.includes(alpha2);
-                const countryName = alpha2 ? (COUNTRIES[alpha2] || geo.properties.name) : geo.properties.name;
+                const countryName = alpha2 ? getCountryName(alpha2, language) : geo.properties.name;
                 
                 return (
                   <Geography
@@ -77,7 +79,7 @@ export default function WorldMap({ selectedCountries = [], onToggleCountry }) {
                     className={`wm-geo ${isSelected ? 'selected' : ''}`}
                     role={alpha2 ? 'button' : undefined}
                     tabIndex={alpha2 ? 0 : -1}
-                    aria-label={alpha2 ? `Filtrar por ${countryName}` : undefined}
+                    aria-label={alpha2 ? `${isEnglish ? 'Filter by' : 'Filtrar por'} ${countryName}` : undefined}
                     aria-pressed={alpha2 ? isSelected : undefined}
                   />
                 );

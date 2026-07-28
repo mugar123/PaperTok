@@ -56,20 +56,75 @@ export const COUNTRIES = {
   HK: 'Hong Kong',
 };
 
+export const COUNTRIES_EN = {
+  US: 'United States',
+  CN: 'China',
+  GB: 'United Kingdom',
+  DE: 'Germany',
+  JP: 'Japan',
+  FR: 'France',
+  CA: 'Canada',
+  IT: 'Italy',
+  IN: 'India',
+  AU: 'Australia',
+  KR: 'South Korea',
+  ES: 'Spain',
+  BR: 'Brazil',
+  NL: 'Netherlands',
+  CH: 'Switzerland',
+  SE: 'Sweden',
+  RU: 'Russia',
+  IL: 'Israel',
+  TW: 'Taiwan',
+  AT: 'Austria',
+  BE: 'Belgium',
+  DK: 'Denmark',
+  FI: 'Finland',
+  NO: 'Norway',
+  PL: 'Poland',
+  SG: 'Singapore',
+  PT: 'Portugal',
+  IE: 'Ireland',
+  CZ: 'Czech Republic',
+  NZ: 'New Zealand',
+  MX: 'Mexico',
+  AR: 'Argentina',
+  CL: 'Chile',
+  CO: 'Colombia',
+  ZA: 'South Africa',
+  TR: 'Turkey',
+  SA: 'Saudi Arabia',
+  EG: 'Egypt',
+  NG: 'Nigeria',
+  KE: 'Kenya',
+  TH: 'Thailand',
+  MY: 'Malaysia',
+  ID: 'Indonesia',
+  PK: 'Pakistan',
+  IR: 'Iran',
+  GR: 'Greece',
+  HU: 'Hungary',
+  RO: 'Romania',
+  UA: 'Ukraine',
+  HK: 'Hong Kong',
+};
+
 /**
- * Get the Spanish name for a country code.
+ * Get the localized name for a country code.
  */
-export function getCountryName(code) {
-  return COUNTRIES[code] || code;
+export function getCountryName(code, language = 'es') {
+  const names = language === 'en' ? COUNTRIES_EN : COUNTRIES;
+  return names[code] || code;
 }
 
 /**
- * Search countries by name (Spanish). Returns array of { code, name }.
+ * Search countries by localized name. Returns array of { code, name }.
  */
-export function searchCountries(query) {
+export function searchCountries(query, language = 'es') {
   if (!query || query.length < 1) return [];
   const q = query.toLowerCase();
-  return Object.entries(COUNTRIES)
+  const names = language === 'en' ? COUNTRIES_EN : COUNTRIES;
+  return Object.entries(names)
     .filter(([, name]) => name.toLowerCase().includes(q))
     .map(([code, name]) => ({ code, name }))
     .slice(0, 10);

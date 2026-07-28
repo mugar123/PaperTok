@@ -4,6 +4,7 @@ import { BellRing, CheckCheck, Search } from 'lucide-react';
 import FeedContainer from '../Feed/FeedContainer';
 import { useFollowing } from '../../context/FollowingContext';
 import { useFollowingUpdates } from '../../context/FollowingUpdatesContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { orderFollowingFeedPapers } from '../../utils/followingFeed';
 import './FollowingFeedPage.css';
 
@@ -17,6 +18,7 @@ import './FollowingFeedPage.css';
  */
 export default function FollowingFeedPage({ onOpenPdf, onSaveToList }) {
   const navigate = useNavigate();
+  const { isEnglish } = useLanguage();
   const { followedEntities } = useFollowing();
   const { items, seenIds, loading, refreshing, error, refresh, markSeen } = useFollowingUpdates();
 
@@ -35,28 +37,40 @@ export default function FollowingFeedPage({ onOpenPdf, onSaveToList }) {
   const emptyState = useMemo(() => hasFollows ? (
     <div className="ff-empty" role="status">
       <CheckCheck size={30} aria-hidden="true" />
-      <h2>No hay publicaciones nuevas de tus seguimientos</h2>
-      <p>La bandeja recoge trabajos recientes de lo que sigues y se actualizará cuando aparezcan.</p>
-      <button className="feed-retry-btn" onClick={() => refresh()}>Buscar novedades</button>
+      <h2>{isEnglish ? 'No new publications from what you follow' : 'No hay publicaciones nuevas de tus seguimientos'}</h2>
+      <p>{isEnglish
+        ? 'This feed collects recent work from what you follow and will update when new papers appear.'
+        : 'La bandeja recoge trabajos recientes de lo que sigues y se actualizará cuando aparezcan.'}</p>
+      <button className="feed-retry-btn" onClick={() => refresh()}>
+        {isEnglish ? 'Check for updates' : 'Buscar novedades'}
+      </button>
     </div>
   ) : (
     <div className="ff-empty" role="status">
       <BellRing size={30} aria-hidden="true" />
-      <h2>Aún no sigues autores, temas, instituciones o proyectos</h2>
-      <p>Sigue cualquier entidad desde un paper o desde su página y sus publicaciones aparecerán aquí.</p>
+      <h2>{isEnglish
+        ? 'You are not following any authors, topics, institutions, or projects yet'
+        : 'Aún no sigues autores, temas, instituciones o proyectos'}</h2>
+      <p>{isEnglish
+        ? 'Follow anything from a paper or its page and its publications will appear here.'
+        : 'Sigue cualquier entidad desde un paper o desde su página y sus publicaciones aparecerán aquí.'}</p>
       <div className="ff-empty-actions">
-        <button className="feed-retry-btn" onClick={() => navigate('/')}>Descubrir papers</button>
+        <button className="feed-retry-btn" onClick={() => navigate('/')}>
+          {isEnglish ? 'Discover papers' : 'Descubrir papers'}
+        </button>
         <button className="feed-retry-btn ff-empty-secondary" onClick={() => navigate('/search')}>
-          <Search size={15} aria-hidden="true" /> Buscar entidades
+          <Search size={15} aria-hidden="true" /> {isEnglish ? 'Search entities' : 'Buscar entidades'}
         </button>
       </div>
     </div>
-  ), [hasFollows, navigate, refresh]);
+  ), [hasFollows, isEnglish, navigate, refresh]);
 
   const source = useMemo(() => ({
     papers: orderedPapers,
     loading,
-    error: error && orderedPapers.length === 0 ? 'No se han podido consultar tus seguimientos.' : null,
+    error: error && orderedPapers.length === 0
+      ? (isEnglish ? 'The content you follow could not be retrieved.' : 'No se han podido consultar tus seguimientos.')
+      : null,
     hasMore: false,
     loadMore: () => {},
     refresh,
@@ -64,7 +78,7 @@ export default function FollowingFeedPage({ onOpenPdf, onSaveToList }) {
     emptyState,
     showFollowReason: true,
     onPaperViewed: markSeen,
-  }), [orderedPapers, loading, error, refresh, refreshing, emptyState, markSeen]);
+  }), [orderedPapers, loading, error, refresh, refreshing, emptyState, markSeen, isEnglish]);
 
   return (
     <FeedContainer

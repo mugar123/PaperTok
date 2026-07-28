@@ -1,8 +1,10 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import AnimatedAtom from '../Feed/AnimatedAtom';
 
 export default function ProtectedRoute({ children, requireOnboarding = true }) {
+  const { isEnglish } = useLanguage();
   const {
     user,
     loading,
@@ -15,7 +17,7 @@ export default function ProtectedRoute({ children, requireOnboarding = true }) {
     return (
       <div className="loading-screen">
         <AnimatedAtom size={80} strokeWidth={1} className="loading-atom" />
-        <p className="loading-text">Cargando...</p>
+        <p className="loading-text">{isEnglish ? 'Loading...' : 'Cargando...'}</p>
         <style>{`
           .loading-screen {
             display: flex;
@@ -53,9 +55,11 @@ export default function ProtectedRoute({ children, requireOnboarding = true }) {
     return (
       <div className="loading-screen">
         <AnimatedAtom size={64} strokeWidth={1} className="loading-atom" />
-        <h2 className="loading-error-title">No se pudo cargar tu perfil</h2>
-        <p className="loading-text">{profileLoadError}</p>
-        <button className="loading-retry" onClick={retryProfileLoad}>Reintentar</button>
+        <h2 className="loading-error-title">{isEnglish ? 'Your profile could not be loaded' : 'No se pudo cargar tu perfil'}</h2>
+        <p className="loading-text">
+          {isEnglish ? 'Your profile could not be retrieved. Check your connection and try again.' : profileLoadError}
+        </p>
+        <button className="loading-retry" onClick={retryProfileLoad}>{isEnglish ? 'Try again' : 'Reintentar'}</button>
         <style>{`
           .loading-screen {
             display: flex;

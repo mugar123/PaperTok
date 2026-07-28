@@ -29,7 +29,7 @@ export function mapCrossrefInstitutionWork(work) {
     id: `crossref:${doi}`,
     doi,
     title,
-    abstract: stripMarkup(work.abstract) || 'El resumen no está disponible en Crossref.',
+    abstract: stripMarkup(work.abstract),
     authors: (work.author || []).map(author => ({
       name: [author.given, author.family].filter(Boolean).join(' ').trim() || author.name || 'Autor desconocido',
     })).filter(author => author.name !== 'Autor desconocido'),

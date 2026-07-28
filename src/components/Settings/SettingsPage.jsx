@@ -9,6 +9,7 @@ import {
   ChevronRight,
   FlaskConical,
   GraduationCap,
+  Languages,
   LoaderCircle,
   LogOut,
   Mail,
@@ -21,6 +22,7 @@ import {
   UsersRound,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { useFollowing } from '../../context/FollowingContext';
 import { useEmailNotifications } from '../../context/EmailNotificationsContext';
 import { AI_EXPLANATION_LEVELS } from '../../services/aiExplanationService';
@@ -32,45 +34,179 @@ import './SettingsPage.css';
 
 const LEVEL_DETAILS = {
   beginner: {
-    description: 'Lenguaje claro y contexto desde cero',
+    label: { es: 'Principiante', en: 'Beginner' },
+    description: {
+      es: 'Lenguaje claro y contexto desde cero',
+      en: 'Clear language and context from first principles',
+    },
     Icon: BookOpen,
   },
   university: {
-    description: 'Rigor académico sin asumir especialización',
+    label: { es: 'Universitario', en: 'University' },
+    description: {
+      es: 'Rigor académico sin asumir especialización',
+      en: 'Academic rigor without assuming specialization',
+    },
     Icon: GraduationCap,
   },
   researcher: {
-    description: 'Métodos, límites y detalle técnico',
+    label: { es: 'Investigador', en: 'Researcher' },
+    description: {
+      es: 'Métodos, límites y detalle técnico',
+      en: 'Methods, limitations, and technical detail',
+    },
     Icon: FlaskConical,
   },
 };
 
 const FOLLOW_SUMMARY = [
-  { type: 'author', label: 'Autores', Icon: UserRound },
-  { type: 'topic', label: 'Temas', Icon: Tag },
-  { type: 'institution', label: 'Instituciones', Icon: Building2 },
-  { type: 'project', label: 'Proyectos', Icon: BriefcaseBusiness },
+  { type: 'author', label: { es: 'Autores', en: 'Authors' }, Icon: UserRound },
+  { type: 'topic', label: { es: 'Temas', en: 'Topics' }, Icon: Tag },
+  { type: 'institution', label: { es: 'Instituciones', en: 'Institutions' }, Icon: Building2 },
+  { type: 'project', label: { es: 'Proyectos', en: 'Projects' }, Icon: BriefcaseBusiness },
 ];
 
-function emailStatus(preferences, health, loading) {
-  if (loading) return { label: 'Comprobando', description: 'Cargando tu configuración de correo', tone: 'neutral' };
+const SETTINGS_COPY = {
+  es: {
+    eyebrow: 'Ajustes de usuario',
+    title: 'Configuración',
+    subtitle: 'Tu cuenta, tus preferencias de descubrimiento y tus herramientas de lectura.',
+    account: 'Cuenta',
+    defaultUser: 'Usuario de PaperTok',
+    googleAccount: 'Cuenta gestionada con Google',
+    changePhoto: 'Cambiar foto',
+    restoreGooglePhoto: 'Restaurar foto de Google',
+    removePhoto: 'Quitar foto de perfil',
+    photoUpdated: 'Foto de perfil actualizada.',
+    googlePhotoRestored: 'Se ha restaurado tu foto de Google.',
+    photoRemoved: 'Foto de perfil eliminada.',
+    photoSaveError: 'No se pudo guardar la foto de perfil.',
+    photoRestoreError: 'No se pudo restaurar la foto de perfil.',
+    discovery: 'Descubrimiento',
+    discoveryDescription: 'Señales que PaperTok utiliza para construir tus feeds.',
+    followedContent: 'Contenido seguido',
+    loadingFollowing: 'Cargando tus seguimientos...',
+    followedOne: 'entidad seguida',
+    followedMany: 'entidades seguidas',
+    recommendationsSuffix: 'influyen en tus recomendaciones',
+    followingSummary: 'Resumen de contenido seguido',
+    viewAll: 'Ver todo',
+    scientificInterests: 'Intereses científicos',
+    selectedOne: 'subcategoría seleccionada',
+    selectedMany: 'subcategorías seleccionadas',
+    trainFeed: 'para entrenar tu feed',
+    selectedAreas: 'Áreas seleccionadas',
+    edit: 'Editar',
+    readingAi: 'Lectura e IA',
+    readingAiDescription: 'Ajusta el nivel de profundidad de tus explicaciones.',
+    defaultAiLevel: 'Nivel predeterminado de IA',
+    defaultAiDescription: 'Se abrirá seleccionado cuando pidas que la IA explique un paper',
+    saving: 'Guardando...',
+    preferenceSaved: 'Preferencia guardada',
+    saveError: 'No se pudo guardar',
+    aiLevelLabel: 'Nivel predeterminado de explicación',
+    interface: 'Interfaz',
+    interfaceDescription: 'Elige el idioma que PaperTok utiliza en este dispositivo.',
+    language: 'Idioma',
+    languageDescription: 'Cambia los menús, controles y mensajes de la aplicación.',
+    languageLabel: 'Idioma de la interfaz',
+    spanish: 'Español',
+    english: 'English',
+    notifications: 'Notificaciones',
+    notificationsDescription: 'Decide si quieres recibir novedades aunque PaperTok esté cerrado.',
+    emailUpdates: 'Novedades por email',
+    configure: 'Configurar',
+    session: 'Sesión',
+    sessionDescription: 'La información personalizada permanece asociada a esta cuenta.',
+    signOut: 'Cerrar sesión',
+  },
+  en: {
+    eyebrow: 'User settings',
+    title: 'Settings',
+    subtitle: 'Your account, discovery preferences, and reading tools.',
+    account: 'Account',
+    defaultUser: 'PaperTok user',
+    googleAccount: 'Account managed with Google',
+    changePhoto: 'Change photo',
+    restoreGooglePhoto: 'Restore Google photo',
+    removePhoto: 'Remove profile photo',
+    photoUpdated: 'Profile photo updated.',
+    googlePhotoRestored: 'Your Google photo has been restored.',
+    photoRemoved: 'Profile photo removed.',
+    photoSaveError: 'The profile photo could not be saved.',
+    photoRestoreError: 'The profile photo could not be restored.',
+    discovery: 'Discovery',
+    discoveryDescription: 'Signals PaperTok uses to build your feeds.',
+    followedContent: 'Following',
+    loadingFollowing: 'Loading the content you follow...',
+    followedOne: 'followed entity',
+    followedMany: 'followed entities',
+    recommendationsSuffix: 'influence your recommendations',
+    followingSummary: 'Summary of followed content',
+    viewAll: 'View all',
+    scientificInterests: 'Scientific interests',
+    selectedOne: 'selected subcategory',
+    selectedMany: 'selected subcategories',
+    trainFeed: 'used to train your feed',
+    selectedAreas: 'Selected areas',
+    edit: 'Edit',
+    readingAi: 'Reading and AI',
+    readingAiDescription: 'Adjust the depth of your AI explanations.',
+    defaultAiLevel: 'Default AI level',
+    defaultAiDescription: 'This level will be preselected when you ask AI to explain a paper',
+    saving: 'Saving...',
+    preferenceSaved: 'Preference saved',
+    saveError: 'Could not save',
+    aiLevelLabel: 'Default explanation level',
+    interface: 'Interface',
+    interfaceDescription: 'Choose the language PaperTok uses on this device.',
+    language: 'Language',
+    languageDescription: 'Changes the menus, controls, and messages in the app.',
+    languageLabel: 'Interface language',
+    spanish: 'Español',
+    english: 'English',
+    notifications: 'Notifications',
+    notificationsDescription: 'Choose whether to receive updates while PaperTok is closed.',
+    emailUpdates: 'Email updates',
+    configure: 'Configure',
+    session: 'Session',
+    sessionDescription: 'Your personalized information remains linked to this account.',
+    signOut: 'Sign out',
+  },
+};
+
+function emailStatus(preferences, health, loading, language) {
+  const isEnglish = language === 'en';
+  if (loading) {
+    return {
+      label: isEnglish ? 'Checking' : 'Comprobando',
+      description: isEnglish ? 'Loading your email settings' : 'Cargando tu configuración de correo',
+      tone: 'neutral',
+    };
+  }
   if (!health.available) {
     return {
-      label: 'No disponible',
-      description: 'El servicio de correo no responde en este momento',
+      label: isEnglish ? 'Unavailable' : 'No disponible',
+      description: isEnglish
+        ? 'The email service is not responding right now'
+        : 'El servicio de correo no responde en este momento',
       tone: 'warning',
     };
   }
   if (!preferences.enabled) {
     return {
-      label: 'Desactivado',
-      description: `Los avisos no se enviarán a ${preferences.email || 'tu correo'}`,
+      label: isEnglish ? 'Off' : 'Desactivado',
+      description: isEnglish
+        ? `Updates will not be sent to ${preferences.email || 'your email'}`
+        : `Los avisos no se enviarán a ${preferences.email || 'tu correo'}`,
       tone: 'neutral',
     };
   }
   return {
-    label: 'Activado',
-    description: `${preferences.frequency === 'weekly' ? 'Cada lunes' : 'Cada mañana'} · hasta ${preferences.maxPapers || 5} papers`,
+    label: isEnglish ? 'On' : 'Activado',
+    description: isEnglish
+      ? `${preferences.frequency === 'weekly' ? 'Every Monday' : 'Every morning'} · up to ${preferences.maxPapers || 5} papers`
+      : `${preferences.frequency === 'weekly' ? 'Cada lunes' : 'Cada mañana'} · hasta ${preferences.maxPapers || 5} papers`,
     tone: 'success',
   };
 }
@@ -78,6 +214,8 @@ function emailStatus(preferences, health, loading) {
 export default function SettingsPage() {
   const navigate = useNavigate();
   const profileInputRef = useRef(null);
+  const { language, setLanguage } = useLanguage();
+  const copy = SETTINGS_COPY[language];
   const {
     user,
     userPreferences,
@@ -103,22 +241,25 @@ export default function SettingsPage() {
   const [levelFeedback, setLevelFeedback] = useState(null);
   const [savingPhoto, setSavingPhoto] = useState(false);
   const [photoFeedback, setPhotoFeedback] = useState(null);
+  const [savingLanguage, setSavingLanguage] = useState(false);
+  const [languageFeedback, setLanguageFeedback] = useState(null);
 
   const selectedAreas = useMemo(() => {
     const selected = new Set(userPreferences || []);
     return Object.entries(CATEGORIES)
       .map(([id, area]) => {
         const count = Object.keys(area.subcategories).filter(key => selected.has(key)).length;
-        return count > 0 ? { id, label: area.label, count } : null;
+        return count > 0 ? { id, label: language === 'en' ? area.labelEn : area.label, count } : null;
       })
       .filter(Boolean);
-  }, [userPreferences]);
+  }, [language, userPreferences]);
 
   const selectedInterestCount = Array.isArray(userPreferences) ? userPreferences.length : 0;
   const notificationStatus = emailStatus(
     notificationPreferences,
     notificationHealth,
     notificationsLoading,
+    language,
   );
   const visibleProfilePhoto = profilePhoto || user?.photoURL;
 
@@ -133,6 +274,12 @@ export default function SettingsPage() {
     const timer = window.setTimeout(() => setPhotoFeedback(null), 2_400);
     return () => window.clearTimeout(timer);
   }, [photoFeedback]);
+
+  useEffect(() => {
+    if (!languageFeedback) return undefined;
+    const timer = window.setTimeout(() => setLanguageFeedback(null), 1_800);
+    return () => window.clearTimeout(timer);
+  }, [languageFeedback]);
 
   const handleLevelChange = async (level) => {
     if (level === readingPreferences.aiExplanationLevel || savingLevel) return;
@@ -158,11 +305,11 @@ export default function SettingsPage() {
     try {
       const preparedPhoto = await prepareProfileImage(file);
       await updateProfilePhoto(preparedPhoto);
-      setPhotoFeedback({ tone: 'success', text: 'Foto de perfil actualizada.' });
+      setPhotoFeedback({ tone: 'success', text: copy.photoUpdated });
     } catch (error) {
       setPhotoFeedback({
         tone: 'error',
-        text: error?.message || 'No se pudo guardar la foto de perfil.',
+        text: error?.message || copy.photoSaveError,
       });
     } finally {
       setSavingPhoto(false);
@@ -177,10 +324,10 @@ export default function SettingsPage() {
       await updateProfilePhoto(null);
       setPhotoFeedback({
         tone: 'success',
-        text: user?.photoURL ? 'Se ha restaurado tu foto de Google.' : 'Foto de perfil eliminada.',
+        text: user?.photoURL ? copy.googlePhotoRestored : copy.photoRemoved,
       });
     } catch {
-      setPhotoFeedback({ tone: 'error', text: 'No se pudo restaurar la foto de perfil.' });
+      setPhotoFeedback({ tone: 'error', text: copy.photoRestoreError });
     } finally {
       setSavingPhoto(false);
     }
@@ -191,14 +338,28 @@ export default function SettingsPage() {
     navigate('/login');
   };
 
+  const handleLanguageChange = async (nextLanguage) => {
+    if (nextLanguage === language || savingLanguage) return;
+    setSavingLanguage(true);
+    setLanguageFeedback(null);
+    try {
+      await setLanguage(nextLanguage);
+      setLanguageFeedback('saved');
+    } catch {
+      setLanguageFeedback('error');
+    } finally {
+      setSavingLanguage(false);
+    }
+  };
+
   return (
     <>
       <main className="settings-page">
         <div className="settings-shell">
           <header className="settings-heading">
-            <span>Ajustes de usuario</span>
-            <h1>Configuración</h1>
-            <p>Tu cuenta, tus preferencias de descubrimiento y tus herramientas de lectura.</p>
+            <span>{copy.eyebrow}</span>
+            <h1>{copy.title}</h1>
+            <p>{copy.subtitle}</p>
           </header>
 
           <section className="settings-profile" aria-labelledby="settings-account-title">
@@ -218,10 +379,10 @@ export default function SettingsPage() {
             </div>
 
             <div className="settings-profile-copy">
-              <small>Cuenta</small>
-              <h2 id="settings-account-title">{user?.displayName || 'Usuario de PaperTok'}</h2>
+              <small>{copy.account}</small>
+              <h2 id="settings-account-title">{user?.displayName || copy.defaultUser}</h2>
               <p>{user?.email}</p>
-              <span><ShieldCheck size={14} /> Cuenta gestionada con Google</span>
+              <span><ShieldCheck size={14} /> {copy.googleAccount}</span>
             </div>
 
             <div className="settings-profile-actions">
@@ -240,7 +401,7 @@ export default function SettingsPage() {
                 onClick={() => profileInputRef.current?.click()}
               >
                 <Camera size={17} />
-                Cambiar foto
+                {copy.changePhoto}
               </button>
               {profilePhoto && (
                 <button
@@ -248,8 +409,8 @@ export default function SettingsPage() {
                   className="settings-photo-restore"
                   disabled={savingPhoto}
                   onClick={handleRestorePhoto}
-                  aria-label={user?.photoURL ? 'Restaurar foto de Google' : 'Quitar foto de perfil'}
-                  title={user?.photoURL ? 'Restaurar foto de Google' : 'Quitar foto de perfil'}
+                  aria-label={user?.photoURL ? copy.restoreGooglePhoto : copy.removePhoto}
+                  title={user?.photoURL ? copy.restoreGooglePhoto : copy.removePhoto}
                 >
                   <RotateCcw size={17} />
                 </button>
@@ -269,8 +430,8 @@ export default function SettingsPage() {
             <div className="settings-section-heading">
               <SlidersHorizontal size={18} />
               <div>
-                <h2 id="discovery-heading">Descubrimiento</h2>
-                <p>Señales que PaperTok utiliza para construir tus feeds.</p>
+                <h2 id="discovery-heading">{copy.discovery}</h2>
+                <p>{copy.discoveryDescription}</p>
               </div>
             </div>
 
@@ -278,37 +439,37 @@ export default function SettingsPage() {
               <div className="settings-row" style={{ '--settings-index': 0 }}>
                 <span className="settings-row-icon is-purple"><UsersRound size={20} /></span>
                 <div className="settings-row-content">
-                  <h3>Contenido seguido</h3>
+                  <h3>{copy.followedContent}</h3>
                   <p>
                     {followingLoading && followedEntities.length === 0
-                      ? 'Cargando tus seguimientos...'
-                      : `${followedEntities.length} ${followedEntities.length === 1 ? 'entidad seguida' : 'entidades seguidas'} influyen en tus recomendaciones`}
+                      ? copy.loadingFollowing
+                      : `${followedEntities.length} ${followedEntities.length === 1 ? copy.followedOne : copy.followedMany} ${copy.recommendationsSuffix}`}
                   </p>
-                  <div className="settings-follow-summary" aria-label="Resumen de contenido seguido">
+                  <div className="settings-follow-summary" aria-label={copy.followingSummary}>
                     {FOLLOW_SUMMARY.map(({ type, label, Icon }) => (
                       <span key={type}>
                         <Icon size={12} />
-                        {label}
+                        {label[language]}
                         <strong>{followedByType[type]?.length || 0}</strong>
                       </span>
                     ))}
                   </div>
                 </div>
                 <button className="settings-row-action" onClick={() => navigate('/settings/following')}>
-                  Ver todo <ChevronRight size={17} />
+                  {copy.viewAll} <ChevronRight size={17} />
                 </button>
               </div>
 
               <div className="settings-row" style={{ '--settings-index': 1 }}>
                 <span className="settings-row-icon is-green"><SlidersHorizontal size={20} /></span>
                 <div className="settings-row-content">
-                  <h3>Intereses científicos</h3>
+                  <h3>{copy.scientificInterests}</h3>
                   <p>
                     {selectedInterestCount}{' '}
-                    {selectedInterestCount === 1 ? 'subcategoría seleccionada' : 'subcategorías seleccionadas'} para entrenar tu feed
+                    {selectedInterestCount === 1 ? copy.selectedOne : copy.selectedMany} {copy.trainFeed}
                   </p>
                   {selectedAreas.length > 0 && (
-                    <div className="settings-interest-summary" aria-label="Áreas seleccionadas">
+                    <div className="settings-interest-summary" aria-label={copy.selectedAreas}>
                       {selectedAreas.map(area => (
                         <span key={area.id}>{area.label} <small>{area.count}</small></span>
                       ))}
@@ -316,7 +477,7 @@ export default function SettingsPage() {
                   )}
                 </div>
                 <button className="settings-row-action" onClick={() => setIsInterestsOpen(true)}>
-                  Editar <ChevronRight size={17} />
+                  {copy.edit} <ChevronRight size={17} />
                 </button>
               </div>
             </div>
@@ -326,8 +487,8 @@ export default function SettingsPage() {
             <div className="settings-section-heading">
               <Sparkles size={18} />
               <div>
-                <h2 id="reading-heading">Lectura e IA</h2>
-                <p>Ajusta el nivel de profundidad de tus explicaciones.</p>
+                <h2 id="reading-heading">{copy.readingAi}</h2>
+                <p>{copy.readingAiDescription}</p>
               </div>
             </div>
 
@@ -335,17 +496,17 @@ export default function SettingsPage() {
               <div className="settings-row settings-row--levels" style={{ '--settings-index': 2 }}>
                 <span className="settings-row-icon is-purple"><Sparkles size={20} /></span>
                 <div className="settings-row-content">
-                  <h3>Nivel predeterminado de IA</h3>
-                  <p>Se abrirá seleccionado cuando pidas que la IA explique un paper</p>
+                  <h3>{copy.defaultAiLevel}</h3>
+                  <p>{copy.defaultAiDescription}</p>
                   <span className={`settings-save-feedback ${levelFeedback ? `is-${levelFeedback}` : ''}`} aria-live="polite">
-                    {savingLevel && 'Guardando...'}
-                    {!savingLevel && levelFeedback === 'saved' && 'Preferencia guardada'}
-                    {!savingLevel && levelFeedback === 'error' && 'No se pudo guardar'}
+                    {savingLevel && copy.saving}
+                    {!savingLevel && levelFeedback === 'saved' && copy.preferenceSaved}
+                    {!savingLevel && levelFeedback === 'error' && copy.saveError}
                   </span>
                 </div>
-                <div className="settings-levels" role="radiogroup" aria-label="Nivel predeterminado de explicación">
-                  {AI_EXPLANATION_LEVELS.map(({ id, label }) => {
-                    const { description, Icon } = LEVEL_DETAILS[id];
+                <div className="settings-levels" role="radiogroup" aria-label={copy.aiLevelLabel}>
+                  {AI_EXPLANATION_LEVELS.map(({ id }) => {
+                    const { label, description, Icon } = LEVEL_DETAILS[id];
                     const active = readingPreferences.aiExplanationLevel === id;
                     return (
                       <button
@@ -358,10 +519,57 @@ export default function SettingsPage() {
                         onClick={() => handleLevelChange(id)}
                       >
                         <Icon size={18} />
-                        <span><strong>{label}</strong><small>{description}</small></span>
+                        <span><strong>{label[language]}</strong><small>{description[language]}</small></span>
                       </button>
                     );
                   })}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="settings-section" aria-labelledby="interface-heading">
+            <div className="settings-section-heading">
+              <Languages size={18} />
+              <div>
+                <h2 id="interface-heading">{copy.interface}</h2>
+                <p>{copy.interfaceDescription}</p>
+              </div>
+            </div>
+
+            <div className="settings-list">
+              <div className="settings-row" style={{ '--settings-index': 3 }}>
+                <span className="settings-row-icon is-cyan"><Languages size={20} /></span>
+                <div className="settings-row-content">
+                  <h3>{copy.language}</h3>
+                  <p>{copy.languageDescription}</p>
+                  <span className={`settings-save-feedback ${languageFeedback ? `is-${languageFeedback}` : ''}`} aria-live="polite">
+                    {savingLanguage && copy.saving}
+                    {!savingLanguage && languageFeedback === 'saved' && copy.preferenceSaved}
+                    {!savingLanguage && languageFeedback === 'error' && copy.saveError}
+                  </span>
+                </div>
+                <div className="settings-language" role="radiogroup" aria-label={copy.languageLabel}>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={language === 'es'}
+                    className={language === 'es' ? 'is-active' : ''}
+                    disabled={savingLanguage}
+                    onClick={() => handleLanguageChange('es')}
+                  >
+                    {copy.spanish}
+                  </button>
+                  <button
+                    type="button"
+                    role="radio"
+                    aria-checked={language === 'en'}
+                    className={language === 'en' ? 'is-active' : ''}
+                    disabled={savingLanguage}
+                    onClick={() => handleLanguageChange('en')}
+                  >
+                    {copy.english}
+                  </button>
                 </div>
               </div>
             </div>
@@ -371,17 +579,17 @@ export default function SettingsPage() {
             <div className="settings-section-heading">
               <Bell size={18} />
               <div>
-                <h2 id="notifications-heading">Notificaciones</h2>
-                <p>Decide si quieres recibir novedades aunque PaperTok esté cerrado.</p>
+                <h2 id="notifications-heading">{copy.notifications}</h2>
+                <p>{copy.notificationsDescription}</p>
               </div>
             </div>
 
             <div className="settings-list">
-              <div className="settings-row" style={{ '--settings-index': 3 }}>
+              <div className="settings-row" style={{ '--settings-index': 4 }}>
                 <span className="settings-row-icon is-amber"><Mail size={20} /></span>
                 <div className="settings-row-content">
                   <div className="settings-row-title-line">
-                    <h3>Novedades por email</h3>
+                    <h3>{copy.emailUpdates}</h3>
                     <span className={`settings-status is-${notificationStatus.tone}`}>
                       {notificationStatus.label}
                     </span>
@@ -389,7 +597,7 @@ export default function SettingsPage() {
                   <p>{notificationStatus.description}</p>
                 </div>
                 <button className="settings-row-action" onClick={() => setIsNotificationsOpen(true)}>
-                  Configurar <ChevronRight size={17} />
+                  {copy.configure} <ChevronRight size={17} />
                 </button>
               </div>
             </div>
@@ -399,12 +607,12 @@ export default function SettingsPage() {
             <div className="settings-section-heading">
               <UserRound size={18} />
               <div>
-                <h2 id="session-heading">Sesión</h2>
-                <p>La información personalizada permanece asociada a esta cuenta.</p>
+                <h2 id="session-heading">{copy.session}</h2>
+                <p>{copy.sessionDescription}</p>
               </div>
             </div>
             <button className="settings-signout" onClick={handleSignOut}>
-              <LogOut size={18} /> Cerrar sesión
+              <LogOut size={18} /> {copy.signOut}
             </button>
           </section>
         </div>

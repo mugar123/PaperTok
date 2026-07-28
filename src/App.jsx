@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import PageTransition from './components/Layout/PageTransition'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import { LanguageProvider } from './context/LanguageContext'
 import { FeedProvider } from './context/FeedContext'
 import { FollowingProvider } from './context/FollowingContext'
 import { FollowingUpdatesProvider } from './context/FollowingUpdatesContext'
@@ -168,7 +169,9 @@ function UserScopedAppContent() {
 function App() {
   return (
     <AuthProvider>
-      <UserScopedAppContent />
+      <LanguageProvider>
+        <UserScopedAppContent />
+      </LanguageProvider>
     </AuthProvider>
   )
 }

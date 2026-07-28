@@ -9,20 +9,36 @@ function normalizeLabel(value = '') {
     .trim();
 }
 
-function findLocalTopic(value) {
+function findLocalTopic(value, language = 'es') {
   if (!value) return null;
   if (CATEGORIES[value]) {
-    return { id: value, label: CATEGORIES[value].label, type: 'topic', reliable: true };
+    const area = CATEGORIES[value];
+    return {
+      id: value,
+      label: language === 'en' ? area.labelEn || area.label : area.label,
+      type: 'topic',
+      reliable: true,
+    };
   }
 
   const normalized = normalizeLabel(value);
   for (const [areaId, area] of Object.entries(CATEGORIES)) {
     if ([area.label, area.labelEn].some(label => normalizeLabel(label) === normalized)) {
-      return { id: areaId, label: area.label, type: 'topic', reliable: true };
+      return {
+        id: areaId,
+        label: language === 'en' ? area.labelEn || area.label : area.label,
+        type: 'topic',
+        reliable: true,
+      };
     }
     for (const [categoryId, category] of Object.entries(area.subcategories || {})) {
       if (categoryId === value || [category.label, category.labelEn].some(label => normalizeLabel(label) === normalized)) {
-        return { id: categoryId, label: category.label, type: 'topic', reliable: true };
+        return {
+          id: categoryId,
+          label: language === 'en' ? category.labelEn || category.label : category.label,
+          type: 'topic',
+          reliable: true,
+        };
       }
     }
   }
@@ -36,10 +52,10 @@ function isExplicitCategoryId(value) {
   return /^[a-z][a-z-]*(?:\.[A-Za-z][A-Za-z-]*)+$/.test(value) || /^(?:astro|cond|hep|nucl|nlin)-[a-z-]+$/i.test(value);
 }
 
-export function resolvePaperTopic(value) {
+export function resolvePaperTopic(value, language = 'es') {
   const concept = typeof value === 'object' && value !== null ? value : null;
   const label = concept?.display_name || concept?.displayName || concept?.name || String(value || '');
-  const local = findLocalTopic(concept?.categoryId || label) || findLocalTopic(value);
+  const local = findLocalTopic(concept?.categoryId || label, language) || findLocalTopic(value, language);
   if (local) return local;
 
   const rawId = concept?.id || concept?.openAlexId || '';

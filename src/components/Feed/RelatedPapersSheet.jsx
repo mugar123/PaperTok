@@ -3,6 +3,7 @@ import { BookOpen, ChevronRight, GitBranch, Loader2, Network, Sparkles, X } from
 import { getCitationGraph, getCitationGraphDoi } from '../../services/citationGraphService';
 import { getRelatedPapers } from '../../services/relatedPapersService';
 import ScientificText from '../ScientificText';
+import { useLanguage } from '../../context/LanguageContext';
 
 const INITIAL_GRAPH = {
   references: [],
@@ -12,9 +13,9 @@ const INITIAL_GRAPH = {
   partial: false,
 };
 
-function formatCompactCount(value) {
+function formatCompactCount(value, locale = 'es-ES') {
   const count = Math.max(0, Number(value) || 0);
-  return new Intl.NumberFormat('es-ES', { notation: count >= 1000 ? 'compact' : 'standard' }).format(count);
+  return new Intl.NumberFormat(locale, { notation: count >= 1000 ? 'compact' : 'standard' }).format(count);
 }
 
 function LoadingState({ label }) {
@@ -29,6 +30,7 @@ function LoadingState({ label }) {
 }
 
 export default function RelatedPapersSheet({ paper, onClose, onSelectPaper }) {
+  const { isEnglish, locale } = useLanguage();
   const hasGraphIdentifier = Boolean(getCitationGraphDoi(paper));
   const [mode, setMode] = useState(hasGraphIdentifier ? 'graph' : 'similar');
   const [graphSide, setGraphSide] = useState('references');
@@ -119,8 +121,8 @@ export default function RelatedPapersSheet({ paper, onClose, onSelectPaper }) {
 
   const graphPapers = graph[graphSide] || [];
   const graphEmptyLabel = graphSide === 'references'
-    ? 'No se encontraron referencias enlazadas para este paper.'
-    : 'Todavía no se encontraron trabajos posteriores enlazados.';
+    ? (isEnglish ? 'No linked references were found for this paper.' : 'No se encontraron referencias enlazadas para este paper.')
+    : (isEnglish ? 'No linked later works have been found yet.' : 'Todavía no se encontraron trabajos posteriores enlazados.');
   const visiblePapers = mode === 'graph' ? graphPapers : papers;
   const visibleStatus = mode === 'graph' ? graphStatus : relatedStatus;
   const sourceLabel = graph.source === 'opencitations'
@@ -128,9 +130,9 @@ export default function RelatedPapersSheet({ paper, onClose, onSelectPaper }) {
     : 'OpenCitations + OpenAlex';
 
   const currentPaperLabel = useMemo(() => {
-    const title = String(paper?.title || 'Paper actual').trim();
+    const title = String(paper?.title || (isEnglish ? 'Current paper' : 'Paper actual')).trim();
     return title.length > 38 ? `${title.slice(0, 38).trim()}…` : title;
-  }, [paper?.title]);
+  }, [isEnglish, paper?.title]);
 
   return (
     <div
@@ -141,18 +143,18 @@ export default function RelatedPapersSheet({ paper, onClose, onSelectPaper }) {
       <section
         className={`related-sheet related-sheet--graph ${selectedPaperId ? 'is-selecting-paper' : ''}`}
         onClick={event => event.stopPropagation()}
-        aria-label="Conexiones del paper"
+        aria-label={isEnglish ? 'Paper connections' : 'Conexiones del paper'}
         aria-modal="true"
         aria-busy={visibleStatus === 'loading'}
         role="dialog"
       >
         <div className="related-grabber" aria-hidden="true" />
         <header className="related-header">
-          <div><Network size={18} /><h3>Conexiones del paper</h3></div>
-          <button onClick={requestClose} aria-label="Cerrar" title="Cerrar" autoFocus><X size={20} /></button>
+          <div><Network size={18} /><h3>{isEnglish ? 'Paper connections' : 'Conexiones del paper'}</h3></div>
+          <button onClick={requestClose} aria-label={isEnglish ? 'Close' : 'Cerrar'} title={isEnglish ? 'Close' : 'Cerrar'} autoFocus><X size={20} /></button>
         </header>
 
-        <div className="related-mode-tabs" role="tablist" aria-label="Tipo de conexión">
+        <div className="related-mode-tabs" role="tablist" aria-label={isEnglish ? 'Connection type' : 'Tipo de conexión'}>
           <button
             className={mode === 'graph' ? 'is-active' : ''}
             onClick={() => setMode('graph')}
@@ -160,7 +162,7 @@ export default function RelatedPapersSheet({ paper, onClose, onSelectPaper }) {
             role="tab"
             aria-selected={mode === 'graph'}
           >
-            <GitBranch size={16} />Grafo
+            <GitBranch size={16} />{isEnglish ? 'Graph' : 'Grafo'}
           </button>
           <button
             className={mode === 'similar' ? 'is-active' : ''}
@@ -168,24 +170,24 @@ export default function RelatedPapersSheet({ paper, onClose, onSelectPaper }) {
             role="tab"
             aria-selected={mode === 'similar'}
           >
-            <Sparkles size={16} />Similares
+            <Sparkles size={16} />{isEnglish ? 'Similar' : 'Similares'}
           </button>
         </div>
 
         {mode === 'graph' && (
-          <div className="knowledge-path" aria-label="Linaje bibliográfico">
+          <div className="knowledge-path" aria-label={isEnglish ? 'Bibliographic lineage' : 'Linaje bibliográfico'}>
             <button
               className={graphSide === 'references' ? 'is-active' : ''}
               onClick={() => setGraphSide('references')}
               aria-pressed={graphSide === 'references'}
             >
               <BookOpen size={17} />
-              <span><strong>{formatCompactCount(graph.counts.references)}</strong><small>Referencias</small></span>
+              <span><strong>{formatCompactCount(graph.counts.references, locale)}</strong><small>{isEnglish ? 'References' : 'Referencias'}</small></span>
             </button>
             <span className="knowledge-path-line" aria-hidden="true" />
             <div className="knowledge-path-current" title={paper?.title}>
               <Network size={18} />
-              <span><strong>Paper actual</strong><small>{currentPaperLabel}</small></span>
+              <span><strong>{isEnglish ? 'Current paper' : 'Paper actual'}</strong><small>{currentPaperLabel}</small></span>
             </div>
             <span className="knowledge-path-line" aria-hidden="true" />
             <button
@@ -194,22 +196,34 @@ export default function RelatedPapersSheet({ paper, onClose, onSelectPaper }) {
               aria-pressed={graphSide === 'citations'}
             >
               <GitBranch size={17} />
-              <span><strong>{formatCompactCount(graph.counts.citations)}</strong><small>Posteriores</small></span>
+              <span><strong>{formatCompactCount(graph.counts.citations, locale)}</strong><small>{isEnglish ? 'Later works' : 'Posteriores'}</small></span>
             </button>
           </div>
         )}
 
         {visibleStatus === 'loading' && (
-          <LoadingState label={mode === 'graph' ? 'Trazando el linaje...' : 'Buscando conexiones...'} />
+          <LoadingState label={mode === 'graph'
+            ? (isEnglish ? 'Tracing the lineage...' : 'Trazando el linaje...')
+            : (isEnglish ? 'Finding connections...' : 'Buscando conexiones...')} />
         )}
         {visibleStatus === 'unavailable' && (
-          <div className="related-state">El grafo bibliográfico necesita un DOI válido.</div>
+          <div className="related-state">
+            {isEnglish ? 'The bibliographic graph needs a valid DOI.' : 'El grafo bibliográfico necesita un DOI válido.'}
+          </div>
         )}
         {visibleStatus === 'empty' && (
-          <div className="related-state">{mode === 'graph' ? graphEmptyLabel : 'No hay recomendaciones disponibles para este paper.'}</div>
+          <div className="related-state">
+            {mode === 'graph'
+              ? graphEmptyLabel
+              : (isEnglish ? 'No recommendations are available for this paper.' : 'No hay recomendaciones disponibles para este paper.')}
+          </div>
         )}
         {visibleStatus === 'error' && (
-          <div className="related-state">No se pudieron cargar estas conexiones ahora. El resto de PaperTok seguirá funcionando con normalidad.</div>
+          <div className="related-state">
+            {isEnglish
+              ? 'These connections could not be loaded right now. The rest of PaperTok will continue to work normally.'
+              : 'No se pudieron cargar estas conexiones ahora. El resto de PaperTok seguirá funcionando con normalidad.'}
+          </div>
         )}
 
         {visibleStatus === 'ready' && (
@@ -227,7 +241,7 @@ export default function RelatedPapersSheet({ paper, onClose, onSelectPaper }) {
                   <small>
                     {related.authors.slice(0, 2).map(author => author.name || author).join(', ')}
                     {related.year ? ` · ${related.year}` : ''}
-                    {related.citationCountKnown ? ` · ${related.citationCount} citas` : ''}
+                    {related.citationCountKnown ? ` · ${related.citationCount} ${isEnglish ? 'citations' : 'citas'}` : ''}
                   </small>
                 </span>
                 <ChevronRight size={18} />

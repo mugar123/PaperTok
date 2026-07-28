@@ -1,5 +1,6 @@
 import { useRef, useEffect, useLayoutEffect, useCallback, useMemo, useState } from 'react';
 import { useFeed } from '../../context/FeedContext';
+import { useLanguage } from '../../context/LanguageContext';
 
 import PaperCard from './PaperCard';
 import SkeletonCard from './SkeletonCard';
@@ -24,6 +25,7 @@ const SCROLL_IDLE_DELAY_MS = 120;
  */
 export default function FeedContainer({ onOpenPdf, onSaveToList, source = null, scrollKey = 'forYou' }) {
   const feed = useFeed();
+  const { isEnglish } = useLanguage();
   const {
     trackPdfOpened,
     likedPaperIds, savedPaperIds, readPaperIds, toggleLike, markNotInterested, markAsRead, trackViewTime, trackSkip
@@ -260,10 +262,10 @@ export default function FeedContainer({ onOpenPdf, onSaveToList, source = null, 
     return (
       <div className="feed-empty">
         <div className="feed-empty-icon">⚠️</div>
-        <h2>Error cargando papers</h2>
+        <h2>{isEnglish ? 'Error loading papers' : 'Error cargando papers'}</h2>
         <p>{error}</p>
         <button className="feed-retry-btn" onClick={handleRefresh}>
-          Reintentar
+          {isEnglish ? 'Try again' : 'Reintentar'}
         </button>
       </div>
     );
@@ -289,11 +291,23 @@ export default function FeedContainer({ onOpenPdf, onSaveToList, source = null, 
         <div className="atom-loader">
           <AnimatedAtom size={80} strokeWidth={1} className="atom-loader-icon" />
         </div>
-        <h2>{loading || isRefreshing ? 'Sintetizando papers...' : 'Buscando descubrimientos...'}</h2>
-        <p>{loading || isRefreshing ? 'Conectando con las fuentes para traer lo último en ciencia' : 'Aún no hay papers en tus categorías. Prueba a ampliar tus intereses.'}</p>
+        <h2>
+          {loading || isRefreshing
+            ? (isEnglish ? 'Gathering papers...' : 'Sintetizando papers...')
+            : (isEnglish ? 'Searching for discoveries...' : 'Buscando descubrimientos...')}
+        </h2>
+        <p>
+          {loading || isRefreshing
+            ? (isEnglish
+              ? 'Connecting to scientific sources to bring you the latest research'
+              : 'Conectando con las fuentes para traer lo último en ciencia')
+            : (isEnglish
+              ? 'There are no papers in your categories yet. Try broadening your interests.'
+              : 'Aún no hay papers en tus categorías. Prueba a ampliar tus intereses.')}
+        </p>
         {!loading && (
           <button className="feed-retry-btn" onClick={handleRefresh}>
-            Explorar de nuevo
+            {isEnglish ? 'Explore again' : 'Explorar de nuevo'}
           </button>
         )}
       </div>

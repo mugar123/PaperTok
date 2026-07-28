@@ -242,33 +242,7 @@
 }
 
 .eim-pill-check {
-  animation: checkPopIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-}
-
-@keyframes checkPopIn {
-  0% { transform: scale(0); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
-}
-
-/* Ripple/glow effect that expands inside */
-.eim-pill::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, transparent 70%);
-  transform: translate(-50%, -50%);
-  border-radius: 50%;
-  transition: width 0.4s ease-out, height 0.4s ease-out;
-  pointer-events: none;
-  z-index: 1;
-}
-
-.eim-pill--selected::before {
-  width: 150px;
-  height: 150px;
+  flex-shrink: 0;
 }
 
 .eim-footer {

@@ -14,16 +14,16 @@ function conceptLabel(concept) {
     : String(concept?.display_name || concept?.name || '').trim();
 }
 
-export function buildPaperTopicTags(paper, limit = 4) {
+export function buildPaperTopicTags(paper, limit = 4, language = 'es') {
   const primaryCategory = paper?.primaryCategory || paper?.categories?.[0] || '';
   const seen = new Set([
     normalizedLabel(primaryCategory),
-    normalizedLabel(getCategoryLabel(primaryCategory)),
+    normalizedLabel(getCategoryLabel(primaryCategory, language)),
   ].filter(Boolean));
   const tags = [];
 
   for (const category of paper?.categories || []) {
-    const label = getCategoryLabel(category);
+    const label = getCategoryLabel(category, language);
     const normalized = normalizedLabel(label);
     if (!normalized || category === primaryCategory || seen.has(normalized)) continue;
     seen.add(normalized);

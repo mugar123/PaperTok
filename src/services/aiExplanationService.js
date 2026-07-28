@@ -46,9 +46,9 @@ export function canExplainPaper(paper) {
   return hasUsableAbstract(paper) || Boolean(getOpenPdfUrl(paper));
 }
 
-export function formatAIModelLabel(model, provider = '') {
+export function formatAIModelLabel(model, provider = '', language = 'es') {
   const value = cleanText(model, 100);
-  if (!value) return 'Modelo de IA';
+  if (!value) return language === 'en' ? 'AI model' : 'Modelo de IA';
 
   if (provider === 'modal-kimi' || /(?:^|\/)kimi[-\s]?k?3$/i.test(value)) {
     return 'Kimi K3 · Modal';
@@ -89,11 +89,12 @@ export function serializePaperForExplanation(paper) {
   };
 }
 
-export async function explainPaper(paper, level = 'university', { force = false } = {}) {
+export async function explainPaper(paper, level = 'university', { force = false, language = 'es' } = {}) {
   if (!AI_EXPLANATION_LEVELS.some(item => item.id === level)) {
     throw new AIExplanationServiceError('AI_INVALID_LEVEL');
   }
-  const cacheKey = `${paperCacheId(paper)}:${level}`;
+  const explanationLanguage = language === 'en' ? 'en' : 'es';
+  const cacheKey = `${paperCacheId(paper)}:${level}:${explanationLanguage}`;
   if (!force && explanationCache.has(cacheKey)) return explanationCache.get(cacheKey);
 
   const apiBase = import.meta.env.VITE_PAPER_API_BASE_URL?.replace(/\/$/, '');
@@ -115,7 +116,7 @@ export async function explainPaper(paper, level = 'university', { force = false 
       body: JSON.stringify({
         paper: serializePaperForExplanation(paper),
         level,
-        language: 'es',
+        language: explanationLanguage,
       }),
     });
     const payload = await response.json().catch(() => ({}));

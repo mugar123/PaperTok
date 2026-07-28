@@ -2,20 +2,36 @@ import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, CheckCircle2, Clock3, Loader2, Mail, Send, X } from 'lucide-react';
 import { useEmailNotifications } from '../../context/EmailNotificationsContext';
+import { useLanguage } from '../../context/LanguageContext';
 import './EmailNotificationModal.css';
 
 const ERROR_COPY = {
-  EMAIL_NOT_CONFIGURED: 'Los avisos por email todavía no están configurados.',
-  EMAIL_AUTH_REQUIRED: 'Vuelve a iniciar sesión para configurar los avisos.',
-  EMAIL_PROVIDER_AUTH_FAILED: 'El proveedor de correo ha rechazado la credencial configurada.',
-  EMAIL_SENDER_NOT_VERIFIED: 'El remitente de Brevo todavía no está verificado.',
-  EMAIL_PROVIDER_LIMIT: 'Se ha alcanzado temporalmente el límite de envío.',
-  EMAIL_TEST_RATE_LIMIT: 'Espera un minuto antes de enviar otra prueba.',
-  EMAIL_TEST_RECIPIENT_RESTRICTED: 'Resend está en modo de prueba y sólo permite enviar al correo propietario de la cuenta. Para otros destinatarios necesitas verificar un dominio.',
-  EMAIL_DATA_LOADING: 'Estamos terminando de cargar tus seguimientos. Inténtalo de nuevo en unos segundos.',
-  EMAIL_SEND_FAILED: 'No se ha podido enviar el correo de prueba.',
-  EMAIL_TIMEOUT: 'El servicio de correo está tardando demasiado.',
-  EMAIL_UNAVAILABLE: 'El servicio de correo no está disponible ahora mismo.',
+  es: {
+    EMAIL_NOT_CONFIGURED: 'Los avisos por email todavía no están configurados.',
+    EMAIL_AUTH_REQUIRED: 'Vuelve a iniciar sesión para configurar los avisos.',
+    EMAIL_PROVIDER_AUTH_FAILED: 'El proveedor de correo ha rechazado la credencial configurada.',
+    EMAIL_SENDER_NOT_VERIFIED: 'El remitente de Brevo todavía no está verificado.',
+    EMAIL_PROVIDER_LIMIT: 'Se ha alcanzado temporalmente el límite de envío.',
+    EMAIL_TEST_RATE_LIMIT: 'Espera un minuto antes de enviar otra prueba.',
+    EMAIL_TEST_RECIPIENT_RESTRICTED: 'Resend está en modo de prueba y sólo permite enviar al correo propietario de la cuenta. Para otros destinatarios necesitas verificar un dominio.',
+    EMAIL_DATA_LOADING: 'Estamos terminando de cargar tus seguimientos. Inténtalo de nuevo en unos segundos.',
+    EMAIL_SEND_FAILED: 'No se ha podido enviar el correo de prueba.',
+    EMAIL_TIMEOUT: 'El servicio de correo está tardando demasiado.',
+    EMAIL_UNAVAILABLE: 'El servicio de correo no está disponible ahora mismo.',
+  },
+  en: {
+    EMAIL_NOT_CONFIGURED: 'Email updates have not been configured yet.',
+    EMAIL_AUTH_REQUIRED: 'Sign in again to configure email updates.',
+    EMAIL_PROVIDER_AUTH_FAILED: 'The email provider rejected the configured credential.',
+    EMAIL_SENDER_NOT_VERIFIED: 'The Brevo sender has not been verified yet.',
+    EMAIL_PROVIDER_LIMIT: 'The sending limit has temporarily been reached.',
+    EMAIL_TEST_RATE_LIMIT: 'Wait one minute before sending another test.',
+    EMAIL_TEST_RECIPIENT_RESTRICTED: 'Resend is in test mode and can only send to the account owner. A verified domain is required for other recipients.',
+    EMAIL_DATA_LOADING: 'We are still loading what you follow. Try again in a few seconds.',
+    EMAIL_SEND_FAILED: 'The test email could not be sent.',
+    EMAIL_TIMEOUT: 'The email service is taking too long.',
+    EMAIL_UNAVAILABLE: 'The email service is not available right now.',
+  },
 };
 
 const MIN_TEST_SENDING_MS = 900;
@@ -24,6 +40,7 @@ const TEST_SENT_VISIBLE_MS = 5000;
 const wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 export default function EmailNotificationModal({ isOpen, onClose }) {
+  const { language, isEnglish } = useLanguage();
   const {
     preferences,
     health,
@@ -69,9 +86,14 @@ export default function EmailNotificationModal({ isOpen, onClose }) {
     setFeedback(null);
     try {
       await savePreferences(draft);
-      setFeedback({ type: 'success', text: draft.enabled ? 'Avisos por email activados.' : 'Avisos por email desactivados.' });
+      setFeedback({
+        type: 'success',
+        text: draft.enabled
+          ? (isEnglish ? 'Email updates enabled.' : 'Avisos por email activados.')
+          : (isEnglish ? 'Email updates disabled.' : 'Avisos por email desactivados.'),
+      });
     } catch (error) {
-      setFeedback({ type: 'error', text: ERROR_COPY[error.code] || ERROR_COPY.EMAIL_UNAVAILABLE });
+      setFeedback({ type: 'error', text: ERROR_COPY[language][error.code] || ERROR_COPY[language].EMAIL_UNAVAILABLE });
     }
   };
 
@@ -86,12 +108,15 @@ export default function EmailNotificationModal({ isOpen, onClose }) {
       if (remainingSendingTime > 0) await wait(remainingSendingTime);
       const saved = result.preferences;
       setDraft(saved);
-      setFeedback({ type: 'success', text: `Correo de prueba enviado a ${saved.email}.` });
+      setFeedback({
+        type: 'success',
+        text: isEnglish ? `Test email sent to ${saved.email}.` : `Correo de prueba enviado a ${saved.email}.`,
+      });
       setTestState('sent');
       testFeedbackTimerRef.current = setTimeout(() => setTestState('idle'), TEST_SENT_VISIBLE_MS);
     } catch (error) {
       setTestState('idle');
-      setFeedback({ type: 'error', text: ERROR_COPY[error.code] || ERROR_COPY.EMAIL_UNAVAILABLE });
+      setFeedback({ type: 'error', text: ERROR_COPY[language][error.code] || ERROR_COPY[language].EMAIL_UNAVAILABLE });
     }
   };
 
@@ -118,37 +143,46 @@ export default function EmailNotificationModal({ isOpen, onClose }) {
             <header>
               <div className="email-notification-icon"><Mail size={20} /></div>
               <div>
-                <h2 id="email-notification-title">Novedades por email</h2>
-                <p>Recibe un digest compacto aunque PaperTok esté cerrado.</p>
+                <h2 id="email-notification-title">{isEnglish ? 'Email updates' : 'Novedades por email'}</h2>
+                <p>{isEnglish
+                  ? 'Receive a compact digest even when PaperTok is closed.'
+                  : 'Recibe un digest compacto aunque PaperTok esté cerrado.'}</p>
               </div>
-              <button className="email-notification-close" onClick={onClose} title="Cerrar"><X size={20} /></button>
+              <button className="email-notification-close" onClick={onClose} title={isEnglish ? 'Close' : 'Cerrar'}><X size={20} /></button>
             </header>
 
             <div className="email-notification-body">
               {!loading && !health.available && (
                 <div className="email-notification-provider-warning">
-                  <strong>Envío pendiente de configuración</strong>
+                  <strong>{isEnglish ? 'Sending requires configuration' : 'Envío pendiente de configuración'}</strong>
                   <span>{health.code === 'EMAIL_PROVIDER_AUTH_FAILED'
-                    ? 'El proveedor de correo no ha aceptado la credencial guardada.'
+                    ? (isEnglish ? 'The email provider did not accept the saved credential.' : 'El proveedor de correo no ha aceptado la credencial guardada.')
                     : health.code === 'EMAIL_SENDER_NOT_VERIFIED'
-                      ? 'Brevo todavía no reconoce el remitente configurado como activo.'
-                      : 'El proveedor de correo no está disponible en este momento.'}</span>
+                      ? (isEnglish ? 'Brevo does not yet recognize the configured sender as active.' : 'Brevo todavía no reconoce el remitente configurado como activo.')
+                      : (isEnglish ? 'The email provider is not available right now.' : 'El proveedor de correo no está disponible en este momento.')}</span>
                 </div>
               )}
               {!loading && health.available && health.provider === 'resend' && health.senderMode === 'resend-test' && (
                 <div className="email-notification-provider-warning is-info">
-                  <strong>Modo de prueba de Resend</strong>
-                  <span>Sin un dominio verificado, Resend sólo entregará correos a la dirección propietaria de tu cuenta.</span>
+                  <strong>{isEnglish ? 'Resend test mode' : 'Modo de prueba de Resend'}</strong>
+                  <span>{isEnglish
+                    ? 'Without a verified domain, Resend will only deliver email to the account owner.'
+                    : 'Sin un dominio verificado, Resend sólo entregará correos a la dirección propietaria de tu cuenta.'}</span>
                 </div>
               )}
               {!loading && health.available && health.provider === 'resend' && health.permissionLimited && health.senderMode !== 'resend-test' && (
                 <div className="email-notification-provider-warning is-info">
-                  <strong>Clave de envío restringida</strong>
-                  <span>La credencial de Resend sólo tiene permiso de envío, así que no podemos comprobar el estado del dominio desde aquí. El envío funciona con normalidad.</span>
+                  <strong>{isEnglish ? 'Restricted sending key' : 'Clave de envío restringida'}</strong>
+                  <span>{isEnglish
+                    ? 'The Resend credential only has sending permission, so the domain status cannot be checked here. Sending still works normally.'
+                    : 'La credencial de Resend sólo tiene permiso de envío, así que no podemos comprobar el estado del dominio desde aquí. El envío funciona con normalidad.'}</span>
                 </div>
               )}
               <label className="email-notification-toggle-row">
-                <span><strong>Activar correos</strong><small>Se enviarán a {draft.email || preferences.email}</small></span>
+                <span>
+                  <strong>{isEnglish ? 'Enable email updates' : 'Activar correos'}</strong>
+                  <small>{isEnglish ? 'They will be sent to' : 'Se enviarán a'} {draft.email || preferences.email}</small>
+                </span>
                 <input
                   type="checkbox"
                   checked={Boolean(draft.enabled)}
@@ -160,19 +194,24 @@ export default function EmailNotificationModal({ isOpen, onClose }) {
 
               <div className={`email-notification-options ${draft.enabled ? '' : 'is-disabled'}`}>
                 <fieldset disabled={!draft.enabled || loading}>
-                  <legend>Frecuencia</legend>
+                  <legend>{isEnglish ? 'Frequency' : 'Frecuencia'}</legend>
                   <div className="email-notification-segments">
                     <button className={draft.frequency === 'daily' ? 'is-active' : ''} onClick={() => setDraft(current => ({ ...current, frequency: 'daily' }))}>
-                      Diario
+                      {isEnglish ? 'Daily' : 'Diario'}
                     </button>
                     <button className={draft.frequency === 'weekly' ? 'is-active' : ''} onClick={() => setDraft(current => ({ ...current, frequency: 'weekly' }))}>
-                      Semanal
+                      {isEnglish ? 'Weekly' : 'Semanal'}
                     </button>
                   </div>
                 </fieldset>
 
                 <label className="email-notification-count">
-                  <span><strong>Máximo por correo</strong><small>PaperTok enviará menos si no encuentra suficiente calidad</small></span>
+                  <span>
+                    <strong>{isEnglish ? 'Maximum per email' : 'Máximo por correo'}</strong>
+                    <small>{isEnglish
+                      ? 'PaperTok will send fewer when there are not enough high-quality matches'
+                      : 'PaperTok enviará menos si no encuentra suficiente calidad'}</small>
+                  </span>
                   <select
                     value={draft.maxPapers || 5}
                     onChange={event => setDraft(current => ({ ...current, maxPapers: Number(event.target.value) }))}
@@ -187,7 +226,11 @@ export default function EmailNotificationModal({ isOpen, onClose }) {
 
               <div className="email-notification-schedule">
                 <Clock3 size={16} />
-                <span>{draft.frequency === 'weekly' ? 'Los lunes por la mañana' : 'Cada mañana'}, sólo cuando haya novedades.</span>
+                <span>
+                  {draft.frequency === 'weekly'
+                    ? (isEnglish ? 'Monday mornings' : 'Los lunes por la mañana')
+                    : (isEnglish ? 'Every morning' : 'Cada mañana')}, {isEnglish ? 'only when there are updates.' : 'sólo cuando haya novedades.'}
+                </span>
               </div>
 
               {feedback && (
@@ -208,21 +251,23 @@ export default function EmailNotificationModal({ isOpen, onClose }) {
                 <AnimatePresence mode="wait" initial={false}>
                   {testState === 'sending' ? (
                     <motion.span key="sending" initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -3 }}>
-                      <Loader2 className="email-notification-test-spinner" size={16} /> Enviando…
+                      <Loader2 className="email-notification-test-spinner" size={16} /> {isEnglish ? 'Sending…' : 'Enviando…'}
                     </motion.span>
                   ) : testState === 'sent' ? (
                     <motion.span key="sent" initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
-                      <CheckCircle2 size={17} /> Enviado
+                      <CheckCircle2 size={17} /> {isEnglish ? 'Sent' : 'Enviado'}
                     </motion.span>
                   ) : (
                     <motion.span key="idle" initial={{ opacity: 0, y: 3 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -3 }}>
-                      <Send size={16} /> Enviar prueba
+                      <Send size={16} /> {isEnglish ? 'Send test' : 'Enviar prueba'}
                     </motion.span>
                   )}
                 </AnimatePresence>
               </button>
               <button className="email-notification-save" onClick={handleSave} disabled={saving || testing || loading || !notificationDataReady || (draft.enabled && !health.available)}>
-                {saving ? 'Guardando...' : 'Guardar cambios'}
+                {saving
+                  ? (isEnglish ? 'Saving...' : 'Guardando...')
+                  : (isEnglish ? 'Save changes' : 'Guardar cambios')}
               </button>
             </footer>
           </motion.section>

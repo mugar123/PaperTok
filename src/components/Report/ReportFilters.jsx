@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { CATEGORIES } from '../../data/categories';
-import { COUNTRIES, searchCountries } from '../../data/countries';
+import { getCountryName, searchCountries } from '../../data/countries';
 import { Filter, Search, X, MapPin, ChevronDown } from 'lucide-react';
 import WorldMap from './WorldMap';
+import { useLanguage } from '../../context/LanguageContext';
 import './ReportFilters.css';
 
 const EASE = [0.16, 1, 0.3, 1];
@@ -42,6 +43,7 @@ function Chevron({ isOpen, size = 16, reduced }) {
 }
 
 export default function ReportFilters({ filters, onChange }) {
+  const { language, isEnglish } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [isCountryOpen, setIsCountryOpen] = useState(() => (filters.countries?.length || 0) > 0);
   const [countrySearch, setCountrySearch] = useState('');
@@ -50,8 +52,8 @@ export default function ReportFilters({ filters, onChange }) {
   const areaKeys = Object.keys(CATEGORIES);
 
   const searchResults = useMemo(() => {
-    return searchCountries(countrySearch);
-  }, [countrySearch]);
+    return searchCountries(countrySearch, language);
+  }, [countrySearch, language]);
 
   const toggleCategory = (key) => {
     const current = filters.categories || [];
@@ -89,7 +91,7 @@ export default function ReportFilters({ filters, onChange }) {
       >
         <div className="rf-toggle-left">
           <Filter size={14} />
-          <span>Filtros</span>
+          <span>{isEnglish ? 'Filters' : 'Filtros'}</span>
           <AnimatePresence>
             {activeCount > 0 && (
               <motion.span
@@ -120,13 +122,13 @@ export default function ReportFilters({ filters, onChange }) {
           >
             <div className="rf-active-chips">
               {activeCategories.map(key => (
-                <button key={key} className="rf-active-chip" onClick={() => toggleCategory(key)} title="Quitar filtro">
-                  {CATEGORIES[key]?.label || key} <X size={10} />
+                <button key={key} className="rf-active-chip" onClick={() => toggleCategory(key)} title={isEnglish ? 'Remove filter' : 'Quitar filtro'}>
+                  {(isEnglish ? CATEGORIES[key]?.labelEn : CATEGORIES[key]?.label) || key} <X size={10} />
                 </button>
               ))}
               {activeCountries.map(code => (
-                <button key={code} className="rf-active-chip" onClick={() => toggleCountry(code)} title="Quitar filtro">
-                  {COUNTRIES[code] || code} <X size={10} />
+                <button key={code} className="rf-active-chip" onClick={() => toggleCountry(code)} title={isEnglish ? 'Remove filter' : 'Quitar filtro'}>
+                  {getCountryName(code, language)} <X size={10} />
                 </button>
               ))}
             </div>
@@ -139,7 +141,7 @@ export default function ReportFilters({ filters, onChange }) {
         <div className="rf-panel">
           {/* Category filters */}
           <div className="rf-section">
-            <span className="rf-section-label">Disciplina</span>
+            <span className="rf-section-label">{isEnglish ? 'Discipline' : 'Disciplina'}</span>
             <motion.div
               className="rf-pills"
               initial={reduced ? false : 'hidden'}
@@ -163,7 +165,7 @@ export default function ReportFilters({ filters, onChange }) {
                     whileTap={reduced ? undefined : { scale: 0.95 }}
                   >
                     <Icon size={13} />
-                    {area.label}
+                    {isEnglish ? area.labelEn : area.label}
                   </motion.button>
                 );
               })}
@@ -179,7 +181,7 @@ export default function ReportFilters({ filters, onChange }) {
               aria-controls="rf-country-controls"
               onClick={() => setIsCountryOpen(open => !open)}
             >
-              <span><MapPin size={13} /> País de origen{activeCountries.length ? ` (${activeCountries.length})` : ''}</span>
+              <span><MapPin size={13} /> {isEnglish ? 'Country of origin' : 'País de origen'}{activeCountries.length ? ` (${activeCountries.length})` : ''}</span>
               <Chevron isOpen={isCountryOpen} size={15} reduced={reduced} />
             </button>
 
@@ -192,7 +194,7 @@ export default function ReportFilters({ filters, onChange }) {
                   <input
                     className="rf-search"
                     type="text"
-                    placeholder="Buscar país..."
+                    placeholder={isEnglish ? 'Search country...' : 'Buscar país...'}
                     value={countrySearch}
                     onChange={(e) => setCountrySearch(e.target.value)}
                   />
@@ -238,7 +240,9 @@ export default function ReportFilters({ filters, onChange }) {
                     selectedCountries={activeCountries}
                     onToggleCountry={toggleCountry}
                   />
-                  <p className="rf-map-hint">Toca un país del mapa para filtrar la edición.</p>
+                  <p className="rf-map-hint">
+                    {isEnglish ? 'Select a country on the map to filter the edition.' : 'Toca un país del mapa para filtrar la edición.'}
+                  </p>
                 </motion.div>
 
                 {/* Selected countries pills */}
@@ -253,7 +257,7 @@ export default function ReportFilters({ filters, onChange }) {
                         exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 0.8, y: 5 }}
                         transition={{ duration: 0.2 }}
                       >
-                        {COUNTRIES[code] || code}
+                        {getCountryName(code, language)}
                         <button onClick={() => toggleCountry(code)}><X size={10} /></button>
                       </motion.span>
                     ))}
@@ -274,7 +278,7 @@ export default function ReportFilters({ filters, onChange }) {
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.18 }}
               >
-                <X size={12} /> Limpiar filtros
+                <X size={12} /> {isEnglish ? 'Clear filters' : 'Limpiar filtros'}
               </motion.button>
             )}
           </AnimatePresence>

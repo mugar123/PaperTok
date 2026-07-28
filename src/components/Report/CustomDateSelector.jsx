@@ -2,12 +2,20 @@ import { useState, useEffect, useRef } from 'react';
 import Slider from 'rc-slider';
 import 'rc-slider/assets/index.css';
 import { ChevronRight, Calendar as CalendarIcon, Check, ChevronLeft, ChevronDown } from 'lucide-react';
+import { useLanguage } from '../../context/LanguageContext';
 import './CustomDateSelector.css';
 
-const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-const WEEKDAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+const MONTHS = {
+  es: ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'],
+  en: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
+};
+const WEEKDAYS = {
+  es: ['L', 'M', 'X', 'J', 'V', 'S', 'D'],
+  en: ['M', 'T', 'W', 'T', 'F', 'S', 'S'],
+};
 
 export default function CustomDateSelector({ onApply, onCancel }) {
+  const { language, isEnglish } = useLanguage();
   const currentYear = new Date().getFullYear();
   const MIN_YEAR = 1950;
   
@@ -106,7 +114,7 @@ export default function CustomDateSelector({ onApply, onCancel }) {
   return (
     <div className="cds-minimal-container">
       <div className="cds-minimal-header">
-        <span className="cds-minimal-title">Periodo Histórico</span>
+        <span className="cds-minimal-title">{isEnglish ? 'Historical period' : 'Periodo histórico'}</span>
         <button className="cds-minimal-close" onClick={onCancel}>✕</button>
       </div>
 
@@ -142,7 +150,9 @@ export default function CustomDateSelector({ onApply, onCancel }) {
               onClick={() => setExactDateMode(!exactDateMode)}
             >
               <CalendarIcon size={14} />
-              <span>{startDateStr ? `Selección: ${startDateStr}` : `Precisión diaria en ${yearRange[0]}`}</span>
+              <span>{startDateStr
+                ? `${isEnglish ? 'Selection' : 'Selección'}: ${startDateStr}`
+                : `${isEnglish ? 'Daily precision in' : 'Precisión diaria en'} ${yearRange[0]}`}</span>
               <ChevronDown size={14} className={`cds-badge-arrow ${exactDateMode ? 'rotated' : ''}`} />
             </button>
 
@@ -152,14 +162,14 @@ export default function CustomDateSelector({ onApply, onCancel }) {
                   <button className="cds-fcal-nav" onClick={() => setSelectedMonth(m => Math.max(0, m - 1))} disabled={selectedMonth === 0}>
                     <ChevronLeft size={16} />
                   </button>
-                  <span className="cds-fcal-month">{MONTHS[selectedMonth]} {yearRange[0]}</span>
+                  <span className="cds-fcal-month">{MONTHS[language][selectedMonth]} {yearRange[0]}</span>
                   <button className="cds-fcal-nav" onClick={() => setSelectedMonth(m => Math.min(11, m + 1))} disabled={selectedMonth === 11}>
                     <ChevronRight size={16} />
                   </button>
                 </div>
                 
                 <div className="cds-fcal-grid">
-                  {WEEKDAYS.map(wd => <div key={wd} className="cds-fcal-wd">{wd}</div>)}
+                  {WEEKDAYS[language].map((wd, index) => <div key={`${wd}-${index}`} className="cds-fcal-wd">{wd}</div>)}
                   {daysArray.map((day, idx) => (
                     <div 
                       key={idx} 
@@ -173,20 +183,25 @@ export default function CustomDateSelector({ onApply, onCancel }) {
                 
                 <div className="cds-exact-summary" style={{ marginTop: 16, fontSize: 13, color: 'rgba(255,255,255,0.7)', textAlign: 'center' }}>
                   {startDateStr ? (
-                    <>Desde: <strong>{startDateStr}</strong> {endDateStr ? <><br/>Hasta: <strong>{endDateStr}</strong></> : ''}</>
+                    <>
+                      {isEnglish ? 'From' : 'Desde'}: <strong>{startDateStr}</strong>
+                      {endDateStr ? <><br/>{isEnglish ? 'To' : 'Hasta'}: <strong>{endDateStr}</strong></> : ''}
+                    </>
                   ) : (
-                    <span className="cds-summary-placeholder">Selecciona los días límite</span>
+                    <span className="cds-summary-placeholder">
+                      {isEnglish ? 'Select the boundary dates' : 'Selecciona los días límite'}
+                    </span>
                   )}
                 </div>
               </div>
             )}
           </div>
         ) : (
-          <div className="cds-badge-placeholder">Rango histórico general</div>
+          <div className="cds-badge-placeholder">{isEnglish ? 'General historical range' : 'Rango histórico general'}</div>
         )}
 
         <button className="cds-minimal-apply" onClick={handleApply}>
-          <Check size={16} /> Buscar
+          <Check size={16} /> {isEnglish ? 'Search' : 'Buscar'}
         </button>
       </div>
     </div>

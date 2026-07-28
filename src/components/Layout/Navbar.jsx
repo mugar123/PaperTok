@@ -3,6 +3,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useFeed } from '../../context/FeedContext';
 import { useFollowingUpdates } from '../../context/FollowingUpdatesContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { Bookmark, LogOut, Settings2, RotateCw, Search } from 'lucide-react';
 import './Navbar.css';
 
@@ -10,6 +11,7 @@ export default function Navbar() {
   const { user, profilePhoto, signOut } = useAuth();
   const { feedMode, setFeedMode, refreshFeed, isRefreshing } = useFeed();
   const { refresh: refreshFollowing, refreshing: isFollowingRefreshing } = useFollowingUpdates();
+  const { isEnglish } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
   const [showDropdown, setShowDropdown] = useState(false);
@@ -72,7 +74,7 @@ export default function Navbar() {
             <button
               className={`navbar-action-btn ${reloadSpinning ? 'spinning' : ''}`}
               onClick={handleReload}
-              title="Recargar"
+              title={isEnglish ? 'Reload' : 'Recargar'}
             >
               <RotateCw size={20} />
             </button>
@@ -87,7 +89,7 @@ export default function Navbar() {
               setFeedMode('top');
             }}
           >
-            Para ti
+            {isEnglish ? 'For you' : 'Para ti'}
           </button>
 
           <NavLink
@@ -101,7 +103,7 @@ export default function Navbar() {
             to="/following"
             className={`navbar-tab ${isFollowingActive ? 'active' : ''}`}
           >
-            Siguiendo
+            {isEnglish ? 'Following' : 'Siguiendo'}
           </NavLink>
 
           {/* Slider indicator */}
@@ -117,7 +119,7 @@ export default function Navbar() {
           <button
             className="navbar-action-btn"
             onClick={() => navigate('/search')}
-            title="Buscar"
+            title={isEnglish ? 'Search' : 'Buscar'}
           >
             <Search size={20} />
           </button>
@@ -126,7 +128,7 @@ export default function Navbar() {
             <div className="navbar-profile" ref={dropdownRef}>
               <button
                 className={`navbar-avatar-btn ${location.pathname === '/settings' ? 'active' : ''}`}
-                aria-label="Abrir menú de usuario"
+                aria-label={isEnglish ? 'Open user menu' : 'Abrir menú de usuario'}
                 onClick={(e) => {
                   e.stopPropagation();
                   setShowDropdown(!showDropdown);
@@ -153,21 +155,21 @@ export default function Navbar() {
                     onClick={() => { navigate('/lists'); setShowDropdown(false); }}
                   >
                     <Bookmark size={16} strokeWidth={2} style={{ display: 'inline-block', verticalAlign: 'text-bottom', marginRight: '8px' }} />
-                    Mis listas
+                    {isEnglish ? 'My lists' : 'Mis listas'}
                   </button>
                   <button
                     className="navbar-dropdown-item"
                     onClick={() => { navigate('/settings'); setShowDropdown(false); }}
                   >
                     <Settings2 size={16} strokeWidth={2} style={{ display: 'inline-block', verticalAlign: 'text-bottom', marginRight: '8px' }} />
-                    Ajustes
+                    {isEnglish ? 'Settings' : 'Ajustes'}
                   </button>
                   <button
                     className="navbar-dropdown-item navbar-dropdown-item--danger"
                     onClick={handleSignOut}
                   >
                     <LogOut size={16} strokeWidth={2} style={{ display: 'inline-block', verticalAlign: 'text-bottom', marginRight: '8px' }} />
-                    Cerrar sesión
+                    {isEnglish ? 'Sign out' : 'Cerrar sesión'}
                   </button>
                 </div>
               )}

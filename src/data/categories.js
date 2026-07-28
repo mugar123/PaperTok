@@ -25,6 +25,7 @@ export const CATEGORIES = {
     icon: Atom,
     gradient: 'var(--gradient-physics)',
     description: 'De partículas subatómicas a galaxias lejanas',
+    descriptionEn: 'From subatomic particles to distant galaxies',
     subcategories: {
       'quant-ph': { label: 'Física Cuántica', labelEn: 'Quantum Physics' },
       'cond-mat.supr-con': { label: 'Superconductividad', labelEn: 'Superconductivity' },
@@ -60,6 +61,7 @@ export const CATEGORIES = {
     icon: Monitor,
     gradient: 'var(--gradient-cs)',
     description: 'IA, algoritmos, redes y más',
+    descriptionEn: 'AI, algorithms, networks, and more',
     subcategories: {
       'cs.AI': { label: 'Inteligencia Artificial', labelEn: 'Artificial Intelligence' },
       'cs.LG': { label: 'Machine Learning', labelEn: 'Machine Learning' },
@@ -90,6 +92,7 @@ export const CATEGORIES = {
     icon: Calculator,
     gradient: 'var(--gradient-math)',
     description: 'El lenguaje del universo',
+    descriptionEn: 'The language of the universe',
     subcategories: {
       'math.AG': { label: 'Geometría Algebraica', labelEn: 'Algebraic Geometry' },
       'math.AP': { label: 'Ecuaciones en Derivadas Parciales', labelEn: 'Analysis of PDEs' },
@@ -116,6 +119,7 @@ export const CATEGORIES = {
     icon: BarChart2,
     gradient: 'var(--gradient-stat)',
     description: 'Machine learning, metodología y aplicaciones',
+    descriptionEn: 'Machine learning, methodology, and applications',
     subcategories: {
       'stat.ML': { label: 'Machine Learning', labelEn: 'Machine Learning' },
       'stat.ME': { label: 'Metodología', labelEn: 'Methodology' },
@@ -130,6 +134,7 @@ export const CATEGORIES = {
     icon: TrendingUp,
     gradient: 'var(--gradient-econ)',
     description: 'Econometría y teoría económica',
+    descriptionEn: 'Econometrics and economic theory',
     subcategories: {
       'econ.EM': { label: 'Econometría', labelEn: 'Econometrics' },
       'econ.GN': { label: 'Economía General', labelEn: 'General Economics' },
@@ -142,6 +147,7 @@ export const CATEGORIES = {
     icon: CircleDollarSign,
     gradient: 'var(--gradient-qfin)',
     description: 'Trading algorítmico, riesgo y portfolios',
+    descriptionEn: 'Algorithmic trading, risk, and portfolios',
     subcategories: {
       'q-fin.ST': { label: 'Finanzas Estadísticas', labelEn: 'Statistical Finance' },
       'q-fin.CP': { label: 'Finanzas Computacionales', labelEn: 'Computational Finance' },
@@ -158,6 +164,7 @@ export const CATEGORIES = {
     icon: Zap,
     gradient: 'var(--gradient-eess)',
     description: 'Señales, potencia, telecomunicaciones y control',
+    descriptionEn: 'Signals, power, telecommunications, and control',
     subcategories: {
       'eess.SP': { label: 'Procesamiento de Señales', labelEn: 'Signal Processing' },
       'eess.IV': { label: 'Procesamiento de Imagen y Vídeo', labelEn: 'Image and Video Processing' },
@@ -174,6 +181,7 @@ export const CATEGORIES = {
     icon: Settings,
     gradient: 'linear-gradient(135deg, #a18cd1, #fbc2eb)',
     description: 'Robótica, termodinámica, fluidos y manufactura',
+    descriptionEn: 'Robotics, thermodynamics, fluids, and manufacturing',
     subcategories: {
       'mech.dyn': { label: 'Dinámica, Robótica y Cinemática', labelEn: 'Dynamics & Robotics' },
       'mech.fluid': { label: 'Mecánica de Fluidos y Aerodinámica', labelEn: 'Fluid Mechanics' },
@@ -192,6 +200,7 @@ export const CATEGORIES = {
     icon: Building,
     gradient: 'linear-gradient(135deg, #f6d365, #fda085)',
     description: 'Estructuras, transporte, geotecnia y urbanismo',
+    descriptionEn: 'Structures, transport, geotechnics, and urban planning',
     subcategories: {
       'civil.struct': { label: 'Ingeniería Estructural', labelEn: 'Structural Engineering' },
       'civil.geo': { label: 'Geotecnia y Mecánica de Suelos', labelEn: 'Geotechnical Engineering' },
@@ -209,6 +218,7 @@ export const CATEGORIES = {
     icon: Beaker,
     gradient: 'linear-gradient(135deg, #84fab0, #8fd3f4)',
     description: 'Procesos químicos, nanotecnología y materiales',
+    descriptionEn: 'Chemical processes, nanotechnology, and materials',
     subcategories: {
       'chemeng.process': { label: 'Procesos Químicos y Catálisis', labelEn: 'Chemical Processes & Catalysis' },
       'chemeng.poly': { label: 'Ingeniería de Polímeros', labelEn: 'Polymer Engineering' },
@@ -226,6 +236,7 @@ export const CATEGORIES = {
     icon: HeartPulse,
     gradient: 'linear-gradient(135deg, #ff758c, #ff7eb3)',
     description: 'Investigación clínica, salud pública y especialidades',
+    descriptionEn: 'Clinical research, public health, and specialties',
     subcategories: {
       'med.gen': { label: 'Medicina General e Interna', labelEn: 'General Medicine' },
       'med.onco': { label: 'Oncología', labelEn: 'Oncology' },
@@ -251,6 +262,7 @@ export const CATEGORIES = {
     icon: Dna,
     gradient: 'linear-gradient(135deg, #11998e, #38ef7d)',
     description: 'De la genética a la ecología y microbiología',
+    descriptionEn: 'From genetics to ecology and microbiology',
     subcategories: {
       'bio.gen': { label: 'Genética y Herencia', labelEn: 'Genetics' },
       'bio.mol': { label: 'Biología Molecular', labelEn: 'Molecular Biology' },
@@ -300,10 +312,11 @@ export function getCategoryGradient(arxivCategory) {
 /**
  * Get the human-readable label for a given arXiv category.
  */
-export function getCategoryLabel(arxivCategory) {
+export function getCategoryLabel(arxivCategory, language = 'es') {
   for (const area of Object.values(CATEGORIES)) {
     if (area.subcategories[arxivCategory]) {
-      return area.subcategories[arxivCategory].label;
+      const category = area.subcategories[arxivCategory];
+      return language === 'en' ? category.labelEn || category.label : category.label;
     }
   }
   return arxivCategory;

@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { useFeed } from '../../context/FeedContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { getCategoryLabel } from '../../data/categories';
 import { getIcon } from '../../utils/icons';
 import { paperLegacyAdapter } from '../../models/Paper';
@@ -40,6 +41,7 @@ function demoSet(key, value) {
 
 export default function ListsPage({ onOpenPdf, onEditPaper }) {
   const { user } = useAuth();
+  const { language, isEnglish } = useLanguage();
   const {
     unmarkAsRead,
     toggleLike,
@@ -68,12 +70,12 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
       .sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))
       .map((record) => record.paperId);
     return [
-      { id: '__favorites__', name: 'Favoritos', emoji: 'Heart', paperIds: favoriteIds, createdAt: 'default' },
-      { id: '__read_later__', name: 'Leer después', emoji: 'BookOpen', paperIds: readLaterIds, createdAt: 'default' },
-      { id: '__read__', name: 'Historial de lectura', emoji: 'Eye', paperIds: readIds, createdAt: 'default' },
+      { id: '__favorites__', name: isEnglish ? 'Favorites' : 'Favoritos', emoji: 'Heart', paperIds: favoriteIds, createdAt: 'default' },
+      { id: '__read_later__', name: isEnglish ? 'Read later' : 'Leer después', emoji: 'BookOpen', paperIds: readLaterIds, createdAt: 'default' },
+      { id: '__read__', name: isEnglish ? 'Reading history' : 'Historial de lectura', emoji: 'Eye', paperIds: readIds, createdAt: 'default' },
       ...lists,
     ];
-  }, [likedPaperIds, lists, personalLibrary, readPaperIds]);
+  }, [isEnglish, likedPaperIds, lists, personalLibrary, readPaperIds]);
 
   const getPaper = (paperId) => savedPapers[paperId] || personalLibrary[paperId]?.paper;
 
@@ -399,25 +401,27 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
   };
   return (
     <div className="lists-page">
-      <div className="lists-header"><h1>Mis Listas</h1></div>
+      <div className="lists-header"><h1>{isEnglish ? 'My lists' : 'Mis listas'}</h1></div>
       {loading && (
         <div className="lists-inline-status" aria-live="polite">
           <div className="lists-loading-spinner" />
-          <span>Actualizando listas personales...</span>
+          <span>{isEnglish ? 'Updating personal lists...' : 'Actualizando listas personales...'}</span>
         </div>
       )}
       {error && (
         <div className="lists-inline-status is-error" role="alert">
-          <span>{error}</span>
+          <span>{isEnglish ? 'Your custom lists could not be updated.' : error}</span>
           <button className="lists-retry-btn" onClick={() => setReloadToken(token => token + 1)}>
-            Reintentar
+            {isEnglish ? 'Try again' : 'Reintentar'}
           </button>
         </div>
       )}
 
       {expandedList ? (
         <div className="lists-expanded">
-          <button className="lists-back-btn" onClick={closeExpandedList}>← Volver a listas</button>
+          <button className="lists-back-btn" onClick={closeExpandedList}>
+            {isEnglish ? '← Back to lists' : '← Volver a listas'}
+          </button>
           {(() => {
             const list = displayLists.find((l) => l.id === expandedList);
             if (!list) return null;
@@ -442,13 +446,15 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
                 {metadataLoadingListId === list.id && (
                   <div className="lists-metadata-status" aria-live="polite">
                     <div className="lists-loading-spinner" />
-                    <span>Cargando los papers de esta lista...</span>
+                    <span>{isEnglish ? 'Loading papers in this list...' : 'Cargando los papers de esta lista...'}</span>
                   </div>
                 )}
                 {metadataError && (
                   <div className="lists-metadata-status is-error" role="alert">
-                    <span>{metadataError}</span>
-                    <button className="lists-retry-btn" onClick={() => openList(list, true)}>Reintentar</button>
+                    <span>{isEnglish ? 'Some paper details could not be loaded.' : metadataError}</span>
+                    <button className="lists-retry-btn" onClick={() => openList(list, true)}>
+                      {isEnglish ? 'Try again' : 'Reintentar'}
+                    </button>
                   </div>
                 )}
                 <div className="lists-expanded-papers">
@@ -458,7 +464,9 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
                     if (!paper) return (
                       <div key={paperId} className="lists-paper-item">
                         <p className="lists-paper-title lists-paper-placeholder">
-                          {metadataLoadingListId === list.id ? 'Cargando datos del paper...' : paperId}
+                          {metadataLoadingListId === list.id
+                            ? (isEnglish ? 'Loading paper details...' : 'Cargando datos del paper...')
+                            : paperId}
                         </p>
                       </div>
                     );
@@ -467,7 +475,7 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
                         onClick={() => onOpenPdf({ ...paper, arxivId: paper.arxivId || paper.id })}>
                         <div className="lists-paper-item-content">
                           {paper.categories && paper.categories.length > 0 && (
-                            <span className="lists-paper-cat">{getCategoryLabel(paper.categories[0])}</span>
+                            <span className="lists-paper-cat">{getCategoryLabel(paper.categories[0], language)}</span>
                           )}
                           <p className="lists-paper-title">{paper.title}</p>
                           {paper.authors && (
@@ -484,7 +492,7 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
                           {record?.note && <p className="lists-paper-note">{record.note}</p>}
                         </div>
                         <div className="lists-paper-actions">
-                          <button className="lists-paper-edit-btn" onClick={(e) => { e.stopPropagation(); onEditPaper?.(paper); }} title="Editar nota y etiquetas">
+                          <button className="lists-paper-edit-btn" onClick={(e) => { e.stopPropagation(); onEditPaper?.(paper); }} title={isEnglish ? 'Edit note and tags' : 'Editar nota y etiquetas'}>
                             <Pencil size={17} />
                           </button>
                           <button
@@ -501,7 +509,7 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
                                 handleRemoveFromCustomList(e, list.id, paperId);
                               }
                             }}
-                            title="Quitar de la lista"
+                            title={isEnglish ? 'Remove from list' : 'Quitar de la lista'}
                           >
                             <X size={18} />
                           </button>
@@ -510,7 +518,7 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
                     );
                   })}
                   {(!list.paperIds || list.paperIds.length === 0) && (
-                    <p className="lists-empty-text">Esta lista está vacía</p>
+                    <p className="lists-empty-text">{isEnglish ? 'This list is empty' : 'Esta lista está vacía'}</p>
                   )}
                 </div>
               </>
@@ -520,8 +528,10 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
       ) : displayLists.length === 0 ? (
         <div className="lists-empty-state">
           <div className="lists-empty-state-icon">📚</div>
-          <h3>Aún no tienes listas</h3>
-          <p>Guarda papers o marca algunos como leídos para organizarlos aquí.</p>
+          <h3>{isEnglish ? 'You do not have any lists yet' : 'Aún no tienes listas'}</h3>
+          <p>{isEnglish
+            ? 'Save papers or mark them as read to organize them here.'
+            : 'Guarda papers o marca algunos como leídos para organizarlos aquí.'}</p>
         </div>
       ) : (
         <div className="lists-grid">
@@ -536,7 +546,7 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
                 </span>
                 {!['__favorites__', '__read__', '__read_later__'].includes(list.id) && (
                   <button className="list-card-delete" onClick={(e) => { e.stopPropagation(); handleDeleteList(list.id); }}
-                    title="Eliminar lista">✕</button>
+                    title={isEnglish ? 'Delete list' : 'Eliminar lista'}>✕</button>
                 )}
               </div>
               <h3 className="list-card-name">{list.name}</h3>

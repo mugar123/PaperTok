@@ -7,6 +7,7 @@ import { OpenAlexAdapter } from '../../services/adapters/OpenAlexAdapter';
 import { PaperBuilder } from '../../services/PaperBuilder';
 import { useFollowing } from '../../context/FollowingContext';
 import { useFeed } from '../../context/FeedContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { motion } from 'framer-motion';
 import PaperCard from '../Feed/PaperCard';
 import PDFViewer from '../PDF/PDFViewer';
@@ -31,6 +32,7 @@ function withTimeout(promise, fallback = [], timeoutMs = 8000) {
 }
 
 function FollowButton({ entity, isFollowing, isPending, onToggle }) {
+  const { isEnglish } = useLanguage();
   const following = isFollowing(entity);
   const pending = isPending(entity);
 
@@ -42,22 +44,25 @@ function FollowButton({ entity, isFollowing, isPending, onToggle }) {
       aria-pressed={following}
     >
       {following && <Check size={14} />}
-      <span>{following ? 'Siguiendo' : 'Seguir'}</span>
+      <span>{following
+        ? (isEnglish ? 'Following' : 'Siguiendo')
+        : (isEnglish ? 'Follow' : 'Seguir')}</span>
     </button>
   );
 }
 
-function formatPaperDate(paper) {
+function formatPaperDate(paper, locale) {
   const dateValue = paper.published || paper.publishedDate;
   if (dateValue) {
     const date = new Date(dateValue);
-    if (!Number.isNaN(date.getTime())) return date.toLocaleDateString('es-ES');
+    if (!Number.isNaN(date.getTime())) return date.toLocaleDateString(locale);
   }
-  return paper.year ? String(paper.year) : 'Fecha desconocida';
+  return paper.year ? String(paper.year) : null;
 }
 
 export default function SearchPage({ onSaveToList = () => {} }) {
   const navigate = useNavigate();
+  const { isEnglish, locale } = useLanguage();
   const { isFollowing, isFollowPending, toggleFollow } = useFollowing();
   const {
     likedPaperIds, savedPaperIds, readPaperIds,
@@ -179,9 +184,9 @@ export default function SearchPage({ onSaveToList = () => {} }) {
     { label: 'MIT', icon: <Building2 size={14} />, query: 'Massachusetts Institute of Technology' },
     { label: 'DeepMind', icon: <Building2 size={14} />, query: 'DeepMind' },
     { label: 'CRISPR Cas9', icon: <FileText size={14} />, query: 'CRISPR' },
-    { label: 'Proyectos Horizon', icon: <Briefcase size={14} />, query: 'Horizon' },
+    { label: isEnglish ? 'Horizon projects' : 'Proyectos Horizon', icon: <Briefcase size={14} />, query: 'Horizon' },
     { label: 'Geoffrey Hinton', icon: <Users size={14} />, query: 'Geoffrey Hinton' },
-    { label: 'Computación Cuántica', icon: <TrendingUp size={14} />, query: 'Quantum Computing' },
+    { label: isEnglish ? 'Quantum Computing' : 'Computación Cuántica', icon: <TrendingUp size={14} />, query: 'Quantum Computing' },
   ];
 
   return (
@@ -196,7 +201,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
           <input 
             type="text" 
             className="search-input"
-            placeholder="Buscar papers, autores, universidades..."
+            placeholder={isEnglish ? 'Search papers, authors, institutions...' : 'Buscar papers, autores, universidades...'}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
@@ -210,14 +215,14 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             {(isSearching || isDebouncing) && !hasResults && (
               <div className="search-loading" role="status">
                 <Loader2 className="spinning" size={36} />
-                <span>Buscando en PaperTok...</span>
+                <span>{isEnglish ? 'Searching PaperTok...' : 'Buscando en PaperTok...'}</span>
               </div>
             )}
 
             {(isSearching || isDebouncing) && hasResults && (
               <div className="search-progress" role="status">
                 <Loader2 className="spinning" size={15} />
-                Actualizando resultados
+                {isEnglish ? 'Updating results' : 'Actualizando resultados'}
               </div>
             )}
 
@@ -225,12 +230,14 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               <div className="search-initial-state animate-fade-in">
                 <div className="search-initial-hero">
                   <Compass size={48} className="search-initial-icon" />
-                  <h2>Explora el conocimiento</h2>
-                  <p>Busca entre millones de papers, investigadores, universidades y proyectos financiados a nivel global.</p>
+                  <h2>{isEnglish ? 'Explore knowledge' : 'Explora el conocimiento'}</h2>
+                  <p>{isEnglish
+                    ? 'Search millions of papers, researchers, institutions, and funded projects around the world.'
+                    : 'Busca entre millones de papers, investigadores, universidades y proyectos financiados a nivel global.'}</p>
                 </div>
                 
                 <div className="search-suggestions">
-                  <h3 className="search-suggestions-title"><Sparkles size={16} /> Búsquedas sugeridas</h3>
+                  <h3 className="search-suggestions-title"><Sparkles size={16} /> {isEnglish ? 'Suggested searches' : 'Búsquedas sugeridas'}</h3>
                   <div className="search-suggestions-grid">
                     {suggestedQueries.map((item, idx) => (
                       <motion.button 
@@ -253,22 +260,24 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             {!hasResults && query && hasSearched && !isSearching && !isDebouncing && (
               <div className="search-empty">
                 <Search size={40} className="search-empty-icon" />
-                <p>No se encontraron resultados para "{query}"</p>
-                <span>Intenta con otros términos o busca en inglés</span>
+                <p>{isEnglish ? `No results found for "${query}"` : `No se encontraron resultados para "${query}"`}</p>
+                <span>{isEnglish ? 'Try a different search term' : 'Intenta con otros términos o busca en inglés'}</span>
               </div>
             )}
 
             {/* Direct ORCID */}
             {cleanOrcid && (
               <div className="search-section">
-                <h3 className="search-section-title">Búsqueda Directa ORCID</h3>
+                <h3 className="search-section-title">{isEnglish ? 'Direct ORCID search' : 'Búsqueda directa ORCID'}</h3>
                 <div className="search-item" onClick={() => navigate(`/explorer/author/https%3A%2F%2Forcid.org%2F${cleanOrcid}`)}>
                   <div className="search-item-icon" style={{ background: '#a6ce39', color: 'white' }}>
                     <Users size={22} />
                   </div>
                   <div className="search-item-info">
-                    <h4 style={{ color: '#a6ce39' }}>Ver perfil ORCID de {cleanOrcid}</h4>
-                    <p>Explorar autor e historial mediante su identificador único verificado</p>
+                    <h4 style={{ color: '#a6ce39' }}>{isEnglish ? 'View ORCID profile' : 'Ver perfil ORCID'} {cleanOrcid}</h4>
+                    <p>{isEnglish
+                      ? 'Explore the author and their work through a verified unique identifier'
+                      : 'Explorar autor e historial mediante su identificador único verificado'}</p>
                   </div>
                 </div>
               </div>
@@ -277,13 +286,13 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             {/* Institutions */}
             {institutionResults.length > 0 && (
               <div className="search-section">
-                <h3 className="search-section-title">Universidades e Instituciones</h3>
+                <h3 className="search-section-title">{isEnglish ? 'Universities and institutions' : 'Universidades e instituciones'}</h3>
                 {institutionResults.map(inst => (
                   <div key={inst.id} className="search-item" onClick={() => navigate(`/explorer/institution/${inst.id.split('/').pop()}`)}>
                     <div className="search-item-icon"><Building2 size={22} /></div>
                     <div className="search-item-info">
                       <h4>{inst.display_name}</h4>
-                      <p>{inst.country_code || 'País desconocido'} • Institución académica</p>
+                      <p>{inst.country_code || (isEnglish ? 'Unknown country' : 'País desconocido')} • {isEnglish ? 'Academic institution' : 'Institución académica'}</p>
                     </div>
                     <FollowButton
                       entity={{ type: 'institution', id: inst.id, displayName: inst.display_name, source: inst._metadataSource || 'ror', externalIds: { ror: inst.ror || inst.id } }}
@@ -299,13 +308,13 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             {/* Projects */}
             {projectResults.length > 0 && (
               <div className="search-section">
-                <h3 className="search-section-title">Proyectos de Investigación</h3>
+                <h3 className="search-section-title">{isEnglish ? 'Research projects' : 'Proyectos de investigación'}</h3>
                 {projectResults.map(project => (
                   <div key={project.id} className="search-item" onClick={() => navigate(`/explorer/project/${project.id}?name=${encodeURIComponent(project.acronym || project.title)}&funder=${encodeURIComponent(project.funder)}`)}>
                     <div className="search-item-icon"><Briefcase size={22} /></div>
                     <div className="search-item-info">
                       <h4>{project.acronym ? `${project.acronym}: ${project.title}` : project.title}</h4>
-                      <p>{project.funder}{project.budget > 0 ? (() => { try { return ` • ${new Intl.NumberFormat('es-ES', { style: 'currency', currency: project.currency, maximumFractionDigits: 0 }).format(project.budget)}`; } catch { return ` • ${project.budget.toLocaleString('es-ES')} €`; } })() : ''}</p>
+                      <p>{project.funder}{project.budget > 0 ? (() => { try { return ` • ${new Intl.NumberFormat(locale, { style: 'currency', currency: project.currency, maximumFractionDigits: 0 }).format(project.budget)}`; } catch { return ` • ${project.budget.toLocaleString(locale)} €`; } })() : ''}</p>
                     </div>
                     <FollowButton
                       entity={{ type: 'project', id: project.id, displayName: project.acronym || project.title, source: 'openaire', metadata: { funder: project.funder } }}
@@ -321,13 +330,13 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             {/* Concepts */}
             {conceptResults.length > 0 && (
               <div className="search-section">
-                <h3 className="search-section-title">Temas y Áreas</h3>
+                <h3 className="search-section-title">{isEnglish ? 'Topics and areas' : 'Temas y áreas'}</h3>
                 {conceptResults.map(concept => (
                   <div key={concept.id} className="search-item" onClick={() => navigate(`/explorer/concept/${concept.id.split('/').pop()}`)}>
                     <div className="search-item-icon"><Lightbulb size={22} /></div>
                     <div className="search-item-info">
                       <h4>{concept.display_name}</h4>
-                      <p>Nivel {concept.level} • {concept.works_count?.toLocaleString()} obras relacionadas</p>
+                      <p>{isEnglish ? 'Level' : 'Nivel'} {concept.level} • {concept.works_count?.toLocaleString(locale)} {isEnglish ? 'related works' : 'obras relacionadas'}</p>
                     </div>
                     <FollowButton
                       entity={{ type: 'topic', id: concept.id, displayName: concept.display_name, source: 'papertok', metadata: { categoryIds: concept.categoryIds } }}
@@ -343,13 +352,13 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             {/* Sources (Journals) */}
             {sourceResults.length > 0 && (
               <div className="search-section">
-                <h3 className="search-section-title">Revistas y Publicaciones</h3>
+                <h3 className="search-section-title">{isEnglish ? 'Journals and publications' : 'Revistas y publicaciones'}</h3>
                 {sourceResults.map(source => (
                   <div key={source.id} className="search-item" onClick={() => navigate(`/explorer/source/${source.id.split('/').pop()}`)}>
                     <div className="search-item-icon"><FileText size={22} /></div>
                     <div className="search-item-info">
                       <h4>{source.display_name}</h4>
-                      <p>{source.host_organization_name ? `${source.host_organization_name} • ` : ''}{source.works_count?.toLocaleString()} obras relacionadas</p>
+                      <p>{source.host_organization_name ? `${source.host_organization_name} • ` : ''}{source.works_count?.toLocaleString(locale)} {isEnglish ? 'related works' : 'obras relacionadas'}</p>
                     </div>
                   </div>
                 ))}
@@ -359,7 +368,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             {/* Authors */}
             {authorResults.length > 0 && (
               <div className="search-section">
-                <h3 className="search-section-title">Autores</h3>
+                <h3 className="search-section-title">{isEnglish ? 'Authors' : 'Autores'}</h3>
                 {authorResults.map(author => {
                   const authorFollow = { type: 'author', id: author.id, displayName: author.display_name, source: 'openalex', externalIds: { orcid: author.orcid } };
                   return (
@@ -369,7 +378,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
                       </div>
                       <div className="search-item-info">
                         <h4>{author.display_name}</h4>
-                        <p>{author.institution || 'Institución desconocida'}</p>
+                        <p>{author.institution || (isEnglish ? 'Unknown institution' : 'Institución desconocida')}</p>
                       </div>
                       <FollowButton
                         entity={authorFollow}
@@ -386,7 +395,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             {/* Papers */}
             {paperResults.length > 0 && (
               <div className="search-section">
-                <h3 className="search-section-title">Publicaciones</h3>
+                <h3 className="search-section-title">{isEnglish ? 'Publications' : 'Publicaciones'}</h3>
                 {paperResults.map(paper => {
                   const authors = (paper.authors || []).map(author => author.name || author);
                   return (
@@ -395,7 +404,9 @@ export default function SearchPage({ onSaveToList = () => {} }) {
                       <div className="search-item-info">
                         <h4><ScientificText>{paper.title}</ScientificText></h4>
                         <p className="search-item-authors">{authors.slice(0, 3).join(', ')}{authors.length > 3 ? ` +${authors.length - 3}` : ''}</p>
-                        <span className="search-item-meta">{formatPaperDate(paper)} • {paper.primaryCategory || paper.journal || 'Paper'}</span>
+                        <span className="search-item-meta">
+                          {formatPaperDate(paper, locale) || (isEnglish ? 'Unknown date' : 'Fecha desconocida')} • {paper.primaryCategory || paper.journal || 'Paper'}
+                        </span>
                       </div>
                     </div>
                   );

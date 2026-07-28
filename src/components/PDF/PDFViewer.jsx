@@ -1,8 +1,10 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useFeed } from '../../context/FeedContext';
+import { useLanguage } from '../../context/LanguageContext';
 import './PDFViewer.css';
 
 export default function PDFViewer({ paper, onClose }) {
+  const { isEnglish } = useLanguage();
   const [iframeLoaded, setIframeLoaded] = useState(false);
   const [showFallback, setShowFallback] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -63,7 +65,7 @@ export default function PDFViewer({ paper, onClose }) {
       <div className={`pdf-viewer ${isClosing ? 'is-closing' : ''}`} onClick={(e) => e.stopPropagation()}>
         {/* Top bar */}
         <div className="pdf-topbar glass-strong">
-          <button className="pdf-close-btn" onClick={handleClose} title="Cerrar">
+          <button className="pdf-close-btn" onClick={handleClose} title={isEnglish ? 'Close' : 'Cerrar'}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
@@ -83,7 +85,7 @@ export default function PDFViewer({ paper, onClose }) {
               <polyline points="15 3 21 3 21 9" />
               <line x1="10" y1="14" x2="21" y2="3" />
             </svg>
-            <span>Nueva pestaña</span>
+            <span>{isEnglish ? 'New tab' : 'Nueva pestaña'}</span>
           </a>
         </div>
 
@@ -91,16 +93,18 @@ export default function PDFViewer({ paper, onClose }) {
         {!iframeLoaded && !showFallback && (
           <div className="pdf-loading">
             <div className="pdf-loading-spinner" />
-            <p>Cargando PDF...</p>
+            <p>{isEnglish ? 'Loading PDF...' : 'Cargando PDF...'}</p>
           </div>
         )}
 
         {/* Fallback message */}
         {shouldShowFallback && !iframeLoaded && (
           <div className="pdf-fallback">
-            <p>{!pdfUrl ? 'No hay PDF de acceso abierto disponible.' : 'El PDF no pudo cargarse en la app.'}</p>
+            <p>{!pdfUrl
+              ? (isEnglish ? 'No open-access PDF is available.' : 'No hay PDF de acceso abierto disponible.')
+              : (isEnglish ? 'The PDF could not be loaded in the app.' : 'El PDF no pudo cargarse en la app.')}</p>
             <a href={externalUrl} target="_blank" rel="noopener noreferrer" className="pdf-fallback-link">
-              Abrir fuente original en nueva pestaña →
+              {isEnglish ? 'Open original source in a new tab →' : 'Abrir fuente original en nueva pestaña →'}
             </a>
           </div>
         )}

@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { X, Check } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { CATEGORIES } from '../../data/categories';
 import './EditInterestsModal.css';
 
 export default function EditInterestsModal({ isOpen, onClose }) {
   const { userPreferences, updatePreferences } = useAuth();
+  const { isEnglish } = useLanguage();
   const [selected, setSelected] = useState(new Set());
   const [isClosing, setIsClosing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -75,8 +77,10 @@ export default function EditInterestsModal({ isOpen, onClose }) {
       <div className="eim-modal" onClick={(e) => e.stopPropagation()}>
         <div className="eim-header">
           <div className="eim-header-text">
-            <h2>Configura tu algoritmo</h2>
-            <p>Selecciona las áreas de investigación que quieres ver en tu feed</p>
+            <h2>{isEnglish ? 'Configure your algorithm' : 'Configura tu algoritmo'}</h2>
+            <p>{isEnglish
+              ? 'Select the research areas you want to see in your feed'
+              : 'Selecciona las áreas de investigación que quieres ver en tu feed'}</p>
           </div>
           <button className="eim-close-btn" onClick={handleClose}>
             <X size={20} />
@@ -95,13 +99,15 @@ export default function EditInterestsModal({ isOpen, onClose }) {
                     <div className="eim-area-icon">
                       <area.icon size={24} />
                     </div>
-                    <h3 className="eim-area-title">{area.label}</h3>
+                    <h3 className="eim-area-title">{isEnglish ? area.labelEn : area.label}</h3>
                   </div>
                   <button 
                     className="eim-area-toggle-btn" 
                     onClick={() => toggleArea(areaKey)}
                   >
-                    {allSelected ? 'Deseleccionar todo' : 'Seleccionar todo'}
+                    {allSelected
+                      ? (isEnglish ? 'Deselect all' : 'Deseleccionar todo')
+                      : (isEnglish ? 'Select all' : 'Seleccionar todo')}
                   </button>
                 </div>
                 <div className="eim-subcats">
@@ -115,7 +121,7 @@ export default function EditInterestsModal({ isOpen, onClose }) {
                       >
                         <div className="eim-pill-content">
                           {isSelected && <Check size={14} strokeWidth={3} className="eim-pill-check" />}
-                          <span>{sub.label}</span>
+                          <span>{isEnglish ? sub.labelEn || sub.label : sub.label}</span>
                         </div>
                       </button>
                     );
@@ -128,14 +134,16 @@ export default function EditInterestsModal({ isOpen, onClose }) {
 
         <div className="eim-footer">
           <span className="eim-selected-count">
-            {selected.size} interese{selected.size !== 1 ? 's' : ''} seleccionado{selected.size !== 1 ? 's' : ''}
+            {isEnglish
+              ? `${selected.size} selected ${selected.size === 1 ? 'interest' : 'interests'}`
+              : `${selected.size} interese${selected.size !== 1 ? 's' : ''} seleccionado${selected.size !== 1 ? 's' : ''}`}
           </span>
           <button 
             className="eim-save-btn" 
             onClick={handleSave} 
             disabled={selected.size === 0 || isSaving}
           >
-            {isSaving ? <div className="eim-spinner" /> : 'Guardar cambios'}
+            {isSaving ? <div className="eim-spinner" /> : (isEnglish ? 'Save changes' : 'Guardar cambios')}
           </button>
         </div>
       </div>

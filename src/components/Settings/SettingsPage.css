@@ -410,6 +410,44 @@
   line-height: 1.35;
 }
 
+.settings-language {
+  display: grid;
+  width: 230px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.settings-language button {
+  min-height: 36px;
+  padding: 7px 11px;
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 750;
+  transition:
+    color var(--transition-fast),
+    background var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.settings-language button:hover {
+  color: var(--text-primary);
+}
+
+.settings-language button.is-active {
+  color: #fff;
+  background: rgba(124, 58, 237, 0.75);
+  box-shadow: 0 4px 14px rgba(76, 29, 149, 0.2);
+}
+
+.settings-language button:disabled {
+  cursor: default;
+}
+
 .settings-save-feedback {
   display: block;
   min-height: 15px;
@@ -495,6 +533,10 @@
     grid-column: 1 / -1;
     margin-top: 5px;
   }
+
+  .settings-language {
+    width: min(100%, 260px);
+  }
 }
 
 @media (max-width: 700px) {
@@ -570,6 +612,11 @@
     grid-template-columns: 1fr;
   }
 
+  .settings-language {
+    width: 100%;
+    grid-column: 1 / -1;
+  }
+
   .settings-levels button {
     min-height: 66px;
     flex-direction: row;
@@ -593,6 +640,7 @@
   .settings-photo-restore,
   .settings-row-action,
   .settings-levels button,
+  .settings-language button,
   .settings-signout {
     transition: none;
   }

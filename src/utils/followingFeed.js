@@ -6,10 +6,18 @@ const IMMEDIATE_REPEAT_PENALTY = 12;
 const MAX_CONSECUTIVE_PER_FOLLOW = 2;
 
 const TYPE_LABELS = {
-  author: 'a',
-  topic: '',
-  institution: '',
-  project: 'el proyecto',
+  es: {
+    author: 'a',
+    topic: '',
+    institution: '',
+    project: 'el proyecto',
+  },
+  en: {
+    author: '',
+    topic: '',
+    institution: '',
+    project: 'the project',
+  },
 };
 
 /**
@@ -21,16 +29,21 @@ const TYPE_LABELS = {
  * @param {Array<{type: string, displayName: string}>} matches
  * @returns {string}
  */
-export function buildFollowReasonLabel(matches = []) {
+export function buildFollowReasonLabel(matches = [], language = 'es') {
   const named = matches.filter(match => match?.displayName);
   if (named.length === 0) return '';
-  if (named.length > 2) return 'Coincide con varios de tus seguimientos';
+  const isEnglish = language === 'en';
+  if (named.length > 2) {
+    return isEnglish ? 'Matches several things you follow' : 'Coincide con varios de tus seguimientos';
+  }
 
   const parts = named.map((match) => {
-    const connector = TYPE_LABELS[match.type] ?? '';
+    const connector = TYPE_LABELS[isEnglish ? 'en' : 'es'][match.type] ?? '';
     return connector ? `${connector} ${match.displayName}` : match.displayName;
   });
-  return `Porque sigues ${parts.join(' y ')}`;
+  return isEnglish
+    ? `Because you follow ${parts.join(' and ')}`
+    : `Porque sigues ${parts.join(' y ')}`;
 }
 
 function getFollowKeys(paper = {}) {
