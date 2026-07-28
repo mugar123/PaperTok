@@ -50,3 +50,17 @@ test('hides PACS classification codes from visible paper topics', () => {
 
   assert.deepEqual(tags.map(tag => tag.label), ['Quantum gravity']);
 });
+
+test('uses readable area labels for valid arXiv codes outside the preference taxonomy', () => {
+  const tags = buildPaperTopicTags({
+    primaryCategory: 'quant-ph',
+    categories: ['quant-ph', 'nlin.CD', 'cs.CC', 'cs.IT', 'astro-ph.IM'],
+    concepts: [{ id: 'C1', display_name: 'Quantum chaos' }],
+  }, 4, 'en');
+
+  assert.deepEqual(tags.map(tag => tag.label), [
+    'Physics',
+    'Computer Science',
+    'Quantum chaos',
+  ]);
+});

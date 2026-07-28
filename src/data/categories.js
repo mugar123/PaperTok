@@ -283,6 +283,28 @@ export const CATEGORIES = {
   },
 };
 
+function getFallbackAreaKey(categoryId = '') {
+  if (categoryId.startsWith('q-fin')) return 'q-fin';
+  if (categoryId.startsWith('q-bio')) return 'bio';
+
+  const prefix = categoryId.split('.')[0].split('-')[0];
+  return {
+    quant: 'physics',
+    cond: 'physics',
+    hep: 'physics',
+    astro: 'physics',
+    gr: 'physics',
+    math: 'math',
+    nucl: 'physics',
+    nlin: 'physics',
+    physics: 'physics',
+    cs: 'cs',
+    stat: 'stat',
+    econ: 'econ',
+    eess: 'eess',
+  }[prefix] || null;
+}
+
 /**
  * Get the gradient CSS variable for a given arXiv category.
  * Maps any category to its parent area gradient.
@@ -298,14 +320,7 @@ export function getCategoryGradient(arxivCategory) {
     }
   }
   // Fallback: try to match by prefix
-  const prefix = arxivCategory.split('.')[0].split('-')[0];
-  const areaMap = {
-    quant: 'physics', cond: 'physics', hep: 'physics', astro: 'physics',
-    gr: 'physics', math: 'math', nucl: 'physics', nlin: 'physics',
-    physics: 'physics', cs: 'cs', stat: 'stat', econ: 'econ',
-    eess: 'eess', q: arxivCategory.startsWith('q-fin') ? 'q-fin' : 'q-bio',
-  };
-  const area = CATEGORIES[areaMap[prefix]];
+  const area = CATEGORIES[getFallbackAreaKey(arxivCategory)];
   return area ? area.gradient : 'var(--gradient-brand)';
 }
 
@@ -313,11 +328,19 @@ export function getCategoryGradient(arxivCategory) {
  * Get the human-readable label for a given arXiv category.
  */
 export function getCategoryLabel(arxivCategory, language = 'es') {
+  if (CATEGORIES[arxivCategory]) {
+    const area = CATEGORIES[arxivCategory];
+    return language === 'en' ? area.labelEn || area.label : area.label;
+  }
   for (const area of Object.values(CATEGORIES)) {
     if (area.subcategories[arxivCategory]) {
       const category = area.subcategories[arxivCategory];
       return language === 'en' ? category.labelEn || category.label : category.label;
     }
+  }
+  const fallbackArea = CATEGORIES[getFallbackAreaKey(arxivCategory)];
+  if (fallbackArea) {
+    return language === 'en' ? fallbackArea.labelEn || fallbackArea.label : fallbackArea.label;
   }
   return arxivCategory;
 }
