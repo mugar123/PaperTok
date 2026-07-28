@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Building2, Lightbulb, Users, Loader2, Search, X, Share2, ExternalLink, Filter, SlidersHorizontal, ChevronRight, ChevronDown, BadgeCheck, Check, FileText, Briefcase, Globe, MapPin, BookOpen, Download, Eye, Award, Tag } from 'lucide-react';
-import { getEntityById, getWorksByEntity, getAuthorsByEntity, enrichPapersBatch, fetchPapersByDois, getAuthorProfileExact, getAuthorProfileByOrcid, findInstitution, getInstitutionRecentImpact } from '../../services/openAlexService';
+import { getEntityById, getWorksByEntity, getAuthorsByEntity, enrichPapersBatch, fetchPapersByDois, getAuthorProfileExact, getAuthorProfileByOrcid, findInstitution, getInstitutionRecentImpact, getLocalTopicEntity } from '../../services/openAlexService';
 import { isOpenAlexRateLimitError } from '../../services/openAlexClient';
 import { fetchPapers, fetchPapersByIds, getAuthorPapers } from '../../services/arxivService';
 import { ElsevierAdapter, isScopusEnabled, OpenAlexAdapter, PubmedAdapter, ScopusAdapter } from '../../services/adapters';
@@ -27,6 +27,7 @@ import { paperMatchesLocalTopic } from '../../utils/topicNavigation';
 import { hasUsableAIAbstract } from '../../utils/aiExplanationAccess.js';
 import { fetchDomainPapers } from '../../services/domainSourceService';
 import { settleWithin } from '../../utils/asyncTiming';
+import { getEntityWikiInfo } from '../../services/wikiService';
 import 'katex/dist/katex.min.css';
 import './EntityExplorer.css';
 
@@ -135,6 +136,13 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
   const projectLinksMenuRef = useRef(null);
   const projectSummaryTextRef = useRef(null);
   const wikiDescriptionTextRef = useRef(null);
+  const localizedTopicEntity = useMemo(
+    () => entity?._localTopic ? getLocalTopicEntity(entity.id || id, language) : null,
+    [entity, id, language],
+  );
+  const entityDisplayName = localizedTopicEntity?.display_name || entity?.display_name || '';
+  const wikiRequestKey = `${language}:${type}:${entityDisplayName}`;
+  const visibleWikiInfo = wikiInfo?._requestKey === wikiRequestKey ? wikiInfo : null;
   const getInteractionState = useCallback((paper) => ({
     isLiked: likedPaperIds.has(paper.id),
     isSaved: savedPaperIds.has(paper.id),
@@ -161,7 +169,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
       window.cancelAnimationFrame(frame);
       window.removeEventListener('resize', measureExpandableDescriptions);
     };
-  }, [entity?.summary, measureExpandableDescriptions, wikiInfo?.extract]);
+  }, [entity?.summary, measureExpandableDescriptions, visibleWikiInfo?.extract]);
 
   useEffect(() => {
     if (!isProjectLinksMenuOpen) return undefined;
@@ -187,7 +195,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
     return {
       type: followType,
       id: entity.id || entity.code || id,
-      displayName: entity.display_name,
+      displayName: entityDisplayName,
       source: type === 'project' ? 'openaire' : type === 'concept' || type === 'topic' ? 'papertok' : 'openalex',
       externalIds: {
         orcid: entity.orcid,
@@ -198,7 +206,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
         categoryIds: entity.categoryIds,
       },
     };
-  }, [entity, id, type]);
+  }, [entity, entityDisplayName, id, type]);
 
   // Reset overlays when navigating to a different entity
   useEffect(() => {
@@ -363,28 +371,6 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
           }
         }
 
-        if (type === 'institution' || type === 'concept' || type === 'topic' || type === 'source') {
-          try {
-            const wikiLanguages = language === 'en' ? ['en', 'es'] : ['es', 'en'];
-            for (const wikiLanguage of wikiLanguages) {
-              const response = await fetch(`https://${wikiLanguage}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(data.display_name)}`);
-              if (isCancelled) return;
-              if (response.ok) {
-                const wikiData = await response.json();
-                if (!isCancelled && wikiData.extract) {
-                  setWikiInfo({
-                    extract: wikiData.extract,
-                    thumbnail: wikiData.thumbnail?.source || null,
-                    url: wikiData.content_urls?.desktop?.page || '',
-                  });
-                  break;
-                }
-              }
-            }
-          } catch (e) {
-            console.error("Failed to fetch Wikipedia info", e);
-          }
-        }
       }
     }
     loadEntity().catch(error => {
@@ -397,7 +383,46 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
     return () => {
       isCancelled = true;
     };
-  }, [type, id, searchParams, entityReloadKey, language]);
+  }, [type, id, searchParams, entityReloadKey]);
+
+  useEffect(() => {
+    if (!entityDisplayName || !['institution', 'concept', 'topic', 'source'].includes(type)) {
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 5_000);
+    const alternateTitle = language === 'en'
+      ? localizedTopicEntity?.labelEs
+      : localizedTopicEntity?.labelEn;
+
+    getEntityWikiInfo({
+      title: entityDisplayName,
+      alternateTitle,
+      language,
+      signal: controller.signal,
+    }).then(info => {
+      if (!controller.signal.aborted) {
+        setWikiInfo(info ? { ...info, _requestKey: wikiRequestKey } : null);
+      }
+    }).catch(error => {
+      if (error?.name !== 'AbortError') console.error('Failed to fetch Wikipedia info', error);
+    }).finally(() => {
+      window.clearTimeout(timeout);
+    });
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [
+    entityDisplayName,
+    language,
+    localizedTopicEntity?.labelEn,
+    localizedTopicEntity?.labelEs,
+    type,
+    wikiRequestKey,
+  ]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -651,7 +676,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
   const handleShare = () => {
     if (navigator.share) {
       navigator.share({
-        title: entity?.display_name || 'PaperTok',
+        title: entityDisplayName || 'PaperTok',
         url: window.location.href,
       }).catch(console.error);
     } else {
@@ -826,14 +851,14 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
       {/* Immersive Hero */}
       <div className="explorer-hero">
         <AnimatePresence>
-          {wikiInfo?.thumbnail && (
+          {visibleWikiInfo?.thumbnail && (
             <motion.div 
               key="bg-blur"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 1.0 }}
               className="ehc-bg-blur" 
-              style={{ backgroundImage: `url(${wikiInfo.thumbnail})` }}
+              style={{ backgroundImage: `url(${visibleWikiInfo.thumbnail})` }}
             ></motion.div>
           )}
         </AnimatePresence>
@@ -855,7 +880,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
         <div className="explorer-hero-content">
           <div className="ehc-main">
             <AnimatePresence mode="wait">
-              {wikiInfo?.thumbnail ? (
+              {visibleWikiInfo?.thumbnail ? (
                 <motion.div 
                   key="wiki-image"
                   initial={{ opacity: 0, scale: 0.9 }}
@@ -863,7 +888,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
                   transition={{ duration: 0.6 }}
                   className="ehc-wiki-image"
                 >
-                  <img src={wikiInfo.thumbnail} alt={entity.display_name} />
+                  <img src={visibleWikiInfo.thumbnail} alt={entityDisplayName} />
                 </motion.div>
               ) : (
                 <motion.div 
@@ -879,7 +904,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
             </AnimatePresence>
             <div className="ehc-info">
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <h1 className="ehc-name" style={{ margin: 0 }}>{entity.display_name}</h1>
+                <h1 className="ehc-name" style={{ margin: 0 }}>{entityDisplayName}</h1>
                 {followEntity && (
                   <button
                     className={`entity-follow-btn ${isFollowing(followEntity) ? 'following' : ''} ${isFollowPending(followEntity) ? 'is-pending' : ''}`}
@@ -1228,7 +1253,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
           
           {/* Wikipedia or external info */}
           <AnimatePresence>
-            {(wikiInfo || entity?.homepage_url) && (
+            {(visibleWikiInfo || entity?.homepage_url) && (
               <motion.div 
                 layout
                 className={`ehc-wiki ${isWikiDescriptionExpanded ? 'is-expanded' : ''}`}
@@ -1236,13 +1261,13 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, ease: "easeOut", layout: { duration: 0.38, ease: [0.16, 1, 0.3, 1] } }}
               >
-                {wikiInfo && (
+                {visibleWikiInfo && (
                   <p
                     ref={wikiDescriptionTextRef}
                     className={isWikiDescriptionExpanded ? 'expanded' : 'collapsed'}
                     style={wikiDescriptionExpandedHeight ? { '--wiki-description-expanded-height': `${wikiDescriptionExpandedHeight}px` } : undefined}
                   >
-                    {wikiInfo.extract}
+                    {visibleWikiInfo.extract}
                   </p>
                 )}
                 {isWikiDescriptionExpandable && (
@@ -1259,8 +1284,8 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
                   </button>
                 )}
                 <div className="ehc-links">
-                  {wikiInfo?.url && (
-                    <a href={wikiInfo.url} target="_blank" rel="noopener noreferrer" className="ehc-link">
+                  {visibleWikiInfo?.url && (
+                    <a href={visibleWikiInfo.url} target="_blank" rel="noopener noreferrer" className="ehc-link">
                       Wikipedia <ExternalLink size={14} />
                     </a>
                   )}

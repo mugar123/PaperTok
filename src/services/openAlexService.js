@@ -682,14 +682,17 @@ export async function searchConcepts(query) {
   return matches.slice(0, 5);
 }
 
-export function getLocalTopicEntity(id) {
+export function getLocalTopicEntity(id, language = 'es') {
   const area = CATEGORIES[id];
   if (area) {
     return {
       id,
-      display_name: area.label,
+      display_name: language === 'en' ? area.labelEn || area.label : area.label,
+      labelEs: area.label,
       labelEn: area.labelEn,
-      description: area.description,
+      description: language === 'en' ? area.descriptionEn || area.description : area.description,
+      descriptionEs: area.description,
+      descriptionEn: area.descriptionEn,
       level: 0,
       categoryIds: Object.keys(area.subcategories || {}),
       _localTopic: true,
@@ -700,9 +703,14 @@ export function getLocalTopicEntity(id) {
     if (subcategory) {
       return {
         id,
-        display_name: subcategory.label,
+        display_name: language === 'en' ? subcategory.labelEn || subcategory.label : subcategory.label,
+        labelEs: subcategory.label,
         labelEn: subcategory.labelEn,
-        description: areaValue.description,
+        description: language === 'en'
+          ? areaValue.descriptionEn || areaValue.description
+          : areaValue.description,
+        descriptionEs: areaValue.description,
+        descriptionEn: areaValue.descriptionEn,
         level: 1,
         categoryIds: [id],
         _localTopic: true,

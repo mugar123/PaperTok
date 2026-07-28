@@ -1,7 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mapCrossrefInstitutionWork } from './crossrefInstitutionService.js';
-import { isOpenAlexEnrichmentId, mapOpenAlexEnrichmentWork, dedupeAuthors } from './openAlexService.js';
+import {
+  dedupeAuthors,
+  getLocalTopicEntity,
+  isOpenAlexEnrichmentId,
+  mapOpenAlexEnrichmentWork,
+} from './openAlexService.js';
+
+test('localizes topic entities without changing their canonical category identity', () => {
+  const spanish = getLocalTopicEntity('gr-qc', 'es');
+  const english = getLocalTopicEntity('gr-qc', 'en');
+
+  assert.equal(spanish.id, 'gr-qc');
+  assert.equal(spanish.display_name, 'Relatividad General');
+  assert.equal(english.id, 'gr-qc');
+  assert.equal(english.display_name, 'General Relativity and Quantum Cosmology');
+  assert.deepEqual(english.categoryIds, spanish.categoryIds);
+  assert.equal(english._localTopic, true);
+});
 
 test('only sends arXiv and OpenAlex identifiers to batch enrichment', () => {
   assert.equal(isOpenAlexEnrichmentId('2503.10761v2'), true);

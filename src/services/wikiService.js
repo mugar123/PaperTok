@@ -1,3 +1,71 @@
+const entityWikiCache = new Map();
+
+function normalizeWikiTitle(value = '') {
+  return String(value).replace(/\s+/g, ' ').trim();
+}
+
+export function mapWikipediaSearchResponse(data, language = 'en') {
+  const pages = Object.values(data?.query?.pages || {})
+    .filter(page => page && !Object.hasOwn(page.pageprops || {}, 'disambiguation'))
+    .sort((left, right) => (left.index ?? Number.MAX_SAFE_INTEGER) - (right.index ?? Number.MAX_SAFE_INTEGER));
+  const page = pages.find(candidate => normalizeWikiTitle(candidate.extract));
+  if (!page) return null;
+
+  return {
+    title: normalizeWikiTitle(page.title),
+    extract: normalizeWikiTitle(page.extract),
+    thumbnail: page.thumbnail?.source || null,
+    url: page.fullurl || '',
+    language: language === 'en' ? 'en' : 'es',
+  };
+}
+
+async function searchWikipedia(title, language, signal) {
+  const normalizedTitle = normalizeWikiTitle(title);
+  if (!normalizedTitle) return null;
+
+  const normalizedLanguage = language === 'en' ? 'en' : 'es';
+  const cacheKey = `${normalizedLanguage}:${normalizedTitle.toLocaleLowerCase('en-US')}`;
+  if (entityWikiCache.has(cacheKey)) return entityWikiCache.get(cacheKey);
+
+  const url = new URL(`https://${normalizedLanguage}.wikipedia.org/w/api.php`);
+  url.searchParams.set('action', 'query');
+  url.searchParams.set('generator', 'search');
+  url.searchParams.set('gsrsearch', normalizedTitle);
+  url.searchParams.set('gsrnamespace', '0');
+  url.searchParams.set('gsrlimit', '3');
+  url.searchParams.set('prop', 'extracts|pageimages|info|pageprops');
+  url.searchParams.set('exintro', '1');
+  url.searchParams.set('explaintext', '1');
+  url.searchParams.set('piprop', 'thumbnail');
+  url.searchParams.set('pithumbsize', '480');
+  url.searchParams.set('inprop', 'url');
+  url.searchParams.set('redirects', '1');
+  url.searchParams.set('format', 'json');
+  url.searchParams.set('origin', '*');
+
+  const response = await fetch(url, { signal });
+  if (!response.ok) return null;
+
+  const result = mapWikipediaSearchResponse(await response.json(), normalizedLanguage);
+  if (result) entityWikiCache.set(cacheKey, result);
+  return result;
+}
+
+export async function getEntityWikiInfo({
+  title,
+  alternateTitle = '',
+  language = 'es',
+  signal,
+} = {}) {
+  const candidates = [...new Set([title, alternateTitle].map(normalizeWikiTitle).filter(Boolean))];
+  for (const candidate of candidates) {
+    const result = await searchWikipedia(candidate, language, signal);
+    if (result) return result;
+  }
+  return null;
+}
+
 export const getAuthorWikiInfo = async (authorName) => {
   if (!authorName) return null;
 
