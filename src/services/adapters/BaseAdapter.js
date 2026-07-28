@@ -1,7 +1,7 @@
 /**
- * Interfaz base para los adaptadores de proveedores.
- * Todos los adaptadores deben seguir este formato para que el PaperBuilder y el Motor de Recomendación
- * puedan funcionar de manera agnóstica al proveedor.
+ * Base interface for provider adapters.
+ * All adapters must follow this shape so PaperBuilder and the recommendation engine
+ * can remain provider-agnostic.
  */
 export class BaseAdapter {
   constructor(name) {
@@ -10,9 +10,9 @@ export class BaseAdapter {
 
   /**
    * Busca papers dado un string de consulta.
-   * @param {string} query - El término de búsqueda.
-   * @param {number} page - La página actual.
-   * @param {object} filters - Filtros adicionales.
+   * @param {string} query - Search term.
+   * @param {number} page - Current page.
+   * @param {object} filters - Additional filters.
    * @returns {Promise<{papers: Array, total: number}>}
    */
   async search() {
@@ -29,7 +29,7 @@ export class BaseAdapter {
   }
 
   /**
-   * Mapea un paper devuelto por el proveedor al formato estándar intermedio.
+   * Maps a provider paper to the standard intermediate format.
    * Formato intermedio esperado:
    * {
    *   id: string,
@@ -47,7 +47,7 @@ export class BaseAdapter {
    *   landingPageUrl: string | null,
    *   citationsCount: number,
    *   provider: string, // ej: 'elsevier', 'arxiv'
-   *   raw: Object // El objeto original del proveedor
+   *   raw: Object // Original provider object
    * }
    */
   mapToStandard() {

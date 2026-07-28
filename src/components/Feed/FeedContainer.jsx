@@ -12,7 +12,7 @@ import {
 import './FeedContainer.css';
 
 // Per-surface scroll memory: the Siguiendo feed shares this container with
-// Para ti and must not clobber its saved position.
+// For You and must not clobber its saved position.
 const savedScrollByKey = {};
 const WHEEL_GESTURE_RESET_MS = 180;
 const SCROLL_IDLE_DELAY_MS = 120;
@@ -282,7 +282,7 @@ export default function FeedContainer({ onOpenPdf, onSaveToList, source = null, 
       );
     }
     // Alternative sources bring their own empty state; Siguiendo must never
-    // fall back to the generic "amplía tus intereses" copy of Para ti.
+    // fall back to the generic For You copy that asks users to broaden their interests.
     if (source?.emptyState && !loading && !isRefreshing) {
       return <div className="feed-empty">{source.emptyState}</div>;
     }

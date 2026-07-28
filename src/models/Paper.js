@@ -7,14 +7,14 @@
 
 /**
  * @typedef {Object} PaperSources
- * @property {string} primary - Proveedor que descubrió el paper originamente (ej. 'arxiv', 'openalex')
- * @property {string[]} enrichedBy - Proveedores que aportaron metadatos adicionales
+ * @property {string} primary - Provider that originally discovered the paper (for example, 'arxiv' or 'openalex')
+ * @property {string[]} enrichedBy - Providers that contributed additional metadata
  */
 
 /**
  * @typedef {Object} Paper
- * @property {string} id - Identificador canónico (DOI si existe, ej. "10.1038/xxx", si no, "arxiv:2401.12345")
- * @property {PaperSources} sources - Trazabilidad de orígenes de datos
+ * @property {string} id - Canonical identifier (DOI when available, for example "10.1038/xxx"; otherwise "arxiv:2401.12345")
+ * @property {PaperSources} sources - Data-source provenance
  * @property {string} title
  * @property {string} abstract
  * @property {Author[]} authors
@@ -33,7 +33,7 @@
  * @property {boolean} openAccess
  * 
  * @property {string} [pdfUrl] - Enlace directo al PDF si existe y es Open Access
- * @property {string} [openAccessPdfUrl] - PDF abierto que debe abrirse externamente
+ * @property {string} [openAccessPdfUrl] - Open-access PDF URL to open externally
  * @property {string} landingPageUrl - URL oficial de la editorial/fuente
  * 
  * // Metadatos aplanados

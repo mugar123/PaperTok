@@ -9,7 +9,7 @@ import { orderFollowingFeedPapers } from '../../utils/followingFeed';
 import './FollowingFeedPage.css';
 
 /**
- * The Siguiendo feed: the exact Para ti experience (vertical cards, gestures,
+ * The Following feed: the same experience as For You (vertical cards, gestures,
  * actions, AI explanation) fed EXCLUSIVELY with papers proven to belong to a
  * followed author, topic, institution or project. Content selection lives in
  * followingUpdatesService (stable-id matching, dedupe across entities); this

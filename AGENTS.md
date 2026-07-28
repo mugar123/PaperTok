@@ -50,6 +50,8 @@ closest tests first, then the full command before publishing.
 
 ## Change Discipline
 
+- Write code comments, documentation, commit messages, issue text, and pull request text in
+  English. User-facing interface copy remains bilingual in Spanish and English.
 - Follow existing React, service, adapter, and utility patterns before adding abstractions.
 - Keep tests beside the module they exercise using `*.test.js`.
 - Update documentation when adding routes, environment variables, providers, or persistence.
@@ -64,4 +66,3 @@ closest tests first, then the full command before publishing.
 - `npx wrangler deploy` publishes the Worker separately.
 - A frontend change that depends on a Worker contract is incomplete until both sides are
   compatible and the relevant deployment path has been verified.
-
