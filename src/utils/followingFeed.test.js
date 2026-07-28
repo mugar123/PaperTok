@@ -42,6 +42,24 @@ test('names the followed entity behind a paper', () => {
   );
 });
 
+test('localizes followed taxonomy topics without changing stored follow data', () => {
+  const galacticAstrophysics = {
+    type: 'topic',
+    canonicalId: 'astro-ph.GA',
+    displayName: 'Astrofísica Galáctica',
+  };
+
+  assert.equal(
+    buildFollowReasonLabel([galacticAstrophysics], 'en'),
+    'Because you follow Astrophysics of Galaxies',
+  );
+  assert.equal(
+    buildFollowReasonLabel([galacticAstrophysics], 'es'),
+    'Porque sigues Astrofísica Galáctica',
+  );
+  assert.equal(galacticAstrophysics.displayName, 'Astrofísica Galáctica');
+});
+
 test('joins two reasons and collapses three or more', () => {
   assert.equal(
     buildFollowReasonLabel([

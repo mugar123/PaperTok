@@ -1,4 +1,5 @@
 import { getFollowingUpdatePaperKey, getPaperPublicationTime } from './followingUpdates.js';
+import { resolvePaperTopic } from './topicNavigation.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RECENCY_DECAY_DAYS = 120;
@@ -39,7 +40,12 @@ export function buildFollowReasonLabel(matches = [], language = 'es') {
 
   const parts = named.map((match) => {
     const connector = TYPE_LABELS[isEnglish ? 'en' : 'es'][match.type] ?? '';
-    return connector ? `${connector} ${match.displayName}` : match.displayName;
+    const localizedTopic = match.type === 'topic'
+      ? resolvePaperTopic(match.canonicalId, language)
+        || resolvePaperTopic(match.displayName, language)
+      : null;
+    const displayName = localizedTopic?.label || match.displayName;
+    return connector ? `${connector} ${displayName}` : displayName;
   });
   return isEnglish
     ? `Because you follow ${parts.join(' and ')}`

@@ -6,6 +6,7 @@ import {
   buildPaperExplanationPrompt,
   classifyGeminiError,
   classifyKimiError,
+  explanationCacheKey,
   getDailyQuotaReset,
   getProviderRetry,
   normalizePaperForExplanation,
@@ -25,6 +26,26 @@ test('builds a source-aware prompt without silently claiming full-text access', 
   assert.match(prompt, /\$\.\.\.\$/);
   assert.match(prompt, /nunca escribas ω_b/);
   assert.match(prompt, /keyPoints/);
+});
+
+test('builds English-only explanations when the interface language is English', () => {
+  const paper = normalizePaperForExplanation({ title: 'A test', abstract: 'Known facts.' });
+  const prompt = buildPaperExplanationPrompt(paper, 'university', 'abstract', 'en');
+  assert.match(prompt, /faithfully explain a scientific paper in English/);
+  assert.match(prompt, /Every explanatory field.*written in English/);
+  assert.match(prompt, /You only have the abstract and metadata/);
+  assert.match(prompt, /Known facts/);
+  assert.doesNotMatch(prompt, /explicar fielmente un paper científico en español/);
+});
+
+test('keeps English and Spanish explanations in separate worker caches', async () => {
+  const paper = normalizePaperForExplanation({ title: 'A test', abstract: 'Known facts.' });
+  const spanishKey = await explanationCacheKey(paper, 'university', 'es', 'gemini', 'test-model');
+  const englishKey = await explanationCacheKey(paper, 'university', 'en', 'gemini', 'test-model');
+
+  assert.notEqual(spanishKey.url, englishKey.url);
+  assert.match(spanishKey.url, /\/es\/university\//);
+  assert.match(englishKey.url, /\/en\/university\//);
 });
 
 test('rejects an explanation request without usable paper content', () => {
