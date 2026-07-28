@@ -12,15 +12,15 @@ import './FollowingFeedPage.css';
  * actions, AI explanation) fed EXCLUSIVELY with papers proven to belong to a
  * followed author, topic, institution or project. Content selection lives in
  * followingUpdatesService (stable-id matching, dedupe across entities); this
- * page only orders it (unseen first, then by publication date) and hands it to
- * the shared container, so no feed mechanics are duplicated.
+ * page applies one relevance-and-diversity ranking across every follow and
+ * hands it to the shared container, so no feed mechanics are duplicated.
  */
 export default function FollowingFeedPage({ onOpenPdf, onSaveToList }) {
   const navigate = useNavigate();
   const { followedEntities } = useFollowing();
   const { items, seenIds, loading, refreshing, error, refresh, markSeen } = useFollowingUpdates();
 
-  // Order captures the seen-set only when the item list itself changes:
+  // Ranking captures the seen-set only when the item list itself changes:
   // marking cards as seen mid-scroll must never reshuffle under the thumb.
   const [orderedPapers, setOrderedPapers] = useState([]);
   const lastItemsRef = useRef(null);

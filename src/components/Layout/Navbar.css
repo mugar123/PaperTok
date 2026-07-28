@@ -295,15 +295,6 @@
     justify-content: center;
   }
 
-  .navbar-tab--following { gap: 3px; }
-
-  .navbar-tab-badge {
-    min-width: 14px;
-    height: 14px;
-    padding: 0 4px;
-    font-size: 9px;
-  }
-  
   .navbar-slider {
     width: calc(33.333% - 2.6px); /* Account for pill padding and 3 tabs */
   }
@@ -341,27 +332,4 @@
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
-}
-
-/* Unread badge on the Siguiendo tab */
-.navbar-tab--following {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.navbar-tab-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 17px;
-  height: 17px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: #df4661;
-  color: #fff;
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1;
 }

@@ -1,5 +1,10 @@
 import { getFollowingUpdatePaperKey, getPaperPublicationTime } from './followingUpdates.js';
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const RECENCY_DECAY_DAYS = 120;
+const IMMEDIATE_REPEAT_PENALTY = 12;
+const MAX_CONSECUTIVE_PER_FOLLOW = 2;
+
 const TYPE_LABELS = {
   author: 'a',
   topic: '',
@@ -28,25 +33,112 @@ export function buildFollowReasonLabel(matches = []) {
   return `Porque sigues ${parts.join(' y ')}`;
 }
 
+function getFollowKeys(paper = {}) {
+  return [...new Set((paper._followedEntityMatches || [])
+    .filter(match => match && typeof match === 'object')
+    .map((match) => {
+      const id = String(match.canonicalId || '').trim().toLowerCase();
+      const name = String(match.displayName || '').trim().toLowerCase();
+      return id ? `${match.type || 'follow'}:${id}` : name ? `${match.type || 'follow'}:${name}` : '';
+    })
+    .filter(Boolean))];
+}
+
+function sharesFollow(leftKeys = [], rightKeys = []) {
+  if (!leftKeys.length || !rightKeys.length) return false;
+  const right = new Set(rightKeys);
+  return leftKeys.some(key => right.has(key));
+}
+
+function getBlockedFollowKeys(ordered = [], maximum = MAX_CONSECUTIVE_PER_FOLLOW) {
+  if (ordered.length < maximum) return new Set();
+  const recentKeySets = ordered.slice(-maximum).map(paper => new Set(getFollowKeys(paper)));
+  if (recentKeySets.some(keys => keys.size === 0)) return new Set();
+  return new Set([...recentKeySets[0]].filter(key => recentKeySets.every(keys => keys.has(key))));
+}
+
+function hasBlockedFollow(paper, blockedKeys) {
+  return getFollowKeys(paper).some(key => blockedKeys.has(key));
+}
+
 /**
- * Orders the Siguiendo feed: unseen papers first, then seen ones, each group
- * newest-first with citations as the tiebreaker. The seen set is captured at
- * call time on purpose — reordering must happen when the list refreshes, never
- * live under the user's thumb while cards are being marked as seen.
+ * Scores only papers already proven to belong to a followed entity. Recency is
+ * the strongest signal, citations are normalized by age, and matching several
+ * follows adds confidence. Seen state is a small novelty boost, not a separate
+ * inbox partition.
+ */
+export function getFollowingFeedRelevanceScore(paper = {}, seenIds = new Set(), now = Date.now()) {
+  const publicationTime = getPaperPublicationTime(paper);
+  const ageDays = publicationTime
+    ? Math.max(0, (Number(now) - publicationTime) / DAY_MS)
+    : RECENCY_DECAY_DAYS * 2;
+  const recencyScore = publicationTime
+    ? 72 * Math.exp(-ageDays / RECENCY_DECAY_DAYS)
+    : 0;
+
+  const citations = Math.max(
+    0,
+    Number(paper.citationCount ?? paper.openAlex?.cited_by_count ?? paper.openAlex?.citationCount) || 0,
+  );
+  const citationVelocity = citations / Math.max(1, Math.sqrt(ageDays + 1));
+  const impactScore = Math.min(26, Math.log1p(citationVelocity) * 8);
+
+  const matchCount = getFollowKeys(paper).length;
+  const followScore = matchCount ? Math.min(36, 16 + (matchCount - 1) * 10) : 0;
+  const seenSet = seenIds instanceof Set ? seenIds : new Set(seenIds || []);
+  const noveltyScore = seenSet.has(getFollowingUpdatePaperKey(paper)) ? 0 : 8;
+
+  return recencyScore + impactScore + followScore + noveltyScore;
+}
+
+/**
+ * Builds one global Siguiendo ranking instead of preserving the five-paper
+ * blocks returned by each followed entity. A soft repetition penalty mixes
+ * similarly relevant sources, while a hard cap prevents three consecutive
+ * papers from the same follow whenever another source is available.
  *
  * @param {Array} items - deduplicated papers from FollowingUpdatesContext
  * @param {Set<string>} seenIds - keys already seen by this user
+ * @param {{now?: number, maxConsecutivePerFollow?: number}} options
  * @returns {Array}
  */
-export function orderFollowingFeedPapers(items = [], seenIds = new Set()) {
-  const byRecency = (a, b) => (
-    getPaperPublicationTime(b) - getPaperPublicationTime(a)
-    || (b.citationCount || 0) - (a.citationCount || 0)
-  );
-  const unseen = [];
-  const seen = [];
-  items.forEach((paper) => {
-    (seenIds.has(getFollowingUpdatePaperKey(paper)) ? seen : unseen).push(paper);
-  });
-  return [...unseen.sort(byRecency), ...seen.sort(byRecency)];
+export function orderFollowingFeedPapers(items = [], seenIds = new Set(), options = {}) {
+  const now = Number.isFinite(Number(options.now)) ? Number(options.now) : Date.now();
+  const maximum = Math.max(1, Number(options.maxConsecutivePerFollow) || MAX_CONSECUTIVE_PER_FOLLOW);
+  const ranked = (items || []).filter(Boolean).map(paper => ({
+    paper,
+    score: getFollowingFeedRelevanceScore(paper, seenIds, now),
+    key: getFollowingUpdatePaperKey(paper),
+  })).sort((left, right) => (
+    right.score - left.score
+    || getPaperPublicationTime(right.paper) - getPaperPublicationTime(left.paper)
+    || (right.paper.citationCount || 0) - (left.paper.citationCount || 0)
+    || left.key.localeCompare(right.key)
+  ));
+
+  const ordered = [];
+  while (ranked.length) {
+    const blockedKeys = getBlockedFollowKeys(ordered, maximum);
+    const hasAlternative = blockedKeys.size > 0
+      && ranked.some(candidate => !hasBlockedFollow(candidate.paper, blockedKeys));
+    const previousKeys = getFollowKeys(ordered.at(-1));
+    let bestIndex = -1;
+    let bestAdjustedScore = Number.NEGATIVE_INFINITY;
+
+    ranked.forEach((candidate, index) => {
+      if (hasAlternative && hasBlockedFollow(candidate.paper, blockedKeys)) return;
+      const repeatPenalty = sharesFollow(getFollowKeys(candidate.paper), previousKeys)
+        ? IMMEDIATE_REPEAT_PENALTY
+        : 0;
+      const adjustedScore = candidate.score - repeatPenalty;
+      if (adjustedScore > bestAdjustedScore) {
+        bestAdjustedScore = adjustedScore;
+        bestIndex = index;
+      }
+    });
+
+    const [selected] = ranked.splice(bestIndex >= 0 ? bestIndex : 0, 1);
+    ordered.push(selected.paper);
+  }
+  return ordered;
 }

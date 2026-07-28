@@ -9,7 +9,7 @@ import './Navbar.css';
 export default function Navbar() {
   const { user, profilePhoto, signOut } = useAuth();
   const { feedMode, setFeedMode, refreshFeed, isRefreshing } = useFeed();
-  const { unreadCount, refresh: refreshFollowing, refreshing: isFollowingRefreshing } = useFollowingUpdates();
+  const { refresh: refreshFollowing, refreshing: isFollowingRefreshing } = useFollowingUpdates();
   const navigate = useNavigate();
   const location = useLocation();
   const [showDropdown, setShowDropdown] = useState(false);
@@ -99,13 +99,9 @@ export default function Navbar() {
 
           <NavLink
             to="/following"
-            className={`navbar-tab navbar-tab--following ${isFollowingActive ? 'active' : ''}`}
-            aria-label={unreadCount ? `Siguiendo, ${unreadCount} sin ver` : 'Siguiendo'}
+            className={`navbar-tab ${isFollowingActive ? 'active' : ''}`}
           >
             Siguiendo
-            {unreadCount > 0 && (
-              <span className="navbar-tab-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>
-            )}
           </NavLink>
 
           {/* Slider indicator */}

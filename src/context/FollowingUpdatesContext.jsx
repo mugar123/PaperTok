@@ -172,20 +172,9 @@ export function FollowingUpdatesProvider({ children }) {
     persistSeenIds([...next]);
   }, [persistSeenIds, seenIds]);
 
-  const markAllSeen = useCallback(() => {
-    const next = new Set([...seenIds, ...items.map(getFollowingUpdatePaperKey)]);
-    setSeenIds(next);
-    persistSeenIds([...next]);
-  }, [items, persistSeenIds, seenIds]);
-
-  const unreadCount = useMemo(() => items.reduce((count, paper) => (
-    count + (seenIds.has(getFollowingUpdatePaperKey(paper)) ? 0 : 1)
-  ), 0), [items, seenIds]);
-
   const value = useMemo(() => ({
     items,
     seenIds,
-    unreadCount,
     loading,
     refreshing,
     error,
@@ -193,8 +182,7 @@ export function FollowingUpdatesProvider({ children }) {
     lastUpdatedAt,
     refresh,
     markSeen,
-    markAllSeen,
-  }), [error, items, lastUpdatedAt, loading, markAllSeen, markSeen, meta, refreshing, refresh, seenIds, unreadCount]);
+  }), [error, items, lastUpdatedAt, loading, markSeen, meta, refreshing, refresh, seenIds]);
 
   return <FollowingUpdatesContext.Provider value={value}>{children}</FollowingUpdatesContext.Provider>;
 }
