@@ -8,51 +8,72 @@ import {
   useState,
 } from 'react';
 import { useAuth } from './AuthContext';
+import { browserLanguageFallback, detectLanguageFromLocation } from '../services/languageDetectionService';
 
 const LanguageContext = createContext(null);
 const LANGUAGE_STORAGE_KEY = 'papertok_language';
+const LANGUAGE_MODE_STORAGE_KEY = 'papertok_language_mode';
 const SUPPORTED_LANGUAGES = new Set(['es', 'en']);
 
 function normalizeLanguage(value) {
   return SUPPORTED_LANGUAGES.has(value) ? value : 'es';
 }
 
-function readStoredLanguage() {
+function readStoredManualLanguage() {
   try {
-    return normalizeLanguage(window.localStorage.getItem(LANGUAGE_STORAGE_KEY));
+    const language = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    const mode = window.localStorage.getItem(LANGUAGE_MODE_STORAGE_KEY);
+    return mode === 'manual' && SUPPORTED_LANGUAGES.has(language) ? language : null;
   } catch {
-    return 'es';
+    return null;
   }
 }
 
 export function LanguageProvider({ children }) {
   const { user, readingPreferences, updateReadingPreferences } = useAuth();
-  const [guestLanguage, setGuestLanguage] = useState(readStoredLanguage);
-  const language = normalizeLanguage(
-    user ? readingPreferences?.language : guestLanguage,
-  );
+  const [guestManualLanguage, setGuestManualLanguage] = useState(readStoredManualLanguage);
+  const [detectedLanguage, setDetectedLanguage] = useState(browserLanguageFallback);
+  const accountManualLanguage = user
+    && readingPreferences?.languagePreferenceSet === true
+    && SUPPORTED_LANGUAGES.has(readingPreferences?.language)
+    ? readingPreferences.language
+    : null;
+  const manualLanguage = accountManualLanguage || guestManualLanguage;
+  const language = manualLanguage || detectedLanguage;
 
   useEffect(() => {
     document.documentElement.lang = language;
-    try {
-      window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
-    } catch {
-      // The in-memory preference still works when storage is unavailable.
-    }
   }, [language]);
+
+  useEffect(() => {
+    if (manualLanguage) return undefined;
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 1_800);
+    detectLanguageFromLocation({ signal: controller.signal })
+      .then(nextLanguage => {
+        if (!controller.signal.aborted) setDetectedLanguage(normalizeLanguage(nextLanguage));
+      });
+
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
+  }, [manualLanguage]);
 
   const setLanguage = useCallback(async (nextLanguage) => {
     const normalized = normalizeLanguage(nextLanguage);
-    setGuestLanguage(normalized);
+    setGuestManualLanguage(normalized);
 
     try {
       window.localStorage.setItem(LANGUAGE_STORAGE_KEY, normalized);
+      window.localStorage.setItem(LANGUAGE_MODE_STORAGE_KEY, 'manual');
     } catch {
       // Keep the session preference even if storage is unavailable.
     }
 
     if (user) {
-      await updateReadingPreferences({ language: normalized });
+      await updateReadingPreferences({ language: normalized, languagePreferenceSet: true });
     }
   }, [updateReadingPreferences, user]);
 

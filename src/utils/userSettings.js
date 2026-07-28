@@ -1,6 +1,7 @@
 export const DEFAULT_READING_PREFERENCES = Object.freeze({
   aiExplanationLevel: 'university',
   language: 'es',
+  languagePreferenceSet: false,
 });
 
 const AI_EXPLANATION_LEVEL_IDS = new Set(['beginner', 'university', 'researcher']);
@@ -13,6 +14,7 @@ export function normalizeReadingPreferences(value = {}) {
   const language = LANGUAGE_IDS.has(value?.language)
     ? value.language
     : DEFAULT_READING_PREFERENCES.language;
+  const languagePreferenceSet = value?.languagePreferenceSet === true;
 
-  return { aiExplanationLevel, language };
+  return { aiExplanationLevel, language, languagePreferenceSet };
 }
