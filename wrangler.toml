@@ -5,10 +5,16 @@ compatibility_date = "2026-07-16"
 [vars]
 ALLOWED_ORIGINS = "https://mugar123.github.io,http://localhost:5173,http://127.0.0.1:5173,http://localhost:4175,http://127.0.0.1:4175"
 AI_PROVIDER = "gemini"
+AI_FALLBACK_PROVIDER = "modal-kimi"
 AI_MODEL = "gemini-3.5-flash"
 AI_FALLBACK_MODEL = "gemini-3.5-flash-lite"
 AI_DAILY_USER_LIMIT = "10"
 AI_DAILY_GLOBAL_LIMIT = "1000"
+MODAL_KIMI_MODEL = "moonshotai/Kimi-K3"
+KIMI_MONTHLY_HARD_CAP_USD = "27"
+KIMI_PROMPT_USD_PER_MILLION = "3"
+KIMI_CACHED_PROMPT_USD_PER_MILLION = "0.3"
+KIMI_OUTPUT_USD_PER_MILLION = "15"
 FIREBASE_WEB_API_KEY = "AIzaSyAQKtRz0-PJH7_xOBrFhGeQdbIAHkzV4Q0"
 WORKER_PUBLIC_URL = "https://papertok-report-api.papertok-mugar123.workers.dev"
 EMAIL_PROVIDER = "brevo"
@@ -17,6 +23,14 @@ EMAIL_DAILY_SEND_LIMIT = "290"
 [[kv_namespaces]]
 binding = "NOTIFICATION_STORE"
 id = "45c1519982dd48f8a0ea08403c159ae1"
+
+[[durable_objects.bindings]]
+name = "KIMI_BUDGET_LEDGER"
+class_name = "KimiBudgetLedger"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["KimiBudgetLedger"]
 
 [triggers]
 crons = ["0 7 * * *"]

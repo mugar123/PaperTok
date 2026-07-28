@@ -52,5 +52,6 @@ test('keeps AI explanations for papers with an abstract or open full text', () =
 
 test('formats the configured AI model for the explanation metadata', () => {
   assert.equal(formatAIModelLabel('gemini-3.5-flash'), 'Gemini 3.5 Flash');
+  assert.equal(formatAIModelLabel('moonshotai/Kimi-K3', 'modal-kimi'), 'Kimi K3 · Modal');
   assert.equal(formatAIModelLabel(''), 'Modelo de IA');
 });

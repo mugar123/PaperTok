@@ -46,10 +46,13 @@ export function canExplainPaper(paper) {
   return hasUsableAbstract(paper) || Boolean(getOpenPdfUrl(paper));
 }
 
-export function formatAIModelLabel(model) {
+export function formatAIModelLabel(model, provider = '') {
   const value = cleanText(model, 100);
   if (!value) return 'Modelo de IA';
 
+  if (provider === 'modal-kimi' || /(?:^|\/)kimi[-\s]?k?3$/i.test(value)) {
+    return 'Kimi K3 · Modal';
+  }
   if (!/^gemini[-\s]/i.test(value)) return value;
 
   const version = value

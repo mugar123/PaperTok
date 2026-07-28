@@ -5,9 +5,11 @@ import {
   AIExplanationError,
   buildPaperExplanationPrompt,
   classifyGeminiError,
+  classifyKimiError,
   getDailyQuotaReset,
   getProviderRetry,
   normalizePaperForExplanation,
+  shouldFallbackToKimi,
 } from '../../worker/ai-explanation.js';
 
 test('supports the three explanation depths', () => {
@@ -49,6 +51,28 @@ test('distinguishes Gemini configuration errors from temporary failures', () => 
   assert.equal(classifyGeminiError(500, {}), 'AI_UNAVAILABLE');
   assert.equal(classifyGeminiError(429, { error: { message: 'Requests per minute exceeded' } }), 'AI_BUSY');
   assert.equal(classifyGeminiError(429, { error: { message: 'Requests per day exceeded' } }), 'AI_QUOTA_EXHAUSTED');
+});
+
+test('only routes to Kimi after Gemini confirms provider quota exhaustion', () => {
+  assert.equal(shouldFallbackToKimi(new AIExplanationError(
+    'AI_QUOTA_EXHAUSTED',
+    429,
+    'AI_QUOTA_EXHAUSTED',
+    { scope: 'provider' },
+  )), true);
+  assert.equal(shouldFallbackToKimi(new AIExplanationError(
+    'AI_QUOTA_EXHAUSTED',
+    429,
+    'AI_QUOTA_EXHAUSTED',
+    { scope: 'user' },
+  )), false);
+  assert.equal(shouldFallbackToKimi(new AIExplanationError('AI_BUSY', 429)), false);
+});
+
+test('distinguishes Kimi budget failures from transient rate limits', () => {
+  assert.equal(classifyKimiError(402, { error: { message: 'Insufficient balance' } }), 'AI_FALLBACK_BUDGET_EXHAUSTED');
+  assert.equal(classifyKimiError(429, { error: { message: 'Requests per minute exceeded' } }), 'AI_BUSY');
+  assert.equal(classifyKimiError(401, { error: { message: 'Invalid proxy token' } }), 'AI_NOT_CONFIGURED');
 });
 
 test('preserves Gemini retry timing for temporary rate limits', () => {

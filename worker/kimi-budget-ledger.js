@@ -1,0 +1,157 @@
+const MICROS_PER_USD = 1_000_000;
+const DEFAULT_PROMPT_USD_PER_MILLION = 3;
+const DEFAULT_CACHED_PROMPT_USD_PER_MILLION = 0.3;
+const DEFAULT_OUTPUT_USD_PER_MILLION = 15;
+
+function finiteNumber(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function positiveInteger(value, fallback = 0) {
+  return Math.max(0, Math.ceil(finiteNumber(value, fallback)));
+}
+
+export function usdToMicros(value) {
+  return Math.max(0, Math.ceil(finiteNumber(value) * MICROS_PER_USD));
+}
+
+export function microsToUsd(value) {
+  return Math.max(0, finiteNumber(value)) / MICROS_PER_USD;
+}
+
+export function getMonthlyBudgetReset(now = Date.now()) {
+  const current = new Date(now);
+  const resetAt = Date.UTC(current.getUTCFullYear(), current.getUTCMonth() + 1, 1);
+  return {
+    resetAt: new Date(resetAt).toISOString(),
+    retryAfterSeconds: Math.max(1, Math.ceil((resetAt - current.getTime()) / 1_000)),
+  };
+}
+
+export function estimateKimiReservationMicros({
+  promptBytes,
+  maxOutputTokens,
+  promptUsdPerMillion = DEFAULT_PROMPT_USD_PER_MILLION,
+  outputUsdPerMillion = DEFAULT_OUTPUT_USD_PER_MILLION,
+}) {
+  // One UTF-8 byte per prompt token is a deliberately high upper bound. Kimi's
+  // output cap includes reasoning, but reserving it twice protects against
+  // providers reporting/billing visible completion and reasoning separately.
+  const promptTokensUpperBound = positiveInteger(promptBytes) + 1_024;
+  const outputTokensUpperBound = positiveInteger(maxOutputTokens) * 2;
+  const costUsd = (
+    (promptTokensUpperBound * finiteNumber(promptUsdPerMillion, DEFAULT_PROMPT_USD_PER_MILLION))
+    + (outputTokensUpperBound * finiteNumber(outputUsdPerMillion, DEFAULT_OUTPUT_USD_PER_MILLION))
+  ) / 1_000_000;
+  return usdToMicros(costUsd);
+}
+
+export function calculateKimiUsageMicros(usage = {}, {
+  promptUsdPerMillion = DEFAULT_PROMPT_USD_PER_MILLION,
+  cachedPromptUsdPerMillion = DEFAULT_CACHED_PROMPT_USD_PER_MILLION,
+  outputUsdPerMillion = DEFAULT_OUTPUT_USD_PER_MILLION,
+} = {}) {
+  const promptTokens = positiveInteger(usage.prompt_tokens);
+  const cachedPromptTokens = Math.min(
+    promptTokens,
+    positiveInteger(usage.prompt_tokens_details?.cached_tokens ?? usage.cached_prompt_tokens),
+  );
+  const regularPromptTokens = Math.max(0, promptTokens - cachedPromptTokens);
+  const completionTokens = positiveInteger(usage.completion_tokens);
+  const reasoningTokens = positiveInteger(
+    usage.completion_tokens_details?.reasoning_tokens ?? usage.reasoning_tokens,
+  );
+  const costUsd = (
+    (regularPromptTokens * finiteNumber(promptUsdPerMillion, DEFAULT_PROMPT_USD_PER_MILLION))
+    + (cachedPromptTokens * finiteNumber(cachedPromptUsdPerMillion, DEFAULT_CACHED_PROMPT_USD_PER_MILLION))
+    // Counting reasoning in addition to completion is intentionally conservative.
+    + ((completionTokens + reasoningTokens) * finiteNumber(outputUsdPerMillion, DEFAULT_OUTPUT_USD_PER_MILLION))
+  ) / 1_000_000;
+  return usdToMicros(costUsd);
+}
+
+function json(payload, status = 200) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { 'content-type': 'application/json; charset=utf-8' },
+  });
+}
+
+export class KimiBudgetLedger {
+  constructor(state) {
+    this.state = state;
+  }
+
+  async fetch(request) {
+    if (request.method !== 'POST') return json({ code: 'METHOD_NOT_ALLOWED' }, 405);
+    const payload = await request.json().catch(() => null);
+    const action = payload?.action;
+    const reservationId = String(payload?.reservationId || '').slice(0, 160);
+    if (!reservationId || !['reserve', 'settle'].includes(action)) {
+      return json({ code: 'INVALID_REQUEST' }, 400);
+    }
+
+    const result = await this.state.storage.transaction(async transaction => {
+      const reservationKey = `reservation:${reservationId}`;
+      const [spentValue, reservedValue, existingReservation] = await Promise.all([
+        transaction.get('spentMicros'),
+        transaction.get('reservedMicros'),
+        transaction.get(reservationKey),
+      ]);
+      const spentMicros = positiveInteger(spentValue);
+      const reservedMicros = positiveInteger(reservedValue);
+
+      if (action === 'reserve') {
+        if (existingReservation) {
+          return {
+            accepted: true,
+            reservationMicros: positiveInteger(existingReservation),
+            spentMicros,
+            reservedMicros,
+          };
+        }
+        const amountMicros = positiveInteger(payload.amountMicros);
+        const hardCapMicros = positiveInteger(payload.hardCapMicros);
+        if (!amountMicros || !hardCapMicros || spentMicros + reservedMicros + amountMicros > hardCapMicros) {
+          return { accepted: false, spentMicros, reservedMicros, hardCapMicros };
+        }
+        await Promise.all([
+          transaction.put(reservationKey, amountMicros),
+          transaction.put('reservedMicros', reservedMicros + amountMicros),
+        ]);
+        return {
+          accepted: true,
+          reservationMicros: amountMicros,
+          spentMicros,
+          reservedMicros: reservedMicros + amountMicros,
+          hardCapMicros,
+        };
+      }
+
+      if (!existingReservation) {
+        return { settled: true, spentMicros, reservedMicros };
+      }
+      const reservationMicros = positiveInteger(existingReservation);
+      const chargedMicros = Math.min(
+        reservationMicros,
+        positiveInteger(payload.chargedMicros, reservationMicros),
+      );
+      const nextSpentMicros = spentMicros + chargedMicros;
+      const nextReservedMicros = Math.max(0, reservedMicros - reservationMicros);
+      await Promise.all([
+        transaction.delete(reservationKey),
+        transaction.put('spentMicros', nextSpentMicros),
+        transaction.put('reservedMicros', nextReservedMicros),
+      ]);
+      return {
+        settled: true,
+        spentMicros: nextSpentMicros,
+        reservedMicros: nextReservedMicros,
+        chargedMicros,
+      };
+    });
+
+    return json(result);
+  }
+}

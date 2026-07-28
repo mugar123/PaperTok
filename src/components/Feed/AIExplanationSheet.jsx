@@ -30,6 +30,7 @@ import './AIExplanationSheet.css';
 const ERROR_COPY = {
   AI_AUTH_REQUIRED: 'Inicia sesión para utilizar las explicaciones con IA.',
   AI_QUOTA_EXHAUSTED: 'Se han agotado los usos de IA disponibles por hoy. Volverán a estar disponibles mañana.',
+  AI_FALLBACK_BUDGET_EXHAUSTED: 'Se ha alcanzado el límite mensual de seguridad de Kimi. No se realizarán más llamadas de pago este mes.',
   AI_NOT_CONFIGURED: 'Las explicaciones con IA todavía no están disponibles.',
   AI_TIMEOUT: 'La explicación está tardando demasiado. Puedes volver a intentarlo.',
   AI_BUSY: 'El servicio de IA está recibiendo muchas solicitudes. Inténtalo de nuevo dentro de un momento.',
@@ -82,7 +83,7 @@ function ExplanationContent({ result }) {
         </div>
         <div className="ai-explanation-model" title={result.model || undefined}>
           <Cpu size={14} />
-          <span>{formatAIModelLabel(result.model)}</span>
+          <span>{formatAIModelLabel(result.model, result.provider)}</span>
           <span className="ai-explanation-model-separator" aria-hidden="true">·</span>
           <span>{remainingUses === null
             ? result.cached ? 'Resultado guardado' : 'Cupo no disponible'
@@ -266,13 +267,15 @@ export default function AIExplanationSheet({ paper, onClose }) {
                   <small>
                     {error.quota.scope === 'provider-rate' ? (
                       <>Prueba de nuevo en <strong>{formatQuotaCountdown(error.quota.resetAt, quotaNow)}</strong>.</>
+                    ) : error.quota.scope === 'fallback-budget' ? (
+                      <>El presupuesto se restablece en <strong>{formatQuotaCountdown(error.quota.resetAt, quotaNow)}</strong>.</>
                     ) : (
                       <>Vuelve a intentarlo en <strong>{formatQuotaCountdown(error.quota.resetAt, quotaNow)}</strong>. El cupo se renueva a las {formatQuotaResetTime(error.quota.resetAt)} (hora local).</>
                     )}
                   </small>
                 )}
               </span>
-              {!/agotado|todavía no|Inicia sesión/.test(error.message) && (
+              {!/agotado|límite mensual|todavía no|Inicia sesión/.test(error.message) && (
                 <button onClick={handleExplain}>Reintentar</button>
               )}
             </motion.div>

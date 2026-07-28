@@ -1,8 +1,20 @@
 import { hasUsableAIAbstract, isAIReadablePdfUrl } from '../src/utils/aiExplanationAccess.js';
+import {
+  calculateKimiUsageMicros,
+  estimateKimiReservationMicros,
+  getMonthlyBudgetReset,
+  microsToUsd,
+  usdToMicros,
+} from './kimi-budget-ledger.js';
 
 const PROMPT_VERSION = 'paper-explainer-v2';
 const DEFAULT_MODEL = 'gemini-3.5-flash';
 const DEFAULT_FALLBACK_MODEL = 'gemini-3.5-flash-lite';
+const DEFAULT_KIMI_MODEL = 'moonshotai/Kimi-K3';
+const DEFAULT_KIMI_MONTHLY_HARD_CAP_USD = 27;
+const DEFAULT_KIMI_PROMPT_USD_PER_MILLION = 3;
+const DEFAULT_KIMI_CACHED_PROMPT_USD_PER_MILLION = 0.3;
+const DEFAULT_KIMI_OUTPUT_USD_PER_MILLION = 15;
 const DEFAULT_USER_DAILY_LIMIT = 5;
 const DEFAULT_GLOBAL_DAILY_LIMIT = 100;
 const MAX_REQUEST_BYTES = 100_000;
@@ -167,6 +179,11 @@ function safeInteger(value, fallback, minimum, maximum) {
   return Number.isFinite(parsed) ? Math.max(minimum, Math.min(maximum, parsed)) : fallback;
 }
 
+function safeNumber(value, fallback, minimum, maximum) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(minimum, Math.min(maximum, parsed)) : fallback;
+}
+
 function bytesToBase64(bytes) {
   let binary = '';
   const chunkSize = 0x8000;
@@ -222,14 +239,10 @@ function normalizeExplanation(value) {
   };
 }
 
-function parseGeminiPayload(payload) {
-  const text = payload?.candidates?.[0]?.content?.parts
-    ?.map(part => part.text || '')
-    .join('')
-    .trim();
+function parseExplanationText(text) {
   if (!text) throw new AIExplanationError('AI_UNAVAILABLE', 502);
   try {
-    const unfenced = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const unfenced = String(text).replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
     const firstBrace = unfenced.indexOf('{');
     const lastBrace = unfenced.lastIndexOf('}');
     const jsonText = firstBrace >= 0 && lastBrace > firstBrace
@@ -241,6 +254,22 @@ function parseGeminiPayload(payload) {
   } catch {
     throw new AIExplanationError('AI_INVALID_RESPONSE', 502);
   }
+}
+
+function parseGeminiPayload(payload) {
+  const text = payload?.candidates?.[0]?.content?.parts
+    ?.map(part => part.text || '')
+    .join('')
+    .trim();
+  return parseExplanationText(text);
+}
+
+function parseOpenAIChatPayload(payload) {
+  const content = payload?.choices?.[0]?.message?.content;
+  const text = Array.isArray(content)
+    ? content.map(part => typeof part === 'string' ? part : part?.text || '').join('')
+    : content;
+  return parseExplanationText(text);
 }
 
 function providerQuotaCode(payload) {
@@ -386,17 +415,267 @@ async function explainWithGemini({ paper, level, pdfBase64, env }) {
   });
 }
 
+function modalKimiApiUrl(env, resource) {
+  const raw = cleanText(env.MODAL_KIMI_BASE_URL, 2_000);
+  if (!raw) return '';
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:') return '';
+    let pathname = url.pathname.replace(/\/+$/, '');
+    pathname = pathname.replace(/\/v1\/(?:chat\/completions|models)$/i, '/v1');
+    if (!/\/v1$/i.test(pathname)) pathname = `${pathname}/v1`;
+    url.pathname = `${pathname}/${resource.replace(/^\/+/, '')}`;
+    url.search = '';
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return '';
+  }
+}
+
+function kimiHeaders(env) {
+  return {
+    'content-type': 'application/json',
+    'Modal-Key': cleanText(env.MODAL_PROXY_TOKEN_ID, 200),
+    'Modal-Secret': cleanText(env.MODAL_PROXY_TOKEN_SECRET, 300),
+  };
+}
+
+export function isKimiConfigured(env) {
+  return Boolean(
+    modalKimiApiUrl(env, 'chat/completions')
+    && /^wk-/i.test(cleanText(env.MODAL_PROXY_TOKEN_ID, 200))
+    && /^ws-/i.test(cleanText(env.MODAL_PROXY_TOKEN_SECRET, 300))
+    && env.KIMI_BUDGET_LEDGER?.idFromName
+    && env.KIMI_BUDGET_LEDGER?.get,
+  );
+}
+
+export function classifyKimiError(status, payload) {
+  const detail = JSON.stringify(payload || {}).toLowerCase();
+  if (status === 401 || status === 403) return 'AI_NOT_CONFIGURED';
+  if (status === 402 || /credit|balance|billing|budget|quota.+month|monthly.+quota/.test(detail)) {
+    return 'AI_FALLBACK_BUDGET_EXHAUSTED';
+  }
+  if (status === 429 || status === 503 || status === 529) return 'AI_BUSY';
+  if (status === 400 || status === 404) return 'AI_NOT_CONFIGURED';
+  return 'AI_UNAVAILABLE';
+}
+
+export function shouldFallbackToKimi(error) {
+  return error instanceof AIExplanationError
+    && error.code === 'AI_QUOTA_EXHAUSTED'
+    && error.quota?.scope === 'provider';
+}
+
+function kimiBudgetConfig(env) {
+  return {
+    hardCapUsd: safeNumber(
+      env.KIMI_MONTHLY_HARD_CAP_USD,
+      DEFAULT_KIMI_MONTHLY_HARD_CAP_USD,
+      0.5,
+      DEFAULT_KIMI_MONTHLY_HARD_CAP_USD,
+    ),
+    promptUsdPerMillion: Math.max(
+      DEFAULT_KIMI_PROMPT_USD_PER_MILLION,
+      safeNumber(env.KIMI_PROMPT_USD_PER_MILLION, DEFAULT_KIMI_PROMPT_USD_PER_MILLION, 0, 100),
+    ),
+    cachedPromptUsdPerMillion: Math.max(
+      DEFAULT_KIMI_CACHED_PROMPT_USD_PER_MILLION,
+      safeNumber(
+        env.KIMI_CACHED_PROMPT_USD_PER_MILLION,
+        DEFAULT_KIMI_CACHED_PROMPT_USD_PER_MILLION,
+        0,
+        100,
+      ),
+    ),
+    outputUsdPerMillion: Math.max(
+      DEFAULT_KIMI_OUTPUT_USD_PER_MILLION,
+      safeNumber(env.KIMI_OUTPUT_USD_PER_MILLION, DEFAULT_KIMI_OUTPUT_USD_PER_MILLION, 0, 200),
+    ),
+  };
+}
+
+function kimiPeriod(now = new Date()) {
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+async function callKimiBudgetLedger(env, payload) {
+  if (!env.KIMI_BUDGET_LEDGER?.idFromName || !env.KIMI_BUDGET_LEDGER?.get) {
+    throw new AIExplanationError('AI_NOT_CONFIGURED', 503);
+  }
+  const id = env.KIMI_BUDGET_LEDGER.idFromName(kimiPeriod());
+  const stub = env.KIMI_BUDGET_LEDGER.get(id);
+  const response = await stub.fetch('https://papertok.internal/kimi-budget', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const result = await response.json().catch(() => null);
+  if (!response.ok || !result) throw new AIExplanationError('AI_UNAVAILABLE', 502);
+  return result;
+}
+
+async function reserveKimiBudget(env, amountMicros, hardCapUsd) {
+  const reservationId = crypto.randomUUID();
+  const hardCapMicros = usdToMicros(hardCapUsd);
+  const result = await callKimiBudgetLedger(env, {
+    action: 'reserve',
+    reservationId,
+    amountMicros,
+    hardCapMicros,
+  });
+  if (!result.accepted) {
+    throw new AIExplanationError(
+      'AI_FALLBACK_BUDGET_EXHAUSTED',
+      429,
+      'AI_FALLBACK_BUDGET_EXHAUSTED',
+      {
+        ...getMonthlyBudgetReset(),
+        scope: 'fallback-budget',
+        remainingUsd: Math.max(0, hardCapUsd - microsToUsd(result.spentMicros + result.reservedMicros)),
+      },
+    );
+  }
+  return { reservationId, reservationMicros: result.reservationMicros, hardCapUsd };
+}
+
+async function settleKimiBudget(env, reservation, chargedMicros) {
+  try {
+    const result = await callKimiBudgetLedger(env, {
+      action: 'settle',
+      reservationId: reservation.reservationId,
+      chargedMicros,
+    });
+    return {
+      hardCapUsd: reservation.hardCapUsd,
+      remainingUsd: Math.max(
+        0,
+        reservation.hardCapUsd - microsToUsd(result.spentMicros + result.reservedMicros),
+      ),
+      resetAt: getMonthlyBudgetReset().resetAt,
+    };
+  } catch {
+    // Leaving the reservation in place is the safest failure mode: it can only
+    // reduce future Kimi usage, never let spending exceed the configured cap.
+    return null;
+  }
+}
+
+function kimiMaxOutputTokens(level) {
+  if (level === 'researcher') return 5_200;
+  if (level === 'university') return 4_200;
+  return 3_200;
+}
+
+async function explainWithKimi({ paper, level, env }) {
+  if (!isKimiConfigured(env) || !paper.abstract) {
+    throw new AIExplanationError('AI_NOT_CONFIGURED', 503);
+  }
+  const model = cleanText(env.MODAL_KIMI_MODEL || DEFAULT_KIMI_MODEL, 160) || DEFAULT_KIMI_MODEL;
+  const maxOutputTokens = kimiMaxOutputTokens(level);
+  const requestBody = JSON.stringify({
+    model,
+    messages: [
+      { role: 'system', content: SYSTEM_INSTRUCTION },
+      { role: 'user', content: buildPaperExplanationPrompt(paper, level, 'abstract') },
+    ],
+    response_format: { type: 'json_object' },
+    reasoning_effort: level === 'researcher' ? 'high' : 'low',
+    max_tokens: maxOutputTokens,
+    stream: false,
+  });
+  const budgetConfig = kimiBudgetConfig(env);
+  const reservationMicros = estimateKimiReservationMicros({
+    promptBytes: new TextEncoder().encode(requestBody).byteLength,
+    maxOutputTokens,
+    promptUsdPerMillion: budgetConfig.promptUsdPerMillion,
+    outputUsdPerMillion: budgetConfig.outputUsdPerMillion,
+  });
+  const reservation = await reserveKimiBudget(env, reservationMicros, budgetConfig.hardCapUsd);
+  let chargedMicros = reservation.reservationMicros;
+  let result;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 52_000);
+  try {
+    const response = await fetch(modalKimiApiUrl(env, 'chat/completions'), {
+      method: 'POST',
+      signal: controller.signal,
+      headers: kimiHeaders(env),
+      body: requestBody,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const code = classifyKimiError(response.status, payload);
+      throw new AIExplanationError(
+        code,
+        code === 'AI_FALLBACK_BUDGET_EXHAUSTED' || response.status === 429 ? 429 : code === 'AI_NOT_CONFIGURED' ? 503 : 502,
+        code,
+        code === 'AI_FALLBACK_BUDGET_EXHAUSTED'
+          ? { ...getMonthlyBudgetReset(), scope: 'fallback-budget' }
+          : code === 'AI_BUSY'
+            ? getProviderRetry(payload, response.headers.get('retry-after'))
+            : null,
+      );
+    }
+    const measuredMicros = calculateKimiUsageMicros(payload.usage, {
+      promptUsdPerMillion: budgetConfig.promptUsdPerMillion,
+      cachedPromptUsdPerMillion: budgetConfig.cachedPromptUsdPerMillion,
+      outputUsdPerMillion: budgetConfig.outputUsdPerMillion,
+    });
+    if (measuredMicros > 0) chargedMicros = measuredMicros;
+    result = {
+      explanation: parseOpenAIChatPayload(payload),
+      model,
+      provider: 'modal-kimi',
+      sourceBasis: 'abstract',
+    };
+  } catch (error) {
+    if (error instanceof AIExplanationError) throw error;
+    throw new AIExplanationError('AI_UNAVAILABLE', 502);
+  } finally {
+    clearTimeout(timeout);
+    const budget = await settleKimiBudget(env, reservation, chargedMicros);
+    if (result && budget) result.budget = budget;
+  }
+  return result;
+}
+
 const PROVIDERS = {
   gemini: explainWithGemini,
+  'modal-kimi': explainWithKimi,
 };
 
-export async function checkAIProviderHealth(env) {
-  const provider = cleanText(env.AI_PROVIDER || 'gemini', 40).toLowerCase();
+async function explainWithProviderChain({ providerName, fallbackProviderName, ...args }) {
+  const provider = PROVIDERS[providerName];
+  if (!provider) throw new AIExplanationError('AI_NOT_CONFIGURED', 503);
+  try {
+    const result = await provider(args);
+    return { ...result, provider: result.provider || providerName };
+  } catch (primaryError) {
+    const canUseKimi = fallbackProviderName === 'modal-kimi'
+      && providerName === 'gemini'
+      && shouldFallbackToKimi(primaryError)
+      && isKimiConfigured(args.env)
+      && Boolean(args.paper.abstract);
+    if (!canUseKimi) throw primaryError;
+    try {
+      return await PROVIDERS['modal-kimi'](args);
+    } catch (fallbackError) {
+      if (fallbackError instanceof AIExplanationError && fallbackError.code === 'AI_NOT_CONFIGURED') {
+        throw primaryError;
+      }
+      throw fallbackError;
+    }
+  }
+}
+
+async function checkGeminiHealth(env) {
+  const provider = 'gemini';
   const model = cleanText(env.AI_MODEL || DEFAULT_MODEL, 100) || DEFAULT_MODEL;
-  if (provider !== 'gemini' || !env.GEMINI_API_KEY) {
+  if (!env.GEMINI_API_KEY) {
     return { provider, model, configured: false, available: false, code: 'AI_NOT_CONFIGURED' };
   }
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8_000);
   try {
@@ -417,6 +696,52 @@ export async function checkAIProviderHealth(env) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function checkKimiHealth(env) {
+  const provider = 'modal-kimi';
+  const model = cleanText(env.MODAL_KIMI_MODEL || DEFAULT_KIMI_MODEL, 160) || DEFAULT_KIMI_MODEL;
+  if (!isKimiConfigured(env)) {
+    return { provider, model, configured: false, available: false, code: 'AI_NOT_CONFIGURED' };
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8_000);
+  try {
+    const response = await fetch(modalKimiApiUrl(env, 'models'), {
+      signal: controller.signal,
+      headers: kimiHeaders(env),
+    });
+    const payload = response.ok ? null : await response.json().catch(() => ({}));
+    return {
+      provider,
+      model,
+      configured: true,
+      available: response.ok,
+      code: response.ok ? null : classifyKimiError(response.status, payload),
+    };
+  } catch {
+    return { provider, model, configured: true, available: false, code: 'AI_UNAVAILABLE' };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function checkAIProviderHealth(env) {
+  const provider = cleanText(env.AI_PROVIDER || 'gemini', 40).toLowerCase();
+  const fallbackProvider = cleanText(env.AI_FALLBACK_PROVIDER, 40).toLowerCase();
+  const primaryHealth = provider === 'gemini'
+    ? await checkGeminiHealth(env)
+    : provider === 'modal-kimi'
+      ? await checkKimiHealth(env)
+      : { provider, model: '', configured: false, available: false, code: 'AI_NOT_CONFIGURED' };
+  const fallbackHealth = fallbackProvider === 'modal-kimi'
+    ? await checkKimiHealth(env)
+    : null;
+  return {
+    ...primaryHealth,
+    fallback: fallbackHealth,
+    available: primaryHealth.available || Boolean(fallbackHealth?.available),
+  };
 }
 
 async function verifyFirebaseUser(request, env) {
@@ -453,14 +778,16 @@ export function getDailyQuotaReset(now = Date.now()) {
 }
 
 async function getUsage(env, key) {
-  if (env.AI_USAGE?.get) return Number(await env.AI_USAGE.get(key)) || 0;
+  const store = env.AI_USAGE?.get ? env.AI_USAGE : env.NOTIFICATION_STORE;
+  if (store?.get) return Number(await store.get(`ai-usage:${key}`)) || 0;
   const cached = await caches.default.match(new Request(`https://papertok.internal/usage/${encodeURIComponent(key)}`));
   return cached ? Number(await cached.text()) || 0 : 0;
 }
 
 async function setUsage(env, key, value) {
-  if (env.AI_USAGE?.put) {
-    await env.AI_USAGE.put(key, String(value), { expirationTtl: 172_800 });
+  const store = env.AI_USAGE?.put ? env.AI_USAGE : env.NOTIFICATION_STORE;
+  if (store?.put) {
+    await store.put(`ai-usage:${key}`, String(value), { expirationTtl: 172_800 });
     return;
   }
   await caches.default.put(
@@ -527,23 +854,35 @@ export async function handleAIExplanation(request, env) {
   if (!LEVELS[level]) throw new AIExplanationError('AI_INVALID_LEVEL', 400);
   const paper = normalizePaperForExplanation(payload.paper);
   const providerName = cleanText(env.AI_PROVIDER || 'gemini', 40).toLowerCase();
-  const provider = PROVIDERS[providerName];
-  if (!provider) throw new AIExplanationError('AI_NOT_CONFIGURED', 503);
+  const fallbackProviderName = cleanText(env.AI_FALLBACK_PROVIDER, 40).toLowerCase();
+  if (!PROVIDERS[providerName]) throw new AIExplanationError('AI_NOT_CONFIGURED', 503);
   const model = cleanText(env.AI_MODEL || DEFAULT_MODEL, 100) || DEFAULT_MODEL;
-  const cacheKey = await explanationCacheKey(paper, level, providerName, model);
+  const fallbackModel = fallbackProviderName === 'modal-kimi'
+    ? cleanText(env.MODAL_KIMI_MODEL || DEFAULT_KIMI_MODEL, 160) || DEFAULT_KIMI_MODEL
+    : '';
+  const cacheProvider = fallbackProviderName ? `${providerName}+${fallbackProviderName}` : providerName;
+  const cacheModel = fallbackModel ? `${model}+${fallbackModel}` : model;
+  const cacheKey = await explanationCacheKey(paper, level, cacheProvider, cacheModel);
   const cached = await caches.default.match(cacheKey);
   if (cached) return { ...(await cached.json()), remainingUses: null, cached: true };
 
   const quota = await assertWithinQuota(env, uid);
   const pdfBase64 = await fetchPaperPdf(paper.pdfUrl);
   if (!pdfBase64 && !paper.abstract) throw new AIExplanationError('AI_INVALID_PAPER', 400);
-  const result = await provider({ paper, level, pdfBase64, env });
+  const result = await explainWithProviderChain({
+    providerName,
+    fallbackProviderName,
+    paper,
+    level,
+    pdfBase64,
+    env,
+  });
   await recordUsage(env, quota);
 
   const cacheableResponse = {
     ...result,
     level,
-    provider: providerName,
+    provider: result.provider || providerName,
     promptVersion: PROMPT_VERSION,
   };
   await caches.default.put(cacheKey, new Response(JSON.stringify(cacheableResponse), {

@@ -1,6 +1,11 @@
 import { buildOpenAlexTrendFilter, normalizeReportFilters } from '../src/services/openAlexReportQuery.js';
 import { buildScopusSearchQuery } from '../src/services/scopusQuery.js';
-import { AIExplanationError, checkAIProviderHealth, handleAIExplanation } from './ai-explanation.js';
+import {
+  AIExplanationError,
+  checkAIProviderHealth,
+  handleAIExplanation,
+  isKimiConfigured,
+} from './ai-explanation.js';
 import {
   checkEmailProviderHealth,
   EmailNotificationError,
@@ -15,6 +20,8 @@ import {
   normalizeCitationDoi,
   normalizeCitationRows,
 } from '../src/utils/citationGraph.js';
+
+export { KimiBudgetLedger } from './kimi-budget-ledger.js';
 
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://mugar123.github.io',
@@ -953,7 +960,7 @@ export default {
     if (url.pathname === '/health') {
       return json({
         ok: true,
-        aiConfigured: Boolean(env.GEMINI_API_KEY),
+        aiConfigured: Boolean(env.GEMINI_API_KEY || isKimiConfigured(env)),
         openAlexConfigured: Boolean(env.OPENALEX_API_KEY),
         adsConfigured: Boolean(env.NASA_ADS_API_TOKEN),
         scopusConfigured: Boolean(env.ELSEVIER_API_KEY),
