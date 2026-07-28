@@ -96,7 +96,7 @@ test('maps NASA ADS records with citations, references and physics concepts', ()
     pubdate: '2026-03-00',
     doi: ['10.1000/ADS'],
     identifier: ['arXiv:2601.12345'],
-    keyword: ['Cosmology'],
+    keyword: ['11.25.Tq', 'Cosmology'],
     arxiv_class: ['astro-ph.CO'],
     citation_count: 17,
     reference: ['2020ApJ...111..222A'],
@@ -114,6 +114,9 @@ test('maps NASA ADS records with citations, references and physics concepts', ()
   assert.equal(paper.peerReviewed, true);
   assert.equal(paper.openAccess, true);
   assert.match(paper.adsUrl, /ui\.adsabs\.harvard\.edu/);
+  assert.deepEqual(paper.categories, ['astro-ph.CO', 'Cosmology']);
+  assert.ok(!paper.concepts.some(concept => concept.display_name === '11.25.Tq'));
+  assert.ok(paper.keywords.includes('11.25.Tq'));
 });
 
 test('maps INSPIRE papers as a keyless high-energy physics fallback', () => {

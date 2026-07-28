@@ -1,4 +1,5 @@
 import { getCategoryLabel } from '../data/categories.js';
+import { isTechnicalClassification } from './scientificClassification.js';
 
 function normalizedLabel(value) {
   return String(value || '')
@@ -25,7 +26,13 @@ export function buildPaperTopicTags(paper, limit = 4, language = 'es') {
   for (const category of paper?.categories || []) {
     const label = getCategoryLabel(category, language);
     const normalized = normalizedLabel(label);
-    if (!normalized || category === primaryCategory || seen.has(normalized)) continue;
+    if (
+      !normalized
+      || category === primaryCategory
+      || seen.has(normalized)
+      || isTechnicalClassification(category)
+      || isTechnicalClassification(label)
+    ) continue;
     seen.add(normalized);
     tags.push({
       key: `category:${category}`,
@@ -39,7 +46,7 @@ export function buildPaperTopicTags(paper, limit = 4, language = 'es') {
   for (const concept of paper?.concepts || []) {
     const label = conceptLabel(concept);
     const normalized = normalizedLabel(label);
-    if (!normalized || seen.has(normalized)) continue;
+    if (!normalized || seen.has(normalized) || isTechnicalClassification(label)) continue;
     seen.add(normalized);
     tags.push({
       key: `concept:${concept?.id || normalized}`,

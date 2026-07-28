@@ -209,11 +209,15 @@
 }
 
 .pc-project-badge-slot {
-  display: flex;
-  width: fit-content;
+  display: grid;
+  width: 100%;
   max-width: 100%;
+  will-change: grid-template-rows, opacity;
+}
+
+.pc-project-badge-slot-inner {
+  min-height: 0;
   overflow: hidden;
-  will-change: height, opacity;
 }
 
 .pc-project-badge {
@@ -232,6 +236,7 @@
   border-radius: 16px;
   cursor: pointer;
   transform-origin: left center;
+  backface-visibility: hidden;
   will-change: transform, opacity;
 }
 

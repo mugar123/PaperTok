@@ -1,6 +1,7 @@
 import { CATEGORIES } from '../data/categories.js';
 import { PaperBuilder } from './PaperBuilder.js';
 import { isScopusEnabled, ScopusAdapter } from './adapters/ScopusAdapter.js';
+import { isTechnicalClassification } from '../utils/scientificClassification.js';
 
 const PAPER_API_BASE = import.meta.env?.VITE_PAPER_API_BASE_URL?.replace(/\/$/, '') || '';
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -308,10 +309,17 @@ export function mapAdsPaper(raw, requestedCategories = []) {
   const doi = normalizeDoi(Array.isArray(raw.doi) ? raw.doi[0] : raw.doi);
   const arxivId = extractAdsArxivId(raw);
   const properties = (raw.property || []).map(value => String(value).toUpperCase());
+  const rawKeywords = (Array.isArray(raw.keyword) ? raw.keyword : [raw.keyword])
+    .map(normalizeText)
+    .filter(Boolean);
+  const arxivCategories = (Array.isArray(raw.arxiv_class) ? raw.arxiv_class : [raw.arxiv_class])
+    .map(normalizeText)
+    .filter(Boolean);
   const terms = [...new Set([
-    ...(raw.keyword || []),
-    ...(raw.arxiv_class || []),
-  ].map(normalizeText).filter(Boolean))].slice(0, 12);
+    ...rawKeywords.filter(keyword => !isTechnicalClassification(keyword)),
+    ...arxivCategories,
+  ])].slice(0, 12);
+  const keywords = [...new Set([...rawKeywords, ...arxivCategories])].slice(0, 20);
   const refereed = properties.includes('REFEREED');
   const isPreprint = String(raw.doctype || '').toLowerCase() === 'eprint' && !refereed;
   const openAccess = Boolean(arxivId)
@@ -343,7 +351,7 @@ export function mapAdsPaper(raw, requestedCategories = []) {
     referenceCount: Number(raw.reference_count) || (Array.isArray(raw.reference) ? raw.reference.length : 0),
     concepts: terms.map((term, index) => ({ id: `ads:${bibcode}:term:${index}`, display_name: term, level: 2 })),
     categories: terms,
-    keywords: terms,
+    keywords,
     hasReferences: (Number(raw.reference_count) || raw.reference?.length || 0) > 0,
     hasData: Boolean(raw.has_data || (Array.isArray(raw.data) && raw.data.length > 0)),
     provider: 'nasa-ads',

@@ -37,3 +37,16 @@ test('deduplicates concepts that repeat a visible category label', () => {
 
   assert.deepEqual(tags.map(tag => tag.label), ['Óptica', 'Photonics']);
 });
+
+test('hides PACS classification codes from visible paper topics', () => {
+  const tags = buildPaperTopicTags({
+    primaryCategory: 'gr-qc',
+    categories: ['gr-qc', '11.25.Tq', '03.65.Ud'],
+    concepts: [
+      { id: 'ads:pacs', display_name: '04.70.Dy' },
+      { id: 'C1', display_name: 'Quantum gravity' },
+    ],
+  }, 4, 'en');
+
+  assert.deepEqual(tags.map(tag => tag.label), ['Quantum gravity']);
+});

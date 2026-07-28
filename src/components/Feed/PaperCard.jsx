@@ -22,6 +22,7 @@ import { canExplainPaper } from '../../services/aiExplanationService';
 import { hasUsableAIAbstract } from '../../utils/aiExplanationAccess.js';
 import { buildPaperTopicTags } from '../../utils/paperTopicTags.js';
 import { buildFollowReasonLabel } from '../../utils/followingFeed.js';
+import { isTechnicalClassification } from '../../utils/scientificClassification.js';
 
 // Pool of icons for the background constellation per area
 const AREA_BG_ICONS = {
@@ -192,6 +193,11 @@ const PaperCard = memo(function PaperCard({
   const selectedRelatedState = selectedRelatedPaper
     ? getInteractionState(selectedRelatedPaper) || {}
     : {};
+  const visiblePrimaryCategory = useMemo(
+    () => [paper.primaryCategory, ...(paper.categories || [])]
+      .find(category => category && !isTechnicalClassification(category)) || '',
+    [paper.categories, paper.primaryCategory]
+  );
 
   const closeRelatedCard = useCallback(() => {
     if (isClosingRelatedCard) return;
@@ -212,7 +218,7 @@ const PaperCard = memo(function PaperCard({
 
   // Get area info for the gradient background
   const getAreaInfo = () => {
-    const cat = paper.primaryCategory || paper.categories?.[0] || '';
+    const cat = visiblePrimaryCategory;
     const prefix = cat.split('.')[0].split('-')[0];
     for (const [, area] of Object.entries(CATEGORIES)) {
       if (area.subcategories && area.subcategories[cat]) {
@@ -228,7 +234,7 @@ const PaperCard = memo(function PaperCard({
   };
 
   const getCategoryLabelText = () => {
-    const cat = paper.primaryCategory || paper.categories?.[0] || '';
+    const cat = visiblePrimaryCategory;
     const area = Object.values(CATEGORIES).find(a => a.subcategories && a.subcategories[cat]);
     if (area) {
       return isEnglish
@@ -243,8 +249,8 @@ const PaperCard = memo(function PaperCard({
   const areaInfo = getAreaInfo();
   const categoryLabel = getCategoryLabelText();
   const primaryTopic = useMemo(
-    () => resolvePaperTopic(paper.primaryCategory || paper.categories?.[0], language),
-    [language, paper.categories, paper.primaryCategory]
+    () => resolvePaperTopic(visiblePrimaryCategory, language),
+    [language, visiblePrimaryCategory]
   );
   const paperTopicTags = useMemo(
     () => buildPaperTopicTags({
@@ -263,7 +269,7 @@ const PaperCard = memo(function PaperCard({
 
   // Generate scattered background icons (stable per paper id)
   const bgIcons = useMemo(() => {
-    const cat = paper.primaryCategory || paper.categories?.[0] || '';
+    const cat = visiblePrimaryCategory;
     let areaKey = 'physics';
     for (const [key, area] of Object.entries(CATEGORIES)) {
       if (area.subcategories && area.subcategories[cat]) {
@@ -289,7 +295,7 @@ const PaperCard = memo(function PaperCard({
       duration: 10 + seededRandom(i * 6) * 8,
       rotate: seededRandom(i * 7) * 360,
     }));
-  }, [paper.id, paper.categories, paper.primaryCategory]);
+  }, [paper.id, visiblePrimaryCategory]);
 
   const handleDoubleTap = useCallback(() => {
     const now = Date.now();
@@ -584,44 +590,46 @@ const PaperCard = memo(function PaperCard({
               className="pc-project-badge-slot"
               initial={prefersReducedMotion
                 ? { opacity: 0 }
-                : { height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
+                : { gridTemplateRows: '0fr', opacity: 0 }}
+              animate={{ gridTemplateRows: '1fr', opacity: 1 }}
               exit={prefersReducedMotion
                 ? { opacity: 0 }
-                : { height: 0, opacity: 0 }}
+                : { gridTemplateRows: '0fr', opacity: 0 }}
               transition={prefersReducedMotion
                 ? { duration: 0.12 }
                 : {
-                    height: { duration: 0.48, ease: [0.22, 1, 0.36, 1] },
-                    opacity: { duration: 0.28, delay: 0.08, ease: 'easeOut' },
+                    gridTemplateRows: { duration: 0.62, ease: [0.22, 1, 0.36, 1] },
+                    opacity: { duration: 0.32, delay: 0.06, ease: 'easeOut' },
                   }}
             >
-              <motion.div
-                className="pc-project-badge"
-                initial={prefersReducedMotion
-                  ? false
-                  : { opacity: 0, x: -5, y: -2, scale: 0.97 }}
-                animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
-                exit={prefersReducedMotion
-                  ? { opacity: 0 }
-                  : { opacity: 0, x: -3, scale: 0.98 }}
-                transition={prefersReducedMotion
-                  ? { duration: 0.12 }
-                  : { duration: 0.38, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (project.code) {
-                    const paperId = paper.id.startsWith('arxiv:') ? paper.id.split(':')[1] : paper.id;
-                    navigate(`/explorer/project/${encodeURIComponent(project.code)}?name=${encodeURIComponent(project.acronym)}&funder=${encodeURIComponent(project.funder)}&arxivId=${paperId}`);
-                  }
-                }}
-              >
-                <Briefcase size={12} />
-                <span>
-                  {[project.funderLevel, project.funder].find(value => value && value !== 'Unknown Funder')
-                    || (isEnglish ? 'Project' : 'Proyecto')}: {project.acronym}
-                </span>
-              </motion.div>
+              <div className="pc-project-badge-slot-inner">
+                <motion.div
+                  className="pc-project-badge"
+                  initial={prefersReducedMotion
+                    ? false
+                    : { opacity: 0, y: 5, scale: 0.985 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={prefersReducedMotion
+                    ? { opacity: 0 }
+                    : { opacity: 0, y: 3, scale: 0.99 }}
+                  transition={prefersReducedMotion
+                    ? { duration: 0.12 }
+                    : { duration: 0.46, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (project.code) {
+                      const paperId = paper.id.startsWith('arxiv:') ? paper.id.split(':')[1] : paper.id;
+                      navigate(`/explorer/project/${encodeURIComponent(project.code)}?name=${encodeURIComponent(project.acronym)}&funder=${encodeURIComponent(project.funder)}&arxivId=${paperId}`);
+                    }
+                  }}
+                >
+                  <Briefcase size={12} />
+                  <span>
+                    {[project.funderLevel, project.funder].find(value => value && value !== 'Unknown Funder')
+                      || (isEnglish ? 'Project' : 'Proyecto')}: {project.acronym}
+                  </span>
+                </motion.div>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
