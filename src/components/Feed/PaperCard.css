@@ -208,6 +208,39 @@
   font-weight: var(--fw-semibold);
 }
 
+.pc-project-badge-slot {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  overflow: hidden;
+  will-change: height, opacity;
+}
+
+.pc-project-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  margin-bottom: 10px;
+  padding: 4px 10px;
+  overflow: hidden;
+  color: #1da1f2;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(29, 161, 242, 0.15);
+  border: 1px solid rgba(29, 161, 242, 0.3);
+  border-radius: 16px;
+  cursor: pointer;
+  transform-origin: left center;
+  will-change: transform, opacity;
+}
+
+.pc-project-badge span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .pc-topic-link {
   cursor: pointer;
   transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);

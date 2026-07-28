@@ -577,41 +577,54 @@ const PaperCard = memo(function PaperCard({
           </div>
         )}
 
-        {project && (
-          <motion.div
-            className="pc-project-badge"
-            initial={prefersReducedMotion ? { opacity: 0, marginBottom: 0 } : { opacity: 0, y: -7, height: 0, marginBottom: 0 }}
-            animate={prefersReducedMotion ? { opacity: 1, marginBottom: 10 } : { opacity: 1, y: 0, height: 'auto', marginBottom: 10 }}
-            transition={{ duration: prefersReducedMotion ? 0.15 : 0.34, ease: [0.16, 1, 0.3, 1] }}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              background: 'rgba(29, 161, 242, 0.15)',
-              padding: '4px 10px',
-              borderRadius: '16px',
-              fontSize: '11px',
-              fontWeight: '600',
-              color: '#1da1f2',
-              border: '1px solid rgba(29, 161, 242, 0.3)',
-              cursor: 'pointer',
-              overflow: 'hidden',
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (project.code) {
-                const paperId = paper.id.startsWith('arxiv:') ? paper.id.split(':')[1] : paper.id;
-                navigate(`/explorer/project/${encodeURIComponent(project.code)}?name=${encodeURIComponent(project.acronym)}&funder=${encodeURIComponent(project.funder)}&arxivId=${paperId}`);
-              }
-            }}
-          >
-            <Briefcase size={12} />
-            <span>
-              {[project.funderLevel, project.funder].find(value => value && value !== 'Unknown Funder')
-                || (isEnglish ? 'Project' : 'Proyecto')}: {project.acronym}
-            </span>
-          </motion.div>
-        )}
+        <AnimatePresence initial={false}>
+          {project && (
+            <motion.div
+              key="project-badge"
+              className="pc-project-badge-slot"
+              initial={prefersReducedMotion
+                ? { opacity: 0 }
+                : { height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={prefersReducedMotion
+                ? { opacity: 0 }
+                : { height: 0, opacity: 0 }}
+              transition={prefersReducedMotion
+                ? { duration: 0.12 }
+                : {
+                    height: { duration: 0.48, ease: [0.22, 1, 0.36, 1] },
+                    opacity: { duration: 0.28, delay: 0.08, ease: 'easeOut' },
+                  }}
+            >
+              <motion.div
+                className="pc-project-badge"
+                initial={prefersReducedMotion
+                  ? false
+                  : { opacity: 0, x: -5, y: -2, scale: 0.97 }}
+                animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
+                exit={prefersReducedMotion
+                  ? { opacity: 0 }
+                  : { opacity: 0, x: -3, scale: 0.98 }}
+                transition={prefersReducedMotion
+                  ? { duration: 0.12 }
+                  : { duration: 0.38, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (project.code) {
+                    const paperId = paper.id.startsWith('arxiv:') ? paper.id.split(':')[1] : paper.id;
+                    navigate(`/explorer/project/${encodeURIComponent(project.code)}?name=${encodeURIComponent(project.acronym)}&funder=${encodeURIComponent(project.funder)}&arxivId=${paperId}`);
+                  }
+                }}
+              >
+                <Briefcase size={12} />
+                <span>
+                  {[project.funderLevel, project.funder].find(value => value && value !== 'Unknown Funder')
+                    || (isEnglish ? 'Project' : 'Proyecto')}: {project.acronym}
+                </span>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <h2 className="pc-title">
           <ScientificText>{paper.title}</ScientificText>
