@@ -1,7 +1,7 @@
 # PaperTok
 
 **A personalized way to discover scientific research.**
-
+> **Note:** PaperTok's current user interface is primarily in Spanish. Internationalization and an English interface are planned as the project grows.
 PaperTok is an open-source web app for discovering research papers through a scrollable, personalized feed.
 
 I started building it as a physics student because I kept running into the same problem: there is an enormous amount of interesting research available online, but discovering papers outside of a very specific search can still be surprisingly difficult.
