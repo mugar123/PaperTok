@@ -3,7 +3,7 @@ const dom = new JSDOM();
 global.DOMParser = dom.window.DOMParser;
 global.window = dom.window;
 
-import { getScientificReport } from './src/services/scientificReportService.js';
+import { getScientificReport } from '../../src/services/scientificReportService.js';
 
 async function run() {
   console.log("Fetching page 1...");

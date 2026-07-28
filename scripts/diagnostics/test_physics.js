@@ -1,4 +1,4 @@
-import { getScientificReport } from './src/services/scientificReportService.js';
+import { getScientificReport } from '../../src/services/scientificReportService.js';
 async function test() {
   console.log("Fetching physics 7d...");
   const report = await getScientificReport('7d', 1, { categories: ['physics'] });

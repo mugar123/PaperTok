@@ -6,3 +6,5 @@ dist
 .env.local
 .env.*
 .DS_Store
+.claude/
+lint_output.txt

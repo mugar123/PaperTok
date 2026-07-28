@@ -1,4 +1,4 @@
-import CATEGORIES from '../src/data/categories.js';
+import CATEGORIES from '../../src/data/categories.js';
 
 const allCategories = Object.values(CATEGORIES).flatMap(a => 
   Object.entries(a.subcategories || {}).map(([id, label]) => ({ id, labelEn: label.labelEn }))

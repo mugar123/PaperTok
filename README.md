@@ -1,7 +1,9 @@
 # PaperTok
 
 **A personalized way to discover scientific research.**
-> **Note:** PaperTok's current user interface is primarily in Spanish. Internationalization and an English interface are planned as the project grows.
+
+[Open PaperTok](https://mugar123.github.io/papertok/#/)
+
 PaperTok is an open-source web app for discovering research papers through a scrollable, personalized feed.
 
 I started building it as a physics student because I kept running into the same problem: there is an enormous amount of interesting research available online, but discovering papers outside of a very specific search can still be surprisingly difficult.
@@ -11,6 +13,9 @@ PaperTok tries to make that process feel more natural.
 Instead of knowing exactly what to search for, you can browse papers, interact with the ones that interest you, follow scientific topics and researchers, and gradually get recommendations that better match what you care about.
 
 > PaperTok is currently under active development. It is a personal open-source project and not affiliated with arXiv, OpenAlex, PubMed, or any other data provider.
+
+The interface supports Spanish and English. PaperTok selects a default from the visitor's
+region and also provides a manual language setting.
 
 ## What PaperTok does
 
@@ -30,9 +35,9 @@ The main feed is personalized using signals such as:
 
 The goal is not simply to rank the most popular papers, but to help each person discover research that is relevant to them while still leaving room for unexpected and interesting results.
 
-## Scientific Report
+## Research
 
-PaperTok also includes a **Scientific Report** designed for exploring important research over different time periods.
+PaperTok also includes a **Research** section designed for exploring important research over different time periods.
 
 It collects candidates from several scientific sources and ranks them using a combination of relevance, scientific impact, recency and diversity.
 
@@ -144,6 +149,26 @@ Some integrations require additional environment variables or API credentials. T
 
 See [`worker/README.md`](worker/README.md) for information about the server-side configuration.
 
+## Repository structure
+
+```text
+papertok/
+├── src/                    React app, scientific services and recommendation logic
+├── worker/                 Cloudflare Worker, AI and notifications
+├── public/                 Static assets
+├── docs/                   Architecture and development guides
+├── scripts/diagnostics/    Manual provider and proxy probes
+└── .github/workflows/      GitHub Pages deployment
+```
+
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Development guide](docs/DEVELOPMENT.md)
+- [Worker configuration](worker/README.md)
+- [Contributing](CONTRIBUTING.md)
+- [Agent guidance](AGENTS.md)
+
 ## Why I built it
 
 I'm an undergraduate physics student, and PaperTok started as a project to solve a problem I had myself.
@@ -180,6 +205,8 @@ Contributions, suggestions and bug reports are welcome.
 If you find something that could be improved, feel free to open an issue or submit a pull request.
 
 Since PaperTok is still evolving quickly, opening an issue before working on a large change is recommended so we can discuss the approach first.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, verification and security guidance.
 
 ## Acknowledgements
 

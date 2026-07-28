@@ -1,4 +1,4 @@
-import { ElsevierAdapter } from '../src/services/adapters/ElsevierAdapter.js';
+import { ElsevierAdapter } from '../../src/services/adapters/ElsevierAdapter.js';
 
 async function testMech() {
   const elsevierAdapter = new ElsevierAdapter();

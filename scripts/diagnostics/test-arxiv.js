@@ -1,5 +1,5 @@
-import { fetchPapers } from './src/services/arxivService.js';
-import { CATEGORIES } from './src/data/categories.js';
+import { fetchPapers } from '../../src/services/arxivService.js';
+import { CATEGORIES } from '../../src/data/categories.js';
 
 const physicsCats = Object.keys(CATEGORIES.physics.subcategories);
 console.log("Fetching for:", physicsCats);
