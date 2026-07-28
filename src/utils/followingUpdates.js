@@ -16,6 +16,26 @@ function normalizeTitle(value) {
     .trim();
 }
 
+function normalizeAuthor(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function getFollowingUpdateIdentityKeys(paper = {}) {
+  const stableKey = getFollowingUpdatePaperKey(paper);
+  const firstAuthor = Array.isArray(paper.authors) ? paper.authors[0] : null;
+  const authorName = normalizeAuthor(
+    typeof firstAuthor === 'string' ? firstAuthor : firstAuthor?.name,
+  );
+  const title = normalizeTitle(paper.title);
+  const workKey = title && authorName ? `work:${title}|${authorName}` : '';
+  return [...new Set([stableKey, workKey].filter(Boolean))];
+}
+
 export function getFollowingUpdatePaperKey(paper = {}) {
   const doi = normalizeDoi(paper.doi);
   if (doi) return `doi:${doi}`;
@@ -44,29 +64,49 @@ function mergeMatches(left = [], right = []) {
   )) === index);
 }
 
+function mergeFollowingUpdatePaperRecords(current, paper, updateKey) {
+  return {
+    ...current,
+    ...paper,
+    id: current.id || paper.id,
+    doi: current.doi || paper.doi,
+    arxivId: current.arxivId || paper.arxivId,
+    pmid: current.pmid || paper.pmid,
+    abstract: current.abstract?.length >= (paper.abstract?.length || 0) ? current.abstract : paper.abstract,
+    citationCount: Math.max(current.citationCount || 0, paper.citationCount || 0),
+    citationCountKnown: Boolean(current.citationCountKnown || paper.citationCountKnown),
+    _followedEntityMatches: mergeMatches(current._followedEntityMatches, paper._followedEntityMatches),
+    updateKey,
+  };
+}
+
 export function mergeFollowingUpdatePapers(papers = [], limit = 60) {
-  const merged = new Map();
+  const mergedByIdentity = new Map();
 
   papers.filter(Boolean).forEach((paper) => {
-    const key = getFollowingUpdatePaperKey(paper);
-    const current = merged.get(key);
-    if (!current) {
-      merged.set(key, { ...paper, updateKey: key });
+    const identityKeys = getFollowingUpdateIdentityKeys(paper);
+    const existingRecords = [...new Set(identityKeys
+      .map(key => mergedByIdentity.get(key))
+      .filter(Boolean))];
+    if (!existingRecords.length) {
+      const next = { ...paper, updateKey: getFollowingUpdatePaperKey(paper) };
+      identityKeys.forEach(key => mergedByIdentity.set(key, next));
       return;
     }
 
-    merged.set(key, {
-      ...current,
-      ...paper,
-      abstract: current.abstract?.length >= (paper.abstract?.length || 0) ? current.abstract : paper.abstract,
-      citationCount: Math.max(current.citationCount || 0, paper.citationCount || 0),
-      citationCountKnown: Boolean(current.citationCountKnown || paper.citationCountKnown),
-      _followedEntityMatches: mergeMatches(current._followedEntityMatches, paper._followedEntityMatches),
-      updateKey: key,
+    const updateKey = existingRecords[0].updateKey || getFollowingUpdatePaperKey(existingRecords[0]);
+    const next = existingRecords.reduce(
+      (merged, current) => mergeFollowingUpdatePaperRecords(current, merged, updateKey),
+      paper,
+    );
+    const existingSet = new Set(existingRecords);
+    mergedByIdentity.forEach((value, key) => {
+      if (existingSet.has(value)) mergedByIdentity.set(key, next);
     });
+    identityKeys.forEach(key => mergedByIdentity.set(key, next));
   });
 
-  return [...merged.values()]
+  return [...new Set(mergedByIdentity.values())]
     .sort((a, b) => (
       getPaperPublicationTime(b) - getPaperPublicationTime(a)
       || (b.citationCount || 0) - (a.citationCount || 0)

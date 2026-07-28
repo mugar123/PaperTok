@@ -39,6 +39,44 @@ test('deduplicates papers and preserves every followed-entity reason', () => {
   assert.deepEqual(merged[0]._followedEntityMatches.map(match => match.type), ['author', 'topic']);
 });
 
+test('deduplicates provider records by title and first author when their ids differ', () => {
+  const merged = mergeFollowingUpdatePapers([
+    {
+      id: 'openalex:W1',
+      title: 'A shared result without a DOI',
+      authors: [{ name: 'Ada Lovelace' }],
+      published: '2026-07-01',
+      citationCount: 3,
+      abstract: 'Short abstract.',
+      _followedEntityMatches: [{ type: 'author', canonicalId: 'A1', displayName: 'Ada Lovelace' }],
+    },
+    {
+      id: 'repository:99',
+      title: 'A Shared Result Without a DOI',
+      authors: [{ name: 'Ada Lovelace' }],
+      published: '2026-07-01',
+      citationCount: 12,
+      abstract: 'A longer abstract supplied by the second provider.',
+      _followedEntityMatches: [{ type: 'institution', canonicalId: 'I1', displayName: 'Analytical Engine Lab' }],
+    },
+  ]);
+
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].id, 'openalex:W1');
+  assert.equal(merged[0].citationCount, 12);
+  assert.equal(merged[0].abstract, 'A longer abstract supplied by the second provider.');
+  assert.deepEqual(merged[0]._followedEntityMatches.map(match => match.type), ['author', 'institution']);
+});
+
+test('keeps identical titles from different first authors separate', () => {
+  const merged = mergeFollowingUpdatePapers([
+    { id: 'one', title: 'Introduction', authors: [{ name: 'Ada Lovelace' }] },
+    { id: 'two', title: 'Introduction', authors: [{ name: 'Grace Hopper' }] },
+  ]);
+
+  assert.equal(merged.length, 2);
+});
+
 test('sorts updates by publication date and rejects stale papers', () => {
   const now = Date.parse('2026-07-23T00:00:00Z');
   assert.equal(isRecentFollowingUpdate({ published: '2026-07-01' }, now, 365), true);
