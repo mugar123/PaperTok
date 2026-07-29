@@ -1,5 +1,5 @@
 const API_BASE = 'https://api.ror.org/v2/organizations';
-const CACHE_PREFIX = 'papertok_ror_v2_';
+const CACHE_PREFIX = 'papertok_ror_v3_';
 const CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
 const MEMORY_CACHE = new Map();
 const SEARCH_CACHE_TTL = 10 * 60 * 1000;
@@ -15,6 +15,19 @@ function getPreferredName(names = []) {
     || names.find(name => name?.types?.includes('label'))?.value
     || names.find(name => name?.value)?.value
     || '';
+}
+
+function getLocalizedNames(names = []) {
+  return Object.fromEntries(['es', 'en'].flatMap((language) => {
+    const candidates = names.filter(name => (
+      name?.lang === language
+      && name?.value
+      && (name.types?.includes('ror_display') || name.types?.includes('label'))
+    ));
+    const preferred = candidates.find(name => name.types?.includes('ror_display'))
+      || candidates.find(name => name.types?.includes('label'));
+    return preferred ? [[language, preferred.value]] : [];
+  }));
 }
 
 function uniqueStrings(values) {
@@ -44,6 +57,7 @@ export function normalizeRorInstitution(record) {
     id: rorUrl,
     ror: rorUrl,
     display_name: displayName,
+    localized_names: getLocalizedNames(names),
     aliases: uniqueStrings(names.filter(name => !name.types?.includes('ror_display')).map(name => name.value)),
     acronyms: uniqueStrings(names.filter(name => name.types?.includes('acronym')).map(name => name.value)),
     country_code: location.country_code || '',
@@ -86,6 +100,10 @@ export function mergeInstitutionWithRor(openAlexInstitution, rorInstitution) {
     id: openAlexInstitution.id || rorInstitution.id,
     ror: rorInstitution.ror,
     display_name: rorInstitution.display_name || openAlexInstitution.display_name,
+    localized_names: {
+      ...(openAlexInstitution.localized_names || {}),
+      ...(rorInstitution.localized_names || {}),
+    },
     aliases: uniqueStrings([...(openAlexInstitution.aliases || []), ...(rorInstitution.aliases || [])]),
     country_code: rorInstitution.country_code || openAlexInstitution.country_code || '',
     type: rorInstitution.type || openAlexInstitution.type,

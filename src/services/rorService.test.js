@@ -29,6 +29,10 @@ const ROR_RECORD = {
 test('normalizes ROR v2 institutional metadata', () => {
   const institution = normalizeRorInstitution(ROR_RECORD);
   assert.equal(institution.display_name, 'Universidad de Salamanca');
+  assert.deepEqual(institution.localized_names, {
+    es: 'Universidad de Salamanca',
+    en: 'University of Salamanca',
+  });
   assert.equal(institution.domains[0], 'usal.es');
   assert.equal(institution.geo.city, 'Salamanca');
   assert.equal(institution.relationships[0].rorId, '04rxrdv16');
@@ -46,6 +50,7 @@ test('merges ROR identity without losing OpenAlex metrics', () => {
   }, ror);
   assert.equal(merged.id, 'https://openalex.org/I123');
   assert.equal(merged.display_name, 'Universidad de Salamanca');
+  assert.equal(merged.localized_names.en, 'University of Salamanca');
   assert.equal(merged.works_count, 120000);
   assert.equal(merged.summary_stats.h_index, 200);
   assert.equal(merged._metadataSource, 'openalex+ror');

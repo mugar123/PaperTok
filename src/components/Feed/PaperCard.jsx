@@ -616,7 +616,7 @@ const PaperCard = memo(function PaperCard({
             >
               <div className="pc-project-badge-slot-inner">
                 <motion.div
-                  className="pc-project-badge"
+                  className="pc-project-badge-motion"
                   initial={prefersReducedMotion
                     ? false
                     : { opacity: 0, y: 5, scale: 0.985 }}
@@ -627,19 +627,26 @@ const PaperCard = memo(function PaperCard({
                   transition={prefersReducedMotion
                     ? { duration: 0.12 }
                     : { duration: 0.46, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (project.code) {
+                >
+                  <button
+                    type="button"
+                    className="pc-project-badge"
+                    disabled={!project.code}
+                    onClick={(e) => {
+                      e.stopPropagation();
                       const paperId = paper.id.startsWith('arxiv:') ? paper.id.split(':')[1] : paper.id;
                       navigate(`/explorer/project/${encodeURIComponent(project.code)}?name=${encodeURIComponent(project.acronym)}&funder=${encodeURIComponent(project.funder)}&arxivId=${paperId}`);
-                    }
-                  }}
-                >
-                  <Briefcase size={12} />
-                  <span>
-                    {[project.funderLevel, project.funder].find(value => value && value !== 'Unknown Funder')
-                      || (isEnglish ? 'Project' : 'Proyecto')}: {project.acronym}
-                  </span>
+                    }}
+                    title={project.code
+                      ? (isEnglish ? 'Open research project' : 'Abrir proyecto de investigación')
+                      : undefined}
+                  >
+                    <Briefcase size={12} />
+                    <span>
+                      {[project.funderLevel, project.funder].find(value => value && value !== 'Unknown Funder')
+                        || (isEnglish ? 'Project' : 'Proyecto')}: {project.acronym}
+                    </span>
+                  </button>
                 </motion.div>
               </div>
             </motion.div>

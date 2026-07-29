@@ -641,45 +641,162 @@ export async function searchInstitutions(query, options = {}) {
   return [];
 }
 
-/**
- * Search concepts (fields of study) by name.
- * @param {string} query 
- * @returns {Promise<Array>}
- */
-export async function searchConcepts(query) {
-  if (!query) return [];
-  
-  let searchQuery = query.trim().toLowerCase();
-  let matches = [];
+function normalizeTopicSearchValue(value = '') {
+  return String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
 
-  Object.entries(CATEGORIES).forEach(([id, cat]) => {
-    if (cat.label.toLowerCase().includes(searchQuery) || cat.labelEn.toLowerCase().includes(searchQuery)) {
-      matches.push({
-        id: id,
-        display_name: cat.labelEn,
-        description: cat.label,
-        works_count: 1000,
-        level: 0,
-        categoryIds: Object.keys(cat.subcategories || {})
-      });
-    }
-    if (cat.subcategories) {
-      Object.entries(cat.subcategories).forEach(([subId, subCat]) => {
-         if (subCat.label.toLowerCase().includes(searchQuery) || subCat.labelEn.toLowerCase().includes(searchQuery)) {
-           matches.push({
-             id: subId,
-             display_name: subCat.labelEn,
-             description: subCat.label,
-             works_count: 500,
-             level: 1,
-             categoryIds: [subId]
-           });
-         }
-      });
+function scoreTopicMatch(query, values) {
+  const normalizedQuery = normalizeTopicSearchValue(query);
+  if (!normalizedQuery) return -1;
+
+  const queryTokens = normalizedQuery.split(' ').filter(Boolean);
+  let bestScore = -1;
+  values.forEach((value, index) => {
+    const normalizedValue = normalizeTopicSearchValue(value);
+    if (!normalizedValue) return;
+    const sourceWeight = Math.max(0, 4 - index);
+    if (normalizedValue === normalizedQuery) {
+      bestScore = Math.max(bestScore, 100 + sourceWeight);
+    } else if (normalizedValue.startsWith(normalizedQuery)) {
+      bestScore = Math.max(bestScore, 85 + sourceWeight);
+    } else if (normalizedValue.includes(normalizedQuery)) {
+      bestScore = Math.max(bestScore, 75 + sourceWeight);
+    } else if (queryTokens.length > 1 && queryTokens.every(token => normalizedValue.includes(token))) {
+      bestScore = Math.max(bestScore, 65 + sourceWeight);
     }
   });
+  return bestScore;
+}
 
-  return matches.slice(0, 5);
+export function searchLocalTopics(query, language = 'es', limit = 8) {
+  if (!query?.trim()) return [];
+  const matches = [];
+
+  Object.entries(CATEGORIES).forEach(([id, category]) => {
+    const categoryScore = scoreTopicMatch(query, [
+      category.label,
+      category.labelEn,
+      id,
+      category.description,
+      category.descriptionEn,
+    ]);
+    if (categoryScore >= 0) {
+      matches.push({
+        id,
+        display_name: language === 'en' ? category.labelEn || category.label : category.label,
+        labelEs: category.label,
+        labelEn: category.labelEn,
+        description: language === 'en'
+          ? category.descriptionEn || category.description
+          : category.description,
+        level: 0,
+        categoryIds: Object.keys(category.subcategories || {}),
+        subcategoryCount: Object.keys(category.subcategories || {}).length,
+        works_count: null,
+        _localTopic: true,
+        _searchScore: categoryScore,
+      });
+    }
+
+    Object.entries(category.subcategories || {}).forEach(([subcategoryId, subcategory]) => {
+      const subcategoryScore = scoreTopicMatch(query, [
+        subcategory.label,
+        subcategory.labelEn,
+        subcategoryId,
+        category.label,
+        category.labelEn,
+      ]);
+      if (subcategoryScore < 0) return;
+      matches.push({
+        id: subcategoryId,
+        display_name: language === 'en'
+          ? subcategory.labelEn || subcategory.label
+          : subcategory.label,
+        labelEs: subcategory.label,
+        labelEn: subcategory.labelEn,
+        description: language === 'en'
+          ? category.descriptionEn || category.description
+          : category.description,
+        parent_display_name: language === 'en'
+          ? category.labelEn || category.label
+          : category.label,
+        level: 1,
+        categoryIds: [subcategoryId],
+        works_count: null,
+        _localTopic: true,
+        _searchScore: subcategoryScore,
+      });
+    });
+  });
+
+  return matches
+    .sort((a, b) => b._searchScore - a._searchScore || a.display_name.localeCompare(b.display_name))
+    .slice(0, Math.max(1, limit))
+    .map(topic => {
+      const result = { ...topic };
+      delete result._searchScore;
+      return result;
+    });
+}
+
+/**
+ * Search PaperTok's bilingual taxonomy first, then enrich it with current
+ * OpenAlex topics when the provider is available.
+ */
+export async function searchConcepts(query, options = {}) {
+  if (!query?.trim()) return [];
+  const language = options.language === 'en' ? 'en' : 'es';
+  const limit = Math.max(1, Math.min(12, Number(options.limit) || 8));
+  const normalizedQuery = query.trim();
+  const localTopics = searchLocalTopics(normalizedQuery, language, limit);
+
+  try {
+    const url = new URL('https://api.openalex.org/autocomplete/topics');
+    url.searchParams.set('q', normalizedQuery);
+    const data = await openAlexJson(url.toString(), {
+      timeoutMs: 3500,
+      retries: 0,
+      cacheTtlMs: 30 * 60 * 1000,
+      persistentKey: `topic-search:${normalizedQuery.toLowerCase()}`,
+      persistentTtlMs: 7 * 24 * 60 * 60 * 1000,
+      staleIfError: true,
+    });
+
+    const seen = new Set(localTopics.flatMap(topic => [
+      normalizeTopicSearchValue(topic.display_name),
+      normalizeTopicSearchValue(topic.labelEs),
+      normalizeTopicSearchValue(topic.labelEn),
+    ]).filter(Boolean));
+    const remoteTopics = (data?.topics || data?.results || []).flatMap(topic => {
+      const id = String(topic?.id || '').split('/').pop();
+      const nameKey = normalizeTopicSearchValue(topic?.display_name);
+      if (!/^T\d+$/i.test(id) || !nameKey || seen.has(nameKey)) return [];
+      seen.add(nameKey);
+      return [{
+        id,
+        display_name: topic.display_name,
+        description: topic.description || topic.hint || '',
+        level: 2,
+        categoryIds: [],
+        works_count: Number.isFinite(topic.works_count) ? topic.works_count : null,
+        field_display_name: topic.field?.display_name
+          || topic.subfield?.display_name
+          || topic.field_display_name
+          || '',
+        keywords: Array.isArray(topic.keywords) ? topic.keywords.slice(0, 5) : [],
+        _localTopic: false,
+      }];
+    });
+
+    return [...localTopics, ...remoteTopics].slice(0, limit);
+  } catch {
+    return localTopics;
+  }
 }
 
 export function getLocalTopicEntity(id, language = 'es') {

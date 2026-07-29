@@ -15,6 +15,7 @@ import {
 import { useFollowing } from '../../context/FollowingContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { getFollowedEntityPath } from '../../utils/followingNavigation';
+import { getLocalizedInstitutionName } from '../../utils/institutionLocalization';
 import './FollowingSettingsPage.css';
 
 const FOLLOW_TABS = [
@@ -30,6 +31,12 @@ const SOURCE_LABELS = {
   papertok: 'PaperTok',
   legacy: 'Perfil anterior',
 };
+
+function getFollowDisplayName(entity, language) {
+  return entity.type === 'institution'
+    ? getLocalizedInstitutionName(entity, language)
+    : entity.displayName;
+}
 
 export default function FollowingSettingsPage() {
   const navigate = useNavigate();
@@ -50,8 +57,11 @@ export default function FollowingSettingsPage() {
   const activeTab = FOLLOW_TABS.find(tab => tab.type === activeType) || FOLLOW_TABS[0];
   const visibleEntities = useMemo(
     () => [...(followedByType[activeType] || [])]
-      .sort((left, right) => left.displayName.localeCompare(right.displayName, locale)),
-    [activeType, followedByType, locale],
+      .sort((left, right) => (
+        getFollowDisplayName(left, language)
+          .localeCompare(getFollowDisplayName(right, language), locale)
+      )),
+    [activeType, followedByType, language, locale],
   );
 
   const handleUnfollow = async (entity) => {
@@ -59,9 +69,10 @@ export default function FollowingSettingsPage() {
     try {
       await toggleFollow(entity);
     } catch {
+      const displayName = getFollowDisplayName(entity, language);
       setActionError(isEnglish
-        ? `Could not unfollow ${entity.displayName}.`
-        : `No se pudo dejar de seguir a ${entity.displayName}.`);
+        ? `Could not unfollow ${displayName}.`
+        : `No se pudo dejar de seguir a ${displayName}.`);
     }
   };
 
@@ -135,6 +146,7 @@ export default function FollowingSettingsPage() {
               {visibleEntities.map((entity) => {
                 const Icon = activeTab.Icon;
                 const pending = isFollowPending(entity);
+                const displayName = getFollowDisplayName(entity, language);
                 return (
                   <motion.article
                     layout
@@ -150,7 +162,7 @@ export default function FollowingSettingsPage() {
                         <Icon size={20} />
                       </span>
                       <span className="following-settings-entity-copy">
-                        <strong>{entity.displayName}</strong>
+                        <strong>{displayName}</strong>
                         <small>
                           {activeTab.singular[language].charAt(0).toUpperCase() + activeTab.singular[language].slice(1)}
                           {' · '}
@@ -164,8 +176,8 @@ export default function FollowingSettingsPage() {
                       className="following-settings-unfollow"
                       disabled={pending}
                       onClick={() => handleUnfollow(entity)}
-                      aria-label={`${isEnglish ? 'Unfollow' : 'Dejar de seguir'} ${entity.displayName}`}
-                      title={`${isEnglish ? 'Unfollow' : 'Dejar de seguir'} ${entity.displayName}`}
+                      aria-label={`${isEnglish ? 'Unfollow' : 'Dejar de seguir'} ${displayName}`}
+                      title={`${isEnglish ? 'Unfollow' : 'Dejar de seguir'} ${displayName}`}
                     >
                       {pending ? <LoaderCircle size={18} /> : <UserMinus size={18} />}
                     </button>

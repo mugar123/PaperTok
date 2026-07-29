@@ -28,6 +28,7 @@ import { hasUsableAIAbstract } from '../../utils/aiExplanationAccess.js';
 import { fetchDomainPapers } from '../../services/domainSourceService';
 import { settleWithin } from '../../utils/asyncTiming';
 import { getEntityWikiInfo } from '../../services/wikiService';
+import { getLocalizedInstitutionName } from '../../utils/institutionLocalization';
 import 'katex/dist/katex.min.css';
 import './EntityExplorer.css';
 
@@ -140,7 +141,10 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
     () => entity?._localTopic ? getLocalTopicEntity(entity.id || id, language) : null,
     [entity, id, language],
   );
-  const entityDisplayName = localizedTopicEntity?.display_name || entity?.display_name || '';
+  const entityOfficialName = localizedTopicEntity?.display_name || entity?.display_name || '';
+  const entityDisplayName = type === 'institution'
+    ? getLocalizedInstitutionName(entity, language)
+    : entityOfficialName;
   const wikiRequestKey = `${language}:${type}:${entityDisplayName}`;
   const visibleWikiInfo = wikiInfo?._requestKey === wikiRequestKey ? wikiInfo : null;
   const getInteractionState = useCallback((paper) => ({
@@ -195,7 +199,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
     return {
       type: followType,
       id: entity.id || entity.code || id,
-      displayName: entityDisplayName,
+      displayName: type === 'institution' ? entityOfficialName : entityDisplayName,
       source: type === 'project' ? 'openaire' : type === 'concept' || type === 'topic' ? 'papertok' : 'openalex',
       externalIds: {
         orcid: entity.orcid,
@@ -204,9 +208,10 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
       metadata: {
         funder: entity.funder,
         categoryIds: entity.categoryIds,
+        localizedNames: type === 'institution' ? entity.localized_names : undefined,
       },
     };
-  }, [entity, entityDisplayName, id, type]);
+  }, [entity, entityDisplayName, entityOfficialName, id, type]);
 
   // Reset overlays when navigating to a different entity
   useEffect(() => {

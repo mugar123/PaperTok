@@ -14,6 +14,9 @@ function createMatch(follow) {
     type: follow.type,
     canonicalId: follow.canonicalId,
     displayName: follow.displayName,
+    metadata: {
+      localizedNames: follow.metadata?.localizedNames,
+    },
   };
 }
 

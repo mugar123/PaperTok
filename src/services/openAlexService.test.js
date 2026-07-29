@@ -6,6 +6,7 @@ import {
   getLocalTopicEntity,
   isOpenAlexEnrichmentId,
   mapOpenAlexEnrichmentWork,
+  searchLocalTopics,
 } from './openAlexService.js';
 
 test('localizes topic entities without changing their canonical category identity', () => {
@@ -18,6 +19,25 @@ test('localizes topic entities without changing their canonical category identit
   assert.equal(english.display_name, 'General Relativity and Quantum Cosmology');
   assert.deepEqual(english.categoryIds, spanish.categoryIds);
   assert.equal(english._localTopic, true);
+});
+
+test('searches local topics bilingually and ignores accents', () => {
+  const spanish = searchLocalTopics('cosmologia', 'es');
+  const english = searchLocalTopics('cosmology', 'en');
+
+  assert.equal(spanish[0].id, 'astro-ph.CO');
+  assert.equal(spanish[0].display_name, 'Cosmología');
+  assert.equal(english[0].id, 'astro-ph.CO');
+  assert.equal(english[0].display_name, 'Cosmology');
+});
+
+test('returns real local topic metadata instead of invented work counts', () => {
+  const [physics] = searchLocalTopics('physics', 'en');
+
+  assert.equal(physics.id, 'physics');
+  assert.equal(physics.works_count, null);
+  assert.ok(physics.subcategoryCount > 0);
+  assert.equal(physics._localTopic, true);
 });
 
 test('only sends arXiv and OpenAlex identifiers to batch enrichment', () => {

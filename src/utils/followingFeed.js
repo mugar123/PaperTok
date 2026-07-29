@@ -1,5 +1,6 @@
 import { getFollowingUpdatePaperKey, getPaperPublicationTime } from './followingUpdates.js';
 import { resolvePaperTopic } from './topicNavigation.js';
+import { getLocalizedInstitutionName } from './institutionLocalization.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const RECENCY_DECAY_DAYS = 120;
@@ -44,7 +45,10 @@ export function buildFollowReasonLabel(matches = [], language = 'es') {
       ? resolvePaperTopic(match.canonicalId, language)
         || resolvePaperTopic(match.displayName, language)
       : null;
-    const displayName = localizedTopic?.label || match.displayName;
+    const localizedInstitution = match.type === 'institution'
+      ? getLocalizedInstitutionName(match, language)
+      : null;
+    const displayName = localizedTopic?.label || localizedInstitution || match.displayName;
     return connector ? `${connector} ${displayName}` : displayName;
   });
   return isEnglish

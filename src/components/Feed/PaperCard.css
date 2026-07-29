@@ -220,6 +220,14 @@
   overflow: hidden;
 }
 
+.pc-project-badge-motion {
+  display: inline-flex;
+  max-width: 100%;
+  transform-origin: left center;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
 .pc-project-badge {
   display: inline-flex;
   align-items: center;
@@ -235,15 +243,64 @@
   border: 1px solid rgba(29, 161, 242, 0.3);
   border-radius: 16px;
   cursor: pointer;
-  transform-origin: left center;
-  backface-visibility: hidden;
-  will-change: transform, opacity;
+  font-family: inherit;
+  text-align: left;
+  transform: translateY(0) scale(1);
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pc-project-badge:hover:not(:disabled),
+.pc-project-badge:focus-visible:not(:disabled) {
+  color: #7dd3fc;
+  background: rgba(29, 161, 242, 0.23);
+  border-color: rgba(125, 211, 252, 0.58);
+  box-shadow: 0 6px 16px rgba(14, 165, 233, 0.18);
+  transform: translateY(-2px) scale(1.015);
+  outline: none;
+}
+
+.pc-project-badge:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+
+.pc-project-badge:disabled {
+  cursor: default;
+}
+
+.pc-project-badge svg {
+  flex-shrink: 0;
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pc-project-badge:hover:not(:disabled) svg,
+.pc-project-badge:focus-visible:not(:disabled) svg {
+  transform: translateY(-1px) rotate(-6deg) scale(1.08);
 }
 
 .pc-project-badge span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pc-project-badge,
+  .pc-project-badge svg {
+    transition-duration: 0.01ms;
+  }
+
+  .pc-project-badge:hover:not(:disabled),
+  .pc-project-badge:focus-visible:not(:disabled),
+  .pc-project-badge:active:not(:disabled),
+  .pc-project-badge:hover:not(:disabled) svg,
+  .pc-project-badge:focus-visible:not(:disabled) svg {
+    transform: none;
+  }
 }
 
 .pc-topic-link {

@@ -1,28 +1,29 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, FileText, Users, Loader2, ArrowLeft, Building2, Lightbulb, Briefcase, Sparkles, Compass, TrendingUp, Check } from 'lucide-react';
+import { Search, FileText, Users, ArrowLeft, Building2, Lightbulb, Briefcase, Sparkles, Compass, TrendingUp, Check, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { searchAuthors, searchInstitutions, searchConcepts, searchSources } from '../../services/openAlexService';
+import {
+  searchAuthors,
+  searchInstitutions,
+  searchConcepts,
+  searchLocalTopics,
+  searchSources,
+} from '../../services/openAlexService';
 import { searchProjects } from '../../services/openAireService';
 import { OpenAlexAdapter } from '../../services/adapters/OpenAlexAdapter';
 import { PaperBuilder } from '../../services/PaperBuilder';
 import { useFollowing } from '../../context/FollowingContext';
 import { useFeed } from '../../context/FeedContext';
 import { useLanguage } from '../../context/LanguageContext';
-import { motion } from 'framer-motion';
 import PaperCard from '../Feed/PaperCard';
 import PDFViewer from '../PDF/PDFViewer';
 import ScientificText from '../ScientificText';
+import { getLocalizedInstitutionName } from '../../utils/institutionLocalization';
 
 import './SearchPage.css';
 
 const paperSearchAdapter = new OpenAlexAdapter();
-const SEARCH_DEBOUNCE_MS = 220;
+const SEARCH_DEBOUNCE_MS = 260;
 const SEARCH_TIMEOUT_MS = 6000;
-const SEARCH_SECTIONS = ['papers', 'authors', 'institutions', 'concepts', 'sources', 'projects'];
-
-function createPendingSections(pending = false) {
-  return Object.fromEntries(SEARCH_SECTIONS.map(section => [section, pending]));
-}
 
 function withTimeout(promise, fallback = [], timeoutMs = SEARCH_TIMEOUT_MS) {
   return new Promise((resolve) => {
@@ -69,7 +70,7 @@ function formatPaperDate(paper, locale) {
 
 export default function SearchPage({ onSaveToList = () => {} }) {
   const navigate = useNavigate();
-  const { isEnglish, locale } = useLanguage();
+  const { language, isEnglish, locale } = useLanguage();
   const { isFollowing, isFollowPending, toggleFollow } = useFollowing();
   const {
     likedPaperIds, savedPaperIds, readPaperIds,
@@ -78,9 +79,8 @@ export default function SearchPage({ onSaveToList = () => {} }) {
   
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-  const [isDebouncing, setIsDebouncing] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
-  const [pendingSections, setPendingSections] = useState(() => createPendingSections());
+  const [activeScope, setActiveScope] = useState('all');
   
   const [paperResults, setPaperResults] = useState([]);
   const [authorResults, setAuthorResults] = useState([]);
@@ -106,21 +106,15 @@ export default function SearchPage({ onSaveToList = () => {} }) {
     requestAbortRef.current?.abort();
     const requestController = new AbortController();
     requestAbortRef.current = requestController;
+    const localTopics = searchLocalTopics(searchTerm, language, 8);
 
     setIsSearching(true);
     setHasSearched(true);
-    setPendingSections(createPendingSections(true));
-    setPaperResults([]);
-    setAuthorResults([]);
-    setInstitutionResults([]);
-    setConceptResults([]);
-    setSourceResults([]);
-    setProjectResults([]);
+    setConceptResults(localTopics);
 
-    const publish = (section, setter) => (results) => {
+    const publish = (setter) => (results) => {
       if (searchId === searchIdRef.current && !requestController.signal.aborted) {
         setter(results);
-        setPendingSections(current => ({ ...current, [section]: false }));
       }
       return results;
     };
@@ -129,28 +123,31 @@ export default function SearchPage({ onSaveToList = () => {} }) {
       withTimeout(
         paperSearchAdapter.search(searchTerm, 1)
           .then(result => PaperBuilder.deduplicate(result.papers || []).slice(0, 10)),
-      ).then(publish('papers', setPaperResults)),
-      withTimeout(searchAuthors(searchTerm), [], 5000).then(publish('authors', setAuthorResults)),
+      ).then(publish(setPaperResults)),
+      withTimeout(searchAuthors(searchTerm), [], 5000).then(publish(setAuthorResults)),
       withTimeout(
         searchInstitutions(searchTerm, { signal: requestController.signal }),
         [],
         4500,
-      ).then(publish('institutions', setInstitutionResults)),
-      withTimeout(searchConcepts(searchTerm), [], 1000).then(publish('concepts', setConceptResults)),
-      withTimeout(searchSources(searchTerm), [], 5000).then(publish('sources', setSourceResults)),
+      ).then(publish(setInstitutionResults)),
+      withTimeout(
+        searchConcepts(searchTerm, { language, limit: 8 }),
+        localTopics,
+        4500,
+      ).then(publish(setConceptResults)),
+      withTimeout(searchSources(searchTerm), [], 5000).then(publish(setSourceResults)),
       withTimeout(searchProjects(searchTerm).then(result => result.projects || []))
-        .then(publish('projects', setProjectResults)),
+        .then(publish(setProjectResults)),
     ];
 
     await Promise.allSettled(tasks);
     if (searchId === searchIdRef.current) {
       setIsSearching(false);
-      setPendingSections(createPendingSections());
       if (requestAbortRef.current === requestController) {
         requestAbortRef.current = null;
       }
     }
-  }, []);
+  }, [language]);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -164,28 +161,21 @@ export default function SearchPage({ onSaveToList = () => {} }) {
         setSourceResults([]);
         setProjectResults([]);
         setIsSearching(false);
-        setIsDebouncing(false);
         setHasSearched(false);
-        setPendingSections(createPendingSections());
+        setActiveScope('all');
       }, 0);
       return () => clearTimeout(resetStateTimeout);
     }
 
     requestAbortRef.current?.abort();
     searchIdRef.current += 1;
-    const debounceStateTimeout = setTimeout(() => {
-      setIsDebouncing(true);
-      setIsSearching(false);
-    }, 0);
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     
     timeoutRef.current = setTimeout(() => {
-      setIsDebouncing(false);
       performSearch(query.trim());
     }, SEARCH_DEBOUNCE_MS);
     
     return () => {
-      clearTimeout(debounceStateTimeout);
       clearTimeout(timeoutRef.current);
       requestAbortRef.current?.abort();
     };
@@ -211,49 +201,146 @@ export default function SearchPage({ onSaveToList = () => {} }) {
     || projectResults.length > 0
     || !!cleanOrcid;
 
-  const suggestedQueries = [
-    { label: 'MIT', icon: <Building2 size={14} />, query: 'Massachusetts Institute of Technology' },
-    { label: 'DeepMind', icon: <Building2 size={14} />, query: 'DeepMind' },
-    { label: 'CRISPR Cas9', icon: <FileText size={14} />, query: 'CRISPR' },
-    { label: isEnglish ? 'Horizon projects' : 'Proyectos Horizon', icon: <Briefcase size={14} />, query: 'Horizon' },
-    { label: 'Geoffrey Hinton', icon: <Users size={14} />, query: 'Geoffrey Hinton' },
-    { label: isEnglish ? 'Quantum Computing' : 'Computación Cuántica', icon: <TrendingUp size={14} />, query: 'Quantum Computing' },
+  const scopes = [
+    { id: 'all', label: isEnglish ? 'All' : 'Todo' },
+    { id: 'papers', label: isEnglish ? 'Papers' : 'Papers' },
+    { id: 'topics', label: isEnglish ? 'Topics' : 'Temas' },
+    { id: 'authors', label: isEnglish ? 'Authors' : 'Autores' },
+    { id: 'institutions', label: isEnglish ? 'Institutions' : 'Instituciones' },
+    { id: 'projects', label: isEnglish ? 'Projects' : 'Proyectos' },
   ];
+  const scopeAllows = (section) => activeScope === 'all' || activeScope === section;
+  const hasVisibleResults = (
+    (scopeAllows('papers') && (paperResults.length > 0 || sourceResults.length > 0))
+    || (scopeAllows('topics') && conceptResults.length > 0)
+    || (scopeAllows('authors') && (authorResults.length > 0 || !!cleanOrcid))
+    || (scopeAllows('institutions') && institutionResults.length > 0)
+    || (scopeAllows('projects') && projectResults.length > 0)
+  );
+
+  const suggestedQueries = [
+    {
+      label: isEnglish ? 'Cosmology' : 'Cosmología',
+      kind: isEnglish ? 'Topic' : 'Tema',
+      icon: <Lightbulb size={15} />,
+      query: isEnglish ? 'Cosmology' : 'Cosmología',
+      scope: 'topics',
+    },
+    {
+      label: 'MIT',
+      kind: isEnglish ? 'Institution' : 'Institución',
+      icon: <Building2 size={15} />,
+      query: 'Massachusetts Institute of Technology',
+      scope: 'institutions',
+    },
+    {
+      label: 'CRISPR Cas9',
+      kind: 'Paper',
+      icon: <FileText size={15} />,
+      query: 'CRISPR Cas9',
+      scope: 'papers',
+    },
+    {
+      label: isEnglish ? 'Horizon projects' : 'Proyectos Horizon',
+      kind: isEnglish ? 'Project' : 'Proyecto',
+      icon: <Briefcase size={15} />,
+      query: 'Horizon',
+      scope: 'projects',
+    },
+    {
+      label: 'Geoffrey Hinton',
+      kind: isEnglish ? 'Author' : 'Autor',
+      icon: <Users size={15} />,
+      query: 'Geoffrey Hinton',
+      scope: 'authors',
+    },
+    {
+      label: isEnglish ? 'Quantum computing' : 'Computación cuántica',
+      kind: isEnglish ? 'Topic' : 'Tema',
+      icon: <TrendingUp size={15} />,
+      query: 'Quantum computing',
+      scope: 'topics',
+    },
+  ];
+
+  const handleSuggestedSearch = (suggestion) => {
+    setActiveScope(suggestion.scope);
+    setQuery(suggestion.query);
+  };
+
+  const clearSearch = () => {
+    setQuery('');
+    setActiveScope('all');
+  };
 
   return (
     <div className="search-page-container">
-      {/* Header */}
       <div className="search-header">
-        <button className="search-back-btn" onClick={() => navigate('/')}>
-          <ArrowLeft size={22} />
-        </button>
-        <div className="search-input-wrapper">
-          <Search className="search-icon" size={18} />
-          <input 
-            type="text" 
-            className="search-input"
-            placeholder={isEnglish ? 'Search papers, authors, institutions...' : 'Buscar papers, autores, universidades...'}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            autoFocus
-          />
-          {(isSearching || isDebouncing) && (
-            <Loader2
-              className="search-input-spinner spinning"
-              size={17}
-              aria-label={isEnglish ? 'Searching' : 'Buscando'}
+        <div className="search-header-row">
+          <button
+            type="button"
+            className="search-back-btn"
+            onClick={() => navigate('/')}
+            aria-label={isEnglish ? 'Back' : 'Volver'}
+          >
+            <ArrowLeft size={22} />
+          </button>
+          <div className={`search-input-wrapper ${isSearching ? 'is-searching' : ''}`}>
+            <Search className="search-icon" size={18} />
+            <input
+              type="search"
+              className="search-input"
+              placeholder={isEnglish
+                ? 'Search papers, topics, authors, institutions...'
+                : 'Buscar papers, temas, autores, instituciones...'}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape' && query) clearSearch();
+              }}
+              autoComplete="off"
+              autoFocus
             />
-          )}
+            {isSearching && (
+              <span className="search-input-status" role="status">
+                {isEnglish ? 'Searching...' : 'Buscando...'}
+              </span>
+            )}
+            {query && (
+              <button
+                type="button"
+                className="search-clear-btn"
+                onClick={clearSearch}
+                aria-label={isEnglish ? 'Clear search' : 'Borrar búsqueda'}
+              >
+                <X size={17} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="search-scopes" role="tablist" aria-label={isEnglish ? 'Result type' : 'Tipo de resultado'}>
+          {scopes.map(scope => (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeScope === scope.id}
+              key={scope.id}
+              className={`search-scope-btn ${activeScope === scope.id ? 'active' : ''}`}
+              onClick={() => setActiveScope(scope.id)}
+            >
+              {scope.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Results */}
       <div className="search-results custom-scrollbar">
-        <div className="search-results-list animate-fade-in">
-            {(isSearching || isDebouncing) && !hasResults && (
+        <div className="search-results-list" aria-busy={isSearching}>
+            {isSearching && !hasResults && (
               <div className="search-loading search-loading-skeleton" role="status">
                 <div className="search-loading-label">
-                  <Loader2 className="spinning" size={17} />
+                  <span className="search-loading-dot" aria-hidden="true" />
                   <span>{isEnglish ? 'Searching PaperTok...' : 'Buscando en PaperTok...'}</span>
                 </div>
                 <div className="search-skeleton-stack" aria-hidden="true">
@@ -270,45 +357,36 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
-            {(isSearching || isDebouncing) && hasResults && (
-              <div className="search-progress" role="status">
-                <Loader2 className="spinning" size={15} />
-                {isEnglish ? 'Updating results' : 'Actualizando resultados'}
-              </div>
-            )}
-
             {!query && !isSearching && (
-              <div className="search-initial-state animate-fade-in">
+              <div className="search-initial-state">
                 <div className="search-initial-hero">
-                  <Compass size={48} className="search-initial-icon" />
-                  <h2>{isEnglish ? 'Explore knowledge' : 'Explora el conocimiento'}</h2>
-                  <p>{isEnglish
-                    ? 'Search millions of papers, researchers, institutions, and funded projects around the world.'
-                    : 'Busca entre millones de papers, investigadores, universidades y proyectos financiados a nivel global.'}</p>
+                  <Compass size={42} className="search-initial-icon" />
+                  <h2>{isEnglish ? 'Search PaperTok' : 'Buscar en PaperTok'}</h2>
                 </div>
                 
                 <div className="search-suggestions">
                   <h3 className="search-suggestions-title"><Sparkles size={16} /> {isEnglish ? 'Suggested searches' : 'Búsquedas sugeridas'}</h3>
                   <div className="search-suggestions-grid">
-                    {suggestedQueries.map((item, idx) => (
-                      <motion.button 
+                    {suggestedQueries.map(item => (
+                      <button
+                        type="button"
                         key={item.label}
-                        onClick={() => setQuery(item.query)} 
+                        onClick={() => handleSuggestedSearch(item)}
                         className="search-suggestion-chip"
-                        initial={{ opacity: 0, scale: 0.9, y: 10 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        transition={{ duration: 0.6, delay: 0.1 + (idx * 0.05), type: 'spring' }}
                       >
-                        {item.icon} {item.label}
-                      </motion.button>
+                        <span className="search-suggestion-icon">{item.icon}</span>
+                        <span className="search-suggestion-copy">
+                          <span>{item.label}</span>
+                          <small>{item.kind}</small>
+                        </span>
+                      </button>
                     ))}
                   </div>
                 </div>
-
               </div>
             )}
 
-            {!hasResults && query && hasSearched && !isSearching && !isDebouncing && (
+            {!hasVisibleResults && query && hasSearched && !isSearching && (
               <div className="search-empty">
                 <Search size={40} className="search-empty-icon" />
                 <p>{isEnglish ? `No results found for "${query}"` : `No se encontraron resultados para "${query}"`}</p>
@@ -317,7 +395,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             )}
 
             {/* Direct ORCID */}
-            {cleanOrcid && (
+            {cleanOrcid && scopeAllows('authors') && (
               <div className="search-section">
                 <h3 className="search-section-title">{isEnglish ? 'Direct ORCID search' : 'Búsqueda directa ORCID'}</h3>
                 <div className="search-item" onClick={() => navigate(`/explorer/author/https%3A%2F%2Forcid.org%2F${cleanOrcid}`)}>
@@ -334,52 +412,43 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
-            {/* Institutions */}
-            {pendingSections.institutions && institutionResults.length === 0 && hasResults && (
-              <div className="search-section search-institution-loading" role="status">
-                <h3 className="search-section-title">
-                  {isEnglish ? 'Universities and institutions' : 'Universidades e instituciones'}
-                </h3>
-                {[0, 1].map(index => (
-                  <div className="search-skeleton-item" key={index} aria-hidden="true">
-                    <span className="search-skeleton-icon" />
-                    <span className="search-skeleton-copy">
-                      <span className="search-skeleton-line search-skeleton-line-title" />
-                      <span className="search-skeleton-line search-skeleton-line-meta" />
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {institutionResults.length > 0 && (
+            {institutionResults.length > 0 && scopeAllows('institutions') && (
               <div className="search-section">
                 <h3 className="search-section-title">{isEnglish ? 'Universities and institutions' : 'Universidades e instituciones'}</h3>
-                {institutionResults.map((inst, index) => (
-                  <div
-                    key={inst.id}
-                    className="search-item search-item-enter"
-                    style={{ '--search-item-index': index }}
-                    onClick={() => navigate(`/explorer/institution/${inst.id.split('/').pop()}`)}
-                  >
-                    <div className="search-item-icon"><Building2 size={22} /></div>
-                    <div className="search-item-info">
-                      <h4>{inst.display_name}</h4>
-                      <p>{inst.country_code || (isEnglish ? 'Unknown country' : 'País desconocido')} • {isEnglish ? 'Academic institution' : 'Institución académica'}</p>
+                {institutionResults.map((inst, index) => {
+                  const localizedName = getLocalizedInstitutionName(inst, language);
+                  return (
+                    <div
+                      key={inst.id}
+                      className="search-item search-item-enter"
+                      style={{ '--search-item-index': index }}
+                      onClick={() => navigate(`/explorer/institution/${inst.id.split('/').pop()}`)}
+                    >
+                      <div className="search-item-icon"><Building2 size={22} /></div>
+                      <div className="search-item-info">
+                        <h4>{localizedName}</h4>
+                        <p>{inst.country_code || (isEnglish ? 'Unknown country' : 'País desconocido')} • {isEnglish ? 'Academic institution' : 'Institución académica'}</p>
+                      </div>
+                      <FollowButton
+                        entity={{
+                          type: 'institution',
+                          id: inst.id,
+                          displayName: inst.display_name,
+                          source: inst._metadataSource || 'ror',
+                          externalIds: { ror: inst.ror || inst.id },
+                          metadata: { localizedNames: inst.localized_names },
+                        }}
+                        isFollowing={isFollowing}
+                        isPending={isFollowPending}
+                        onToggle={handleToggleFollow}
+                      />
                     </div>
-                    <FollowButton
-                      entity={{ type: 'institution', id: inst.id, displayName: inst.display_name, source: inst._metadataSource || 'ror', externalIds: { ror: inst.ror || inst.id } }}
-                      isFollowing={isFollowing}
-                      isPending={isFollowPending}
-                      onToggle={handleToggleFollow}
-                    />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
-            {/* Projects */}
-            {projectResults.length > 0 && (
+            {projectResults.length > 0 && scopeAllows('projects') && (
               <div className="search-section">
                 <h3 className="search-section-title">{isEnglish ? 'Research projects' : 'Proyectos de investigación'}</h3>
                 {projectResults.map(project => (
@@ -400,19 +469,43 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
-            {/* Concepts */}
-            {conceptResults.length > 0 && (
+            {conceptResults.length > 0 && scopeAllows('topics') && (
               <div className="search-section">
                 <h3 className="search-section-title">{isEnglish ? 'Topics and areas' : 'Temas y áreas'}</h3>
                 {conceptResults.map(concept => (
-                  <div key={concept.id} className="search-item" onClick={() => navigate(`/explorer/concept/${concept.id.split('/').pop()}`)}>
-                    <div className="search-item-icon"><Lightbulb size={22} /></div>
+                  <div
+                    key={concept.id}
+                    className="search-item search-topic-item"
+                    onClick={() => navigate(`/explorer/topic/${encodeURIComponent(String(concept.id).split('/').pop())}`)}
+                  >
+                    <div className="search-item-icon search-topic-icon"><Lightbulb size={22} /></div>
                     <div className="search-item-info">
                       <h4>{concept.display_name}</h4>
-                      <p>{isEnglish ? 'Level' : 'Nivel'} {concept.level} • {concept.works_count?.toLocaleString(locale)} {isEnglish ? 'related works' : 'obras relacionadas'}</p>
+                      <p>
+                        {concept._localTopic && concept.level === 0
+                          ? `${concept.subcategoryCount || 0} ${isEnglish ? 'related topics' : 'temas relacionados'}`
+                          : concept._localTopic
+                            ? `${isEnglish ? 'Topic in' : 'Tema de'} ${concept.parent_display_name || (isEnglish ? 'PaperTok taxonomy' : 'la taxonomía de PaperTok')}`
+                            : [
+                                concept.field_display_name || (isEnglish ? 'OpenAlex topic' : 'Tema de OpenAlex'),
+                                Number.isFinite(concept.works_count)
+                                  ? `${concept.works_count.toLocaleString(locale)} ${isEnglish ? 'works' : 'trabajos'}`
+                                  : '',
+                              ].filter(Boolean).join(' • ')}
+                      </p>
                     </div>
                     <FollowButton
-                      entity={{ type: 'topic', id: concept.id, displayName: concept.display_name, source: 'papertok', metadata: { categoryIds: concept.categoryIds } }}
+                      entity={{
+                        type: 'topic',
+                        id: concept.id,
+                        displayName: concept.display_name,
+                        source: concept._localTopic ? 'papertok' : 'openalex',
+                        metadata: {
+                          categoryIds: concept.categoryIds,
+                          labelEs: concept.labelEs,
+                          labelEn: concept.labelEn,
+                        },
+                      }}
                       isFollowing={isFollowing}
                       isPending={isFollowPending}
                       onToggle={handleToggleFollow}
@@ -422,8 +515,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
-            {/* Sources (Journals) */}
-            {sourceResults.length > 0 && (
+            {sourceResults.length > 0 && scopeAllows('papers') && (
               <div className="search-section">
                 <h3 className="search-section-title">{isEnglish ? 'Journals and publications' : 'Revistas y publicaciones'}</h3>
                 {sourceResults.map(source => (
@@ -438,8 +530,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
-            {/* Authors */}
-            {authorResults.length > 0 && (
+            {authorResults.length > 0 && scopeAllows('authors') && (
               <div className="search-section">
                 <h3 className="search-section-title">{isEnglish ? 'Authors' : 'Autores'}</h3>
                 {authorResults.map(author => {
@@ -465,8 +556,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
-            {/* Papers */}
-            {paperResults.length > 0 && (
+            {paperResults.length > 0 && scopeAllows('papers') && (
               <div className="search-section">
                 <h3 className="search-section-title">{isEnglish ? 'Publications' : 'Publicaciones'}</h3>
                 {paperResults.map(paper => {

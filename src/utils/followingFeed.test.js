@@ -60,6 +60,30 @@ test('localizes followed taxonomy topics without changing stored follow data', (
   assert.equal(galacticAstrophysics.displayName, 'Astrofísica Galáctica');
 });
 
+test('localizes followed institutions without changing their official identity', () => {
+  const university = {
+    type: 'institution',
+    canonicalId: '02f40zc51',
+    displayName: 'Universidad de Salamanca',
+    metadata: {
+      localizedNames: {
+        es: 'Universidad de Salamanca',
+        en: 'University of Salamanca',
+      },
+    },
+  };
+
+  assert.equal(
+    buildFollowReasonLabel([university], 'en'),
+    'Because you follow University of Salamanca',
+  );
+  assert.equal(
+    buildFollowReasonLabel([university], 'es'),
+    'Porque sigues Universidad de Salamanca',
+  );
+  assert.equal(university.displayName, 'Universidad de Salamanca');
+});
+
 test('joins two reasons and collapses three or more', () => {
   assert.equal(
     buildFollowReasonLabel([

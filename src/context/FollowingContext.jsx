@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { collection, deleteDoc, doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db, IS_DEMO } from '../services/firebase';
+import { getRorInstitution, normalizeRorId } from '../services/rorService';
 import { useAuth } from './AuthContext';
 import {
   createFollowEntity,
@@ -12,6 +13,7 @@ import {
 } from '../utils/following';
 
 const FollowingContext = createContext(null);
+const EMPTY_LOCALIZED_INSTITUTION_NAMES = Object.freeze({});
 
 function readDemoFollowing(userId) {
   try {
@@ -31,7 +33,15 @@ export function FollowingProvider({ children }) {
   const [loading, setLoading] = useState(Boolean(user));
   const [error, setError] = useState(null);
   const [pendingFollowKeys, setPendingFollowKeys] = useState(new Set());
+  const [institutionLocalizationState, setInstitutionLocalizationState] = useState({
+    userId: '',
+    names: EMPTY_LOCALIZED_INSTITUTION_NAMES,
+  });
   const legacyMigrationAttempted = useRef(false);
+  const institutionLocalizationPending = useRef(new Set());
+  const localizedInstitutionNames = institutionLocalizationState.userId === user?.uid
+    ? institutionLocalizationState.names
+    : EMPTY_LOCALIZED_INSTITUTION_NAMES;
 
   useEffect(() => {
     if (!user?.uid) {
@@ -98,6 +108,57 @@ export function FollowingProvider({ children }) {
     };
   }, [user?.uid, followedAuthors]);
 
+  useEffect(() => {
+    if (!user?.uid) return undefined;
+    const userId = user.uid;
+    const candidates = followedEntities.filter((follow) => {
+      if (follow.type !== 'institution' || follow.metadata?.localizedNames?.en) return false;
+      const followKey = follow.followKey || createFollowKey(follow.type, follow.canonicalId);
+      const pendingKey = `${userId}:${followKey}`;
+      const rorId = normalizeRorId(follow.externalIds?.ror || follow.canonicalId);
+      return rorId
+        && !localizedInstitutionNames[followKey]
+        && !institutionLocalizationPending.current.has(pendingKey);
+    });
+    if (candidates.length === 0) return undefined;
+
+    let cancelled = false;
+    candidates.forEach((follow) => {
+      const followKey = follow.followKey || createFollowKey(follow.type, follow.canonicalId);
+      institutionLocalizationPending.current.add(`${userId}:${followKey}`);
+    });
+
+    Promise.all(candidates.map(async (follow) => {
+      const followKey = follow.followKey || createFollowKey(follow.type, follow.canonicalId);
+      const pendingKey = `${userId}:${followKey}`;
+      try {
+        const institution = await getRorInstitution(follow.externalIds?.ror || follow.canonicalId);
+        return institution?.localized_names
+          ? [followKey, institution.localized_names]
+          : null;
+      } catch {
+        return null;
+      } finally {
+        institutionLocalizationPending.current.delete(pendingKey);
+      }
+    })).then((entries) => {
+      if (cancelled) return;
+      const validEntries = entries.filter(Boolean);
+      if (validEntries.length === 0) return;
+      setInstitutionLocalizationState(current => ({
+        userId,
+        names: {
+          ...(current.userId === userId ? current.names : {}),
+          ...Object.fromEntries(validEntries),
+        },
+      }));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [followedEntities, localizedInstitutionNames, user?.uid]);
+
   const isFollowing = useCallback((entity) => followsEntity(followedEntities, entity), [followedEntities]);
   const isFollowPending = useCallback((input) => {
     const entity = createFollowEntity(input);
@@ -145,20 +206,35 @@ export function FollowingProvider({ children }) {
     }
   }, [followedEntities, pendingFollowKeys, user]);
 
-  const followedByType = useMemo(() => followedEntities.reduce((groups, entity) => {
+  const localizedFollowedEntities = useMemo(() => followedEntities.map((entity) => {
+    if (entity.type !== 'institution' || entity.metadata?.localizedNames?.en) return entity;
+    const followKey = entity.followKey || createFollowKey(entity.type, entity.canonicalId);
+    const localizedNames = localizedInstitutionNames[followKey];
+    return localizedNames
+      ? {
+        ...entity,
+        metadata: {
+          ...(entity.metadata || {}),
+          localizedNames,
+        },
+      }
+      : entity;
+  }), [followedEntities, localizedInstitutionNames]);
+
+  const followedByType = useMemo(() => localizedFollowedEntities.reduce((groups, entity) => {
     groups[entity.type] = [...(groups[entity.type] || []), entity];
     return groups;
-  }, {}), [followedEntities]);
+  }, {}), [localizedFollowedEntities]);
 
   const value = useMemo(() => ({
-    followedEntities,
+    followedEntities: localizedFollowedEntities,
     followedByType,
     loading,
     error,
     isFollowing,
     isFollowPending,
     toggleFollow,
-  }), [error, followedByType, followedEntities, isFollowPending, isFollowing, loading, toggleFollow]);
+  }), [error, followedByType, isFollowPending, isFollowing, loading, localizedFollowedEntities, toggleFollow]);
 
   return <FollowingContext.Provider value={value}>{children}</FollowingContext.Provider>;
 }
