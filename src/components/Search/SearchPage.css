@@ -2,6 +2,7 @@
   display: flex;
   flex-direction: column;
   height: 100vh;
+  height: 100dvh;
   width: 100vw;
   background: var(--bg-primary);
   color: var(--text-primary);
@@ -40,6 +41,14 @@
 
 .search-back-btn:hover {
   background: rgba(255, 255, 255, 0.1);
+}
+
+.search-back-btn:focus-visible,
+.search-suggestion-chip:focus-visible,
+.search-follow-btn:focus-visible,
+.search-retry-btn:focus-visible {
+  outline: 2px solid rgba(167, 139, 250, 0.9);
+  outline-offset: 2px;
 }
 
 .search-input-wrapper {
@@ -127,11 +136,14 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
+  width: min(100%, 1120px);
+  min-height: 100%;
+  margin-inline: auto;
   padding-bottom: 32px;
 }
 
-/* ─── Loading / Empty ─── */
-.search-loading, .search-empty {
+/* ─── Empty / degraded ─── */
+.search-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -142,81 +154,68 @@
   gap: 0.8rem;
 }
 
-.search-loading-skeleton {
-  align-items: stretch;
-  justify-content: flex-start;
-  width: 100%;
-  min-height: 0;
-}
-
-.search-loading-label {
-  display: inline-flex;
-  align-items: center;
-  align-self: center;
-  gap: 8px;
-  min-height: 34px;
-  color: var(--text-secondary);
-  font-size: 0.82rem;
-}
-
-.search-loading-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #8b5cf6;
-  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.12);
-}
-
-.search-skeleton-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-}
-
-.search-skeleton-item {
+.search-service-state {
   display: flex;
   align-items: center;
-  gap: 14px;
-  min-height: 73px;
-  padding: 14px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.045);
+  gap: 12px;
+  min-height: 58px;
+  padding: 11px 12px;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  background: rgba(245, 158, 11, 0.055);
+  color: #fbbf24;
+  animation: searchSectionIn 0.2s ease-out both;
 }
 
-.search-skeleton-icon {
-  width: 42px;
-  height: 42px;
+.search-service-state.is-error {
+  border-color: rgba(248, 113, 113, 0.22);
+  background: rgba(127, 29, 29, 0.12);
+  color: #fca5a5;
+}
+
+.search-service-state > svg {
   flex-shrink: 0;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.06);
 }
 
-.search-skeleton-copy {
+.search-service-copy {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 9px;
+  gap: 2px;
   min-width: 0;
 }
 
-.search-skeleton-line {
-  display: block;
-  height: 10px;
-  max-width: 100%;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.065);
+.search-service-copy strong {
+  color: var(--text-primary);
+  font-size: 0.84rem;
+  font-weight: 650;
 }
 
-.search-skeleton-line-title {
-  width: min(52%, 390px);
-  height: 13px;
+.search-service-copy span {
+  color: var(--text-secondary);
+  font-size: 0.76rem;
 }
 
-.search-skeleton-line-meta {
-  width: min(32%, 240px);
+.search-retry-btn {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.search-retry-btn:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.1);
+  transform: rotate(20deg);
 }
 
 .search-empty-icon {
@@ -271,6 +270,12 @@
 
 .search-item:active {
   transform: scale(0.99);
+}
+
+.search-item:focus-visible {
+  outline: 2px solid rgba(167, 139, 250, 0.86);
+  outline-offset: 2px;
+  border-color: rgba(139, 92, 246, 0.45);
 }
 
 .search-item-enter {
@@ -546,20 +551,6 @@
   flex-shrink: 0;
 }
 
-.search-trending {
-  width: 100%;
-  max-width: 600px;
-  display: flex;
-  flex-direction: column;
-}
-
-.search-trending-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  width: 100%;
-}
-
 @media (max-width: 520px) {
   .search-header {
     padding-inline: 12px;
@@ -586,6 +577,10 @@
   .search-initial-state {
     padding-inline: 4px;
   }
+
+  .search-service-state {
+    align-items: flex-start;
+  }
 }
 
 @media (max-width: 380px) {
@@ -610,6 +605,10 @@
   }
 
   .search-input-loader {
+    animation: none;
+  }
+
+  .search-service-state {
     animation: none;
   }
 }

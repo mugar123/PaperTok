@@ -197,3 +197,25 @@ test('limits concurrent OpenAlex requests', async () => {
   resolvers.splice(0).forEach(resolve => resolve());
   await Promise.all(requests);
 });
+
+test('cancels an obsolete search request without retrying it', async () => {
+  let calls = 0;
+  const controller = new AbortController();
+  const client = new OpenAlexClient({
+    fetchImpl: async (_url, options) => {
+      calls += 1;
+      return new Promise((_resolve, reject) => {
+        options.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+      });
+    },
+  });
+
+  const request = client.json('https://api.openalex.org/authors?search=obsolete', {
+    signal: controller.signal,
+  });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  controller.abort();
+
+  await assert.rejects(request, error => error.code === 'aborted');
+  assert.equal(calls, 1);
+});

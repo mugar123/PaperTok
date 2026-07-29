@@ -257,6 +257,12 @@ export class OpenAlexClient {
     let lastResponse = null;
     const activeRetryAfterMs = Math.max(0, this.rateLimitedUntil - this.now());
 
+    if (options.signal?.aborted) {
+      throw new OpenAlexRequestError('OpenAlex request was cancelled', {
+        code: 'aborted',
+      });
+    }
+
     if (activeRetryAfterMs > 0) {
       throw new OpenAlexRequestError('OpenAlex rate limit is active', {
         code: 'rate_limited',
@@ -295,6 +301,7 @@ export class OpenAlexClient {
         return response;
       } catch (error) {
         if (isOpenAlexRateLimitError(error)) throw error;
+        if (error.code === 'aborted') throw error;
         if (attempt >= retries || error.code === 'timeout') throw error;
         await this.sleep(this.withJitter(350 * (2 ** attempt)));
       }
@@ -305,6 +312,10 @@ export class OpenAlexClient {
 
   async fetchOnce(url, options) {
     const controller = new AbortController();
+    const externalSignal = options.signal;
+    const abortFromExternalSignal = () => controller.abort(externalSignal?.reason);
+    if (externalSignal?.aborted) abortFromExternalSignal();
+    else externalSignal?.addEventListener('abort', abortFromExternalSignal, { once: true });
     const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs);
     const fetchOptions = { ...options };
     ['timeoutMs', 'cacheTtlMs', 'staleIfError', 'retries', 'persistentKey', 'persistentTtlMs', 'returnMeta']
@@ -314,6 +325,12 @@ export class OpenAlexClient {
       return await this.fetchImpl(url, { ...fetchOptions, signal: controller.signal });
     } catch (error) {
       if (controller.signal.aborted) {
+        if (externalSignal?.aborted) {
+          throw new OpenAlexRequestError('OpenAlex request was cancelled', {
+            code: 'aborted',
+            cause: error,
+          });
+        }
         throw new OpenAlexRequestError('OpenAlex request timed out', {
           code: 'timeout',
           cause: error,
@@ -325,6 +342,7 @@ export class OpenAlexClient {
       });
     } finally {
       clearTimeout(timeoutId);
+      externalSignal?.removeEventListener('abort', abortFromExternalSignal);
     }
   }
 

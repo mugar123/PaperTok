@@ -1,3 +1,5 @@
+import { filterRelevantSearchResults } from '../utils/searchRelevance.js';
+
 const API_BASE = 'https://api.ror.org/v2/organizations';
 const CACHE_PREFIX = 'papertok_ror_v3_';
 const CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
@@ -189,9 +191,19 @@ export async function searchRorInstitutions(query, limit = 8, options = {}) {
   const url = new URL(API_BASE);
   url.searchParams.set('query', cleanQuery);
   const payload = await fetchJson(url, 7000, options);
-  const institutions = (payload?.items || [])
+  const normalizedInstitutions = (payload?.items || [])
     .map(normalizeRorInstitution)
-    .filter(Boolean)
+    .filter(Boolean);
+  const institutions = filterRelevantSearchResults(
+    cleanQuery,
+    normalizedInstitutions,
+    institution => [
+      institution.display_name,
+      ...Object.values(institution.localized_names || {}),
+      ...(institution.aliases || []),
+      ...(institution.acronyms || []),
+    ],
+  )
     .slice(0, limit);
   SEARCH_CACHE.set(cacheKey, { value: institutions, timestamp: Date.now() });
   return institutions;

@@ -3,16 +3,17 @@ import { deduplicateProjectParticipants } from '../utils/entityMetadata.js';
 export const CACHE = new Map();
 const CACHE_TTL = 1000 * 60 * 60 * 24; // 24 hours
 
-async function fetchWithTimeout(url, timeout = 10000) {
+async function fetchWithTimeout(url, timeout = 10000, { signal } = {}) {
   const controller = new AbortController();
+  const abortFromSignal = () => controller.abort(signal?.reason);
+  if (signal?.aborted) abortFromSignal();
+  else signal?.addEventListener('abort', abortFromSignal, { once: true });
   const id = setTimeout(() => controller.abort(), timeout);
   try {
-    const response = await fetch(url, { signal: controller.signal });
+    return await fetch(url, { signal: controller.signal });
+  } finally {
     clearTimeout(id);
-    return response;
-  } catch (err) {
-    clearTimeout(id);
-    throw err;
+    signal?.removeEventListener('abort', abortFromSignal);
   }
 }
 
@@ -310,13 +311,18 @@ export async function getPapersByProject(projectCode, page = 1) {
 /**
  * Search for projects by keywords
  */
-export async function searchProjects(query, page = 1) {
+export async function searchProjects(query, page = 1, options = {}) {
   if (!query) return { projects: [], total: 0 };
   const url = `https://api.openaire.eu/search/projects?format=json&size=5&page=${page}&keywords=${encodeURIComponent(query)}`;
   
   try {
-    const response = await fetchWithTimeout(url);
-    if (!response.ok) return { projects: [], total: 0 };
+    const response = await fetchWithTimeout(url, 10000, options);
+    if (!response.ok) {
+      if (options.throwOnError) {
+        throw new Error(`OpenAIRE search error: ${response.status}`);
+      }
+      return { projects: [], total: 0 };
+    }
     
     const data = await response.json();
     if (!data?.response?.results?.result) return { projects: [], total: 0 };
@@ -344,7 +350,7 @@ export async function searchProjects(query, page = 1) {
         budget,
         currency: validCurrency(p.currency?.["$"]),
       };
-    }).filter(Boolean);
+    }).filter(project => project?.id && project.title);
 
     const seenProjects = new Set();
     const projects = mappedProjects.filter(project => {
@@ -360,7 +366,10 @@ export async function searchProjects(query, page = 1) {
     const total = data.response.header?.total?.["$"] ? parseInt(data.response.header.total["$"]) : 0;
     return { projects, total };
   } catch (e) {
-    console.error("Error searching OpenAIRE projects:", e);
+    if (!options.signal?.aborted) {
+      console.error("Error searching OpenAIRE projects:", e);
+    }
+    if (options.throwOnError) throw e;
     return { projects: [], total: 0 };
   }
 }

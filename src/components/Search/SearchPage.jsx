@@ -1,12 +1,26 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, FileText, Users, ArrowLeft, Building2, Lightbulb, Briefcase, Sparkles, Compass, TrendingUp, Check, LoaderCircle } from 'lucide-react';
+import {
+  Search,
+  FileText,
+  Users,
+  ArrowLeft,
+  Building2,
+  Lightbulb,
+  Briefcase,
+  Sparkles,
+  Compass,
+  TrendingUp,
+  Check,
+  LoaderCircle,
+  AlertCircle,
+  RotateCw,
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   searchAuthors,
   searchInstitutions,
   searchConcepts,
   searchLocalTopics,
-  searchSources,
 } from '../../services/openAlexService';
 import { searchProjects } from '../../services/openAireService';
 import { OpenAlexAdapter } from '../../services/adapters/OpenAlexAdapter';
@@ -18,25 +32,40 @@ import PaperCard from '../Feed/PaperCard';
 import PDFViewer from '../PDF/PDFViewer';
 import ScientificText from '../ScientificText';
 import { getLocalizedInstitutionName } from '../../utils/institutionLocalization';
+import {
+  filterRelevantSearchResults,
+  getSearchSectionOrder,
+  resolvePreferredSearchSection,
+} from '../../utils/searchRelevance';
 
 import './SearchPage.css';
 
 const paperSearchAdapter = new OpenAlexAdapter();
-const SEARCH_DEBOUNCE_MS = 260;
+const SEARCH_DEBOUNCE_MS = 320;
 const SEARCH_TIMEOUT_MS = 6000;
 
-function withTimeout(promise, fallback = [], timeoutMs = SEARCH_TIMEOUT_MS) {
+function settleSearch(promise, fallback = [], timeoutMs = SEARCH_TIMEOUT_MS) {
   return new Promise((resolve) => {
     let settled = false;
-    const finish = (value) => {
+    const finish = (value, status) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeoutId);
-      resolve(value);
+      resolve({ value, status });
     };
-    const timeoutId = setTimeout(() => finish(fallback), timeoutMs);
-    Promise.resolve(promise).then(finish).catch(() => finish(fallback));
+    const timeoutId = setTimeout(() => finish(fallback, 'timeout'), timeoutMs);
+    Promise.resolve(promise)
+      .then(value => finish(value, 'fulfilled'))
+      .catch(() => finish(fallback, 'rejected'));
   });
+}
+
+function handleSearchItemKeyDown(event, action) {
+  if (event.target !== event.currentTarget) return;
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.preventDefault();
+    action();
+  }
 }
 
 function FollowButton({ entity, isFollowing, isPending, onToggle }) {
@@ -80,12 +109,13 @@ export default function SearchPage({ onSaveToList = () => {} }) {
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [searchIntent, setSearchIntent] = useState(null);
+  const [searchIssue, setSearchIssue] = useState(null);
   
   const [paperResults, setPaperResults] = useState([]);
   const [authorResults, setAuthorResults] = useState([]);
   const [institutionResults, setInstitutionResults] = useState([]);
   const [conceptResults, setConceptResults] = useState([]);
-  const [sourceResults, setSourceResults] = useState([]);
   const [projectResults, setProjectResults] = useState([]);
   
   const [selectedPaper, setSelectedPaper] = useState(null);
@@ -99,6 +129,13 @@ export default function SearchPage({ onSaveToList = () => {} }) {
     isSaved: savedPaperIds.has(paper.id),
     isRead: readPaperIds.has(paper.id),
   }), [likedPaperIds, readPaperIds, savedPaperIds]);
+  const clearResults = useCallback(() => {
+    setPaperResults([]);
+    setAuthorResults([]);
+    setInstitutionResults([]);
+    setConceptResults([]);
+    setProjectResults([]);
+  }, []);
 
   const performSearch = useCallback(async (searchTerm) => {
     const searchId = ++searchIdRef.current;
@@ -109,38 +146,71 @@ export default function SearchPage({ onSaveToList = () => {} }) {
 
     setIsSearching(true);
     setHasSearched(true);
+    setSearchIssue(null);
     setConceptResults(localTopics);
 
-    const publish = (setter) => (results) => {
+    const publish = (section, setter) => (outcome) => {
       if (searchId === searchIdRef.current && !requestController.signal.aborted) {
-        setter(results);
+        setter(outcome.value);
       }
-      return results;
+      return { ...outcome, section };
     };
 
     const tasks = [
-      withTimeout(
-        paperSearchAdapter.search(searchTerm, 1)
+      settleSearch(
+        paperSearchAdapter.search(searchTerm, 1, { signal: requestController.signal })
           .then(result => PaperBuilder.deduplicate(result.papers || []).slice(0, 10)),
-      ).then(publish(setPaperResults)),
-      withTimeout(searchAuthors(searchTerm), [], 5000).then(publish(setAuthorResults)),
-      withTimeout(
-        searchInstitutions(searchTerm, { signal: requestController.signal }),
+      ).then(publish('papers', setPaperResults)),
+      settleSearch(
+        searchAuthors(searchTerm, {
+          signal: requestController.signal,
+          throwOnError: true,
+        }).then(results => filterRelevantSearchResults(
+          searchTerm,
+          results,
+          author => [author.display_name],
+        )),
+        [],
+        5000,
+      ).then(publish('authors', setAuthorResults)),
+      settleSearch(
+        searchInstitutions(searchTerm, {
+          signal: requestController.signal,
+          throwOnError: true,
+        }),
         [],
         4500,
-      ).then(publish(setInstitutionResults)),
-      withTimeout(
-        searchConcepts(searchTerm, { language, limit: 8 }),
+      ).then(publish('institutions', setInstitutionResults)),
+      settleSearch(
+        searchConcepts(searchTerm, {
+          language,
+          limit: 8,
+          signal: requestController.signal,
+        }),
         localTopics,
         4500,
-      ).then(publish(setConceptResults)),
-      withTimeout(searchSources(searchTerm), [], 5000).then(publish(setSourceResults)),
-      withTimeout(searchProjects(searchTerm).then(result => result.projects || []))
-        .then(publish(setProjectResults)),
+      ).then(publish('topics', setConceptResults)),
+      settleSearch(
+        searchProjects(searchTerm, 1, {
+          signal: requestController.signal,
+          throwOnError: true,
+        })
+          .then(result => filterRelevantSearchResults(
+            searchTerm,
+            result.projects || [],
+            project => [project.acronym, project.title, project.funder],
+          )),
+      ).then(publish('projects', setProjectResults)),
     ];
 
-    await Promise.allSettled(tasks);
+    const outcomes = await Promise.all(tasks);
     if (searchId === searchIdRef.current) {
+      const unavailableSections = outcomes
+        .filter(outcome => outcome.status !== 'fulfilled')
+        .map(outcome => outcome.section);
+      setSearchIssue(unavailableSections.length > 0
+        ? { unavailableSections }
+        : null);
       setIsSearching(false);
       if (requestAbortRef.current === requestController) {
         requestAbortRef.current = null;
@@ -153,14 +223,10 @@ export default function SearchPage({ onSaveToList = () => {} }) {
       requestAbortRef.current?.abort();
       searchIdRef.current += 1;
       const resetStateTimeout = setTimeout(() => {
-        setPaperResults([]);
-        setAuthorResults([]);
-        setInstitutionResults([]);
-        setConceptResults([]);
-        setSourceResults([]);
-        setProjectResults([]);
+        clearResults();
         setIsSearching(false);
         setHasSearched(false);
+        setSearchIssue(null);
       }, 0);
       return () => clearTimeout(resetStateTimeout);
     }
@@ -177,7 +243,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
       clearTimeout(timeoutRef.current);
       requestAbortRef.current?.abort();
     };
-  }, [query, performSearch]);
+  }, [clearResults, query, performSearch]);
 
   const handleToggleFollow = async (e, entity) => {
     e.stopPropagation();
@@ -195,49 +261,90 @@ export default function SearchPage({ onSaveToList = () => {} }) {
     || authorResults.length > 0
     || institutionResults.length > 0
     || conceptResults.length > 0
-    || sourceResults.length > 0
     || projectResults.length > 0
     || !!cleanOrcid;
+  const preferredSection = resolvePreferredSearchSection({
+    query,
+    hint: searchIntent,
+    sectionValues: {
+      papers: paperResults.map(paper => paper.title),
+      topics: conceptResults.flatMap(concept => [
+        concept.display_name,
+        concept.labelEs,
+        concept.labelEn,
+      ]),
+      authors: authorResults.map(author => author.display_name),
+      institutions: institutionResults.flatMap(institution => [
+        institution.display_name,
+        ...Object.values(institution.localized_names || {}),
+        ...(institution.aliases || []),
+        ...(institution.acronyms || []),
+      ]),
+      projects: projectResults.flatMap(project => [
+        project.acronym,
+        project.title,
+      ]),
+    },
+  });
+  const sectionStyle = section => ({
+    order: getSearchSectionOrder(section, preferredSection),
+  });
 
   const suggestedQueries = [
     {
       label: isEnglish ? 'Cosmology' : 'Cosmología',
       icon: <Lightbulb size={14} />,
       query: isEnglish ? 'Cosmology' : 'Cosmología',
+      section: 'topics',
     },
     {
       label: 'MIT',
       icon: <Building2 size={14} />,
       query: 'Massachusetts Institute of Technology',
+      section: 'institutions',
     },
     {
       label: 'CRISPR Cas9',
       icon: <FileText size={14} />,
       query: 'CRISPR Cas9',
+      section: 'papers',
     },
     {
       label: isEnglish ? 'Horizon projects' : 'Proyectos Horizon',
       icon: <Briefcase size={14} />,
       query: 'Horizon',
+      section: 'projects',
     },
     {
       label: 'Geoffrey Hinton',
       icon: <Users size={14} />,
       query: 'Geoffrey Hinton',
+      section: 'authors',
     },
     {
       label: isEnglish ? 'Quantum computing' : 'Computación cuántica',
       icon: <TrendingUp size={14} />,
       query: 'Quantum computing',
+      section: 'topics',
     },
   ];
 
+  const updateQuery = (nextQuery, intent = null) => {
+    requestAbortRef.current?.abort();
+    clearResults();
+    setQuery(nextQuery);
+    setSearchIntent(intent);
+    setSearchIssue(null);
+    setHasSearched(false);
+    setIsSearching(Boolean(nextQuery.trim()));
+  };
+
   const handleSuggestedSearch = (suggestion) => {
-    setQuery(suggestion.query);
+    updateQuery(suggestion.query, suggestion.section);
   };
 
   const clearSearch = () => {
-    setQuery('');
+    updateQuery('');
   };
 
   return (
@@ -256,11 +363,9 @@ export default function SearchPage({ onSaveToList = () => {} }) {
           <input
             type="search"
             className="search-input"
-            placeholder={isEnglish
-              ? 'Search papers, topics, authors, institutions...'
-              : 'Buscar papers, temas, autores, instituciones...'}
+            placeholder={isEnglish ? 'Search PaperTok...' : 'Buscar en PaperTok...'}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => updateQuery(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Escape' && query) clearSearch();
             }}
@@ -281,7 +386,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
 
       <div className="search-results custom-scrollbar">
         <div className="search-results-list" aria-busy={isSearching}>
-            {!query && !isSearching && (
+            {!query.trim() && !isSearching && (
               <div className="search-initial-state">
                 <div className="search-initial-hero">
                   <Compass size={48} className="search-initial-icon" />
@@ -310,7 +415,33 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
-            {!hasResults && query && hasSearched && !isSearching && (
+            {searchIssue && !isSearching && (
+              <div
+                className={`search-service-state ${hasResults ? 'is-partial' : 'is-error'}`}
+                role={hasResults ? 'status' : 'alert'}
+              >
+                <AlertCircle size={20} aria-hidden="true" />
+                <div className="search-service-copy">
+                  <strong>{hasResults
+                    ? (isEnglish ? 'Partial results' : 'Resultados parciales')
+                    : (isEnglish ? 'Search is temporarily unavailable' : 'La búsqueda no está disponible temporalmente')}</strong>
+                  <span>{hasResults
+                    ? (isEnglish ? 'Some sources did not respond.' : 'Algunas fuentes no han respondido.')
+                    : (isEnglish ? 'Please try again in a moment.' : 'Vuelve a intentarlo dentro de un momento.')}</span>
+                </div>
+                <button
+                  type="button"
+                  className="search-retry-btn"
+                  onClick={() => performSearch(query.trim())}
+                  aria-label={isEnglish ? 'Retry search' : 'Reintentar búsqueda'}
+                  title={isEnglish ? 'Retry search' : 'Reintentar búsqueda'}
+                >
+                  <RotateCw size={17} />
+                </button>
+              </div>
+            )}
+
+            {!hasResults && query && hasSearched && !isSearching && !searchIssue && (
               <div className="search-empty">
                 <Search size={40} className="search-empty-icon" />
                 <p>{isEnglish ? `No results found for "${query}"` : `No se encontraron resultados para "${query}"`}</p>
@@ -320,9 +451,18 @@ export default function SearchPage({ onSaveToList = () => {} }) {
 
             {/* Direct ORCID */}
             {cleanOrcid && (
-              <div className="search-section">
+              <div className="search-section" style={{ order: 0 }}>
                 <h3 className="search-section-title">{isEnglish ? 'Direct ORCID search' : 'Búsqueda directa ORCID'}</h3>
-                <div className="search-item" onClick={() => navigate(`/explorer/author/https%3A%2F%2Forcid.org%2F${cleanOrcid}`)}>
+                <div
+                  className="search-item"
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => navigate(`/explorer/author/https%3A%2F%2Forcid.org%2F${cleanOrcid}`)}
+                  onKeyDown={event => handleSearchItemKeyDown(
+                    event,
+                    () => navigate(`/explorer/author/https%3A%2F%2Forcid.org%2F${cleanOrcid}`),
+                  )}
+                >
                   <div className="search-item-icon" style={{ background: '#a6ce39', color: 'white' }}>
                     <Users size={22} />
                   </div>
@@ -337,7 +477,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             )}
 
             {institutionResults.length > 0 && (
-              <div className="search-section">
+              <div className="search-section" style={sectionStyle('institutions')}>
                 <h3 className="search-section-title">{isEnglish ? 'Universities and institutions' : 'Universidades e instituciones'}</h3>
                 {institutionResults.map((inst, index) => {
                   const localizedName = getLocalizedInstitutionName(inst, language);
@@ -346,7 +486,13 @@ export default function SearchPage({ onSaveToList = () => {} }) {
                       key={inst.id}
                       className="search-item search-item-enter"
                       style={{ '--search-item-index': index }}
+                      role="link"
+                      tabIndex={0}
                       onClick={() => navigate(`/explorer/institution/${inst.id.split('/').pop()}`)}
+                      onKeyDown={event => handleSearchItemKeyDown(
+                        event,
+                        () => navigate(`/explorer/institution/${inst.id.split('/').pop()}`),
+                      )}
                     >
                       <div className="search-item-icon"><Building2 size={22} /></div>
                       <div className="search-item-info">
@@ -373,10 +519,20 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             )}
 
             {projectResults.length > 0 && (
-              <div className="search-section">
+              <div className="search-section" style={sectionStyle('projects')}>
                 <h3 className="search-section-title">{isEnglish ? 'Research projects' : 'Proyectos de investigación'}</h3>
                 {projectResults.map(project => (
-                  <div key={project.id} className="search-item" onClick={() => navigate(`/explorer/project/${project.id}?name=${encodeURIComponent(project.acronym || project.title)}&funder=${encodeURIComponent(project.funder)}`)}>
+                  <div
+                    key={project.id}
+                    className="search-item"
+                    role="link"
+                    tabIndex={0}
+                    onClick={() => navigate(`/explorer/project/${project.id}?name=${encodeURIComponent(project.acronym || project.title)}&funder=${encodeURIComponent(project.funder)}`)}
+                    onKeyDown={event => handleSearchItemKeyDown(
+                      event,
+                      () => navigate(`/explorer/project/${project.id}?name=${encodeURIComponent(project.acronym || project.title)}&funder=${encodeURIComponent(project.funder)}`),
+                    )}
+                  >
                     <div className="search-item-icon"><Briefcase size={22} /></div>
                     <div className="search-item-info">
                       <h4>{project.acronym ? `${project.acronym}: ${project.title}` : project.title}</h4>
@@ -394,13 +550,19 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             )}
 
             {conceptResults.length > 0 && (
-              <div className="search-section">
+              <div className="search-section" style={sectionStyle('topics')}>
                 <h3 className="search-section-title">{isEnglish ? 'Topics and areas' : 'Temas y áreas'}</h3>
                 {conceptResults.map(concept => (
                   <div
                     key={concept.id}
                     className="search-item search-topic-item"
+                    role="link"
+                    tabIndex={0}
                     onClick={() => navigate(`/explorer/topic/${encodeURIComponent(String(concept.id).split('/').pop())}`)}
+                    onKeyDown={event => handleSearchItemKeyDown(
+                      event,
+                      () => navigate(`/explorer/topic/${encodeURIComponent(String(concept.id).split('/').pop())}`),
+                    )}
                   >
                     <div className="search-item-icon search-topic-icon"><Lightbulb size={22} /></div>
                     <div className="search-item-info">
@@ -439,28 +601,23 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
-            {sourceResults.length > 0 && (
-              <div className="search-section">
-                <h3 className="search-section-title">{isEnglish ? 'Journals and publications' : 'Revistas y publicaciones'}</h3>
-                {sourceResults.map(source => (
-                  <div key={source.id} className="search-item" onClick={() => navigate(`/explorer/source/${source.id.split('/').pop()}`)}>
-                    <div className="search-item-icon"><FileText size={22} /></div>
-                    <div className="search-item-info">
-                      <h4>{source.display_name}</h4>
-                      <p>{source.host_organization_name ? `${source.host_organization_name} • ` : ''}{source.works_count?.toLocaleString(locale)} {isEnglish ? 'related works' : 'obras relacionadas'}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
             {authorResults.length > 0 && (
-              <div className="search-section">
+              <div className="search-section" style={sectionStyle('authors')}>
                 <h3 className="search-section-title">{isEnglish ? 'Authors' : 'Autores'}</h3>
                 {authorResults.map(author => {
                   const authorFollow = { type: 'author', id: author.id, displayName: author.display_name, source: 'openalex', externalIds: { orcid: author.orcid } };
                   return (
-                    <div key={author.id} className="search-item" onClick={() => navigate(`/explorer/author/${author.id.split('/').pop()}`)}>
+                    <div
+                      key={author.id}
+                      className="search-item"
+                      role="link"
+                      tabIndex={0}
+                      onClick={() => navigate(`/explorer/author/${author.id.split('/').pop()}`)}
+                      onKeyDown={event => handleSearchItemKeyDown(
+                        event,
+                        () => navigate(`/explorer/author/${author.id.split('/').pop()}`),
+                      )}
+                    >
                       <div className="search-item-avatar">
                         {author.display_name.charAt(0).toUpperCase()}
                       </div>
@@ -481,12 +638,22 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             )}
 
             {paperResults.length > 0 && (
-              <div className="search-section">
+              <div className="search-section" style={sectionStyle('papers')}>
                 <h3 className="search-section-title">{isEnglish ? 'Publications' : 'Publicaciones'}</h3>
                 {paperResults.map(paper => {
                   const authors = (paper.authors || []).map(author => author.name || author);
                   return (
-                    <div key={paper.id} className="search-item paper-item" onClick={() => setSelectedPaper(paper)}>
+                    <div
+                      key={paper.id}
+                      className="search-item paper-item"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedPaper(paper)}
+                      onKeyDown={event => handleSearchItemKeyDown(
+                        event,
+                        () => setSelectedPaper(paper),
+                      )}
+                    >
                       <div className="search-item-icon"><FileText size={22} /></div>
                       <div className="search-item-info">
                         <h4><ScientificText>{paper.title}</ScientificText></h4>
@@ -509,6 +676,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
           <button 
             className="search-back-btn" 
             onClick={() => setSelectedPaper(null)}
+            aria-label={isEnglish ? 'Back to search results' : 'Volver a los resultados'}
             style={{ position: 'absolute', top: 'max(16px, env(safe-area-inset-top))', left: '16px', zIndex: 1200, background: 'rgba(255,255,255,0.1)', width: '40px', height: '40px' }}
           >
             <ArrowLeft size={22} />

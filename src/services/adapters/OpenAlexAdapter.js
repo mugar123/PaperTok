@@ -25,6 +25,7 @@ export class OpenAlexAdapter extends BaseAdapter {
         timeoutMs: 10000,
         cacheTtlMs: 10 * 60 * 1000,
         staleIfError: true,
+        signal: filters.signal,
       });
       if (!response.ok) {
         throw new Error(`OpenAlex API error: ${response.status}`);
@@ -42,7 +43,9 @@ export class OpenAlexAdapter extends BaseAdapter {
         total: data.meta.count
       };
     } catch (error) {
-      console.error('[OpenAlexAdapter] Error en búsqueda:', error);
+      if (error.code !== 'aborted') {
+        console.error('[OpenAlexAdapter] Error en búsqueda:', error);
+      }
       throw new Error(`No se pudo conectar con OpenAlex: ${error.message}`, { cause: error });
     }
   }

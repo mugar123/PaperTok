@@ -589,7 +589,7 @@ export function dedupeAuthors(authors) {
   return ordered.map(cluster => cluster.author);
 }
 
-export async function searchAuthors(query) {
+export async function searchAuthors(query, options = {}) {
   if (!query) return [];
   const normalizedQuery = query.trim();
   const cleanName = encodeURIComponent(normalizedQuery);
@@ -602,6 +602,7 @@ export async function searchAuthors(query) {
       staleIfError: true,
       persistentKey: `author-search:${normalizedQuery.toLowerCase()}`,
       persistentTtlMs: 24 * 60 * 60 * 1000,
+      signal: options.signal,
     });
 
     const authors = (data?.results || []).map(author => ({
@@ -616,7 +617,8 @@ export async function searchAuthors(query) {
     })).filter(author => author.id && author.display_name);
 
     return dedupeAuthors(authors);
-  } catch {
+  } catch (error) {
+    if (options.throwOnError) throw error;
     // Search authors failed
   }
   return [];
@@ -635,7 +637,8 @@ export async function searchInstitutions(query, options = {}) {
       ...institution,
       country_code: institution.geo?.country || institution.country_code || '',
     }));
-  } catch {
+  } catch (error) {
+    if (options.throwOnError) throw error;
     // Search institutions failed
   }
   return [];
@@ -765,6 +768,7 @@ export async function searchConcepts(query, options = {}) {
       persistentKey: `topic-search:${normalizedQuery.toLowerCase()}`,
       persistentTtlMs: 7 * 24 * 60 * 60 * 1000,
       staleIfError: true,
+      signal: options.signal,
     });
 
     const seen = new Set(localTopics.flatMap(topic => [

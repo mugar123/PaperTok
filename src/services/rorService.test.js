@@ -75,8 +75,8 @@ test('caches repeated institution searches in memory', async () => {
   };
 
   try {
-    const first = await searchRorInstitutions('PaperTok cache test institution', 5);
-    const second = await searchRorInstitutions('PaperTok cache test institution', 5);
+    const first = await searchRorInstitutions('Universidad de Salamanca', 5);
+    const second = await searchRorInstitutions('Universidad de Salamanca', 5);
 
     assert.equal(fetchCount, 1);
     assert.equal(first[0].display_name, 'Universidad de Salamanca');
