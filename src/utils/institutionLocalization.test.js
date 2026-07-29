@@ -36,3 +36,8 @@ test('keeps the official name when ROR has no verified translation', () => {
   assert.equal(getLocalizedInstitutionName(institution, 'en'), 'KU Leuven');
   assert.equal(getLocalizedInstitutionName(institution, 'es'), 'KU Leuven');
 });
+
+test('returns an empty label while an institution is still loading', () => {
+  assert.equal(getLocalizedInstitutionName(null, 'en'), '');
+  assert.equal(getLocalizedInstitutionName(undefined, 'es'), '');
+});

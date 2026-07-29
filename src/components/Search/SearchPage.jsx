@@ -80,7 +80,6 @@ export default function SearchPage({ onSaveToList = () => {} }) {
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
-  const [activeScope, setActiveScope] = useState('all');
   
   const [paperResults, setPaperResults] = useState([]);
   const [authorResults, setAuthorResults] = useState([]);
@@ -162,7 +161,6 @@ export default function SearchPage({ onSaveToList = () => {} }) {
         setProjectResults([]);
         setIsSearching(false);
         setHasSearched(false);
-        setActiveScope('all');
       }, 0);
       return () => clearTimeout(resetStateTimeout);
     }
@@ -201,161 +199,96 @@ export default function SearchPage({ onSaveToList = () => {} }) {
     || projectResults.length > 0
     || !!cleanOrcid;
 
-  const scopes = [
-    { id: 'all', label: isEnglish ? 'All' : 'Todo' },
-    { id: 'papers', label: isEnglish ? 'Papers' : 'Papers' },
-    { id: 'topics', label: isEnglish ? 'Topics' : 'Temas' },
-    { id: 'authors', label: isEnglish ? 'Authors' : 'Autores' },
-    { id: 'institutions', label: isEnglish ? 'Institutions' : 'Instituciones' },
-    { id: 'projects', label: isEnglish ? 'Projects' : 'Proyectos' },
-  ];
-  const scopeAllows = (section) => activeScope === 'all' || activeScope === section;
-  const hasVisibleResults = (
-    (scopeAllows('papers') && (paperResults.length > 0 || sourceResults.length > 0))
-    || (scopeAllows('topics') && conceptResults.length > 0)
-    || (scopeAllows('authors') && (authorResults.length > 0 || !!cleanOrcid))
-    || (scopeAllows('institutions') && institutionResults.length > 0)
-    || (scopeAllows('projects') && projectResults.length > 0)
-  );
-
   const suggestedQueries = [
     {
       label: isEnglish ? 'Cosmology' : 'Cosmología',
-      kind: isEnglish ? 'Topic' : 'Tema',
-      icon: <Lightbulb size={15} />,
+      icon: <Lightbulb size={14} />,
       query: isEnglish ? 'Cosmology' : 'Cosmología',
-      scope: 'topics',
     },
     {
       label: 'MIT',
-      kind: isEnglish ? 'Institution' : 'Institución',
-      icon: <Building2 size={15} />,
+      icon: <Building2 size={14} />,
       query: 'Massachusetts Institute of Technology',
-      scope: 'institutions',
     },
     {
       label: 'CRISPR Cas9',
-      kind: 'Paper',
-      icon: <FileText size={15} />,
+      icon: <FileText size={14} />,
       query: 'CRISPR Cas9',
-      scope: 'papers',
     },
     {
       label: isEnglish ? 'Horizon projects' : 'Proyectos Horizon',
-      kind: isEnglish ? 'Project' : 'Proyecto',
-      icon: <Briefcase size={15} />,
+      icon: <Briefcase size={14} />,
       query: 'Horizon',
-      scope: 'projects',
     },
     {
       label: 'Geoffrey Hinton',
-      kind: isEnglish ? 'Author' : 'Autor',
-      icon: <Users size={15} />,
+      icon: <Users size={14} />,
       query: 'Geoffrey Hinton',
-      scope: 'authors',
     },
     {
       label: isEnglish ? 'Quantum computing' : 'Computación cuántica',
-      kind: isEnglish ? 'Topic' : 'Tema',
-      icon: <TrendingUp size={15} />,
+      icon: <TrendingUp size={14} />,
       query: 'Quantum computing',
-      scope: 'topics',
     },
   ];
 
   const handleSuggestedSearch = (suggestion) => {
-    setActiveScope(suggestion.scope);
     setQuery(suggestion.query);
   };
 
   const clearSearch = () => {
     setQuery('');
-    setActiveScope('all');
   };
 
   return (
     <div className="search-page-container">
       <div className="search-header">
-        <div className="search-header-row">
-          <button
-            type="button"
-            className="search-back-btn"
-            onClick={() => navigate('/')}
-            aria-label={isEnglish ? 'Back' : 'Volver'}
-          >
-            <ArrowLeft size={22} />
-          </button>
-          <div className={`search-input-wrapper ${isSearching ? 'is-searching' : ''}`}>
-            <Search className="search-icon" size={18} />
-            <input
-              type="search"
-              className="search-input"
-              placeholder={isEnglish
-                ? 'Search papers, topics, authors, institutions...'
-                : 'Buscar papers, temas, autores, instituciones...'}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape' && query) clearSearch();
-              }}
-              autoComplete="off"
-              autoFocus
-            />
-            {isSearching && (
-              <span
-                className="search-input-loader"
-                role="status"
-                aria-label={isEnglish ? 'Searching' : 'Buscando'}
-              >
-                <LoaderCircle size={17} aria-hidden="true" />
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="search-scopes" role="tablist" aria-label={isEnglish ? 'Result type' : 'Tipo de resultado'}>
-          {scopes.map(scope => (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeScope === scope.id}
-              key={scope.id}
-              className={`search-scope-btn ${activeScope === scope.id ? 'active' : ''}`}
-              onClick={() => setActiveScope(scope.id)}
+        <button
+          type="button"
+          className="search-back-btn"
+          onClick={() => navigate('/')}
+          aria-label={isEnglish ? 'Back' : 'Volver'}
+        >
+          <ArrowLeft size={22} />
+        </button>
+        <div className={`search-input-wrapper ${isSearching ? 'is-searching' : ''}`}>
+          <Search className="search-icon" size={18} />
+          <input
+            type="search"
+            className="search-input"
+            placeholder={isEnglish
+              ? 'Search papers, topics, authors, institutions...'
+              : 'Buscar papers, temas, autores, instituciones...'}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape' && query) clearSearch();
+            }}
+            autoComplete="off"
+            autoFocus
+          />
+          {isSearching && (
+            <span
+              className="search-input-loader"
+              role="status"
+              aria-label={isEnglish ? 'Searching' : 'Buscando'}
             >
-              {scope.label}
-            </button>
-          ))}
+              <LoaderCircle size={17} aria-hidden="true" />
+            </span>
+          )}
         </div>
       </div>
 
       <div className="search-results custom-scrollbar">
         <div className="search-results-list" aria-busy={isSearching}>
-            {isSearching && !hasResults && (
-              <div className="search-loading search-loading-skeleton" role="status">
-                <div className="search-loading-label">
-                  <span className="search-loading-dot" aria-hidden="true" />
-                  <span>{isEnglish ? 'Searching PaperTok...' : 'Buscando en PaperTok...'}</span>
-                </div>
-                <div className="search-skeleton-stack" aria-hidden="true">
-                  {[0, 1, 2].map(index => (
-                    <div className="search-skeleton-item" key={index}>
-                      <span className="search-skeleton-icon" />
-                      <span className="search-skeleton-copy">
-                        <span className="search-skeleton-line search-skeleton-line-title" />
-                        <span className="search-skeleton-line search-skeleton-line-meta" />
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {!query && !isSearching && (
               <div className="search-initial-state">
                 <div className="search-initial-hero">
-                  <Compass size={42} className="search-initial-icon" />
-                  <h2>{isEnglish ? 'Search PaperTok' : 'Buscar en PaperTok'}</h2>
+                  <Compass size={48} className="search-initial-icon" />
+                  <h2>{isEnglish ? 'Explore knowledge' : 'Explora el conocimiento'}</h2>
+                  <p>{isEnglish
+                    ? 'Search papers, researchers, topics, institutions, and funded projects.'
+                    : 'Busca papers, investigadores, temas, universidades y proyectos financiados.'}</p>
                 </div>
                 
                 <div className="search-suggestions">
@@ -368,11 +301,8 @@ export default function SearchPage({ onSaveToList = () => {} }) {
                         onClick={() => handleSuggestedSearch(item)}
                         className="search-suggestion-chip"
                       >
-                        <span className="search-suggestion-icon">{item.icon}</span>
-                        <span className="search-suggestion-copy">
-                          <span>{item.label}</span>
-                          <small>{item.kind}</small>
-                        </span>
+                        {item.icon}
+                        <span>{item.label}</span>
                       </button>
                     ))}
                   </div>
@@ -380,7 +310,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
-            {!hasVisibleResults && query && hasSearched && !isSearching && (
+            {!hasResults && query && hasSearched && !isSearching && (
               <div className="search-empty">
                 <Search size={40} className="search-empty-icon" />
                 <p>{isEnglish ? `No results found for "${query}"` : `No se encontraron resultados para "${query}"`}</p>
@@ -389,7 +319,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             )}
 
             {/* Direct ORCID */}
-            {cleanOrcid && scopeAllows('authors') && (
+            {cleanOrcid && (
               <div className="search-section">
                 <h3 className="search-section-title">{isEnglish ? 'Direct ORCID search' : 'Búsqueda directa ORCID'}</h3>
                 <div className="search-item" onClick={() => navigate(`/explorer/author/https%3A%2F%2Forcid.org%2F${cleanOrcid}`)}>
@@ -406,7 +336,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
-            {institutionResults.length > 0 && scopeAllows('institutions') && (
+            {institutionResults.length > 0 && (
               <div className="search-section">
                 <h3 className="search-section-title">{isEnglish ? 'Universities and institutions' : 'Universidades e instituciones'}</h3>
                 {institutionResults.map((inst, index) => {
@@ -442,7 +372,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
-            {projectResults.length > 0 && scopeAllows('projects') && (
+            {projectResults.length > 0 && (
               <div className="search-section">
                 <h3 className="search-section-title">{isEnglish ? 'Research projects' : 'Proyectos de investigación'}</h3>
                 {projectResults.map(project => (
@@ -463,7 +393,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
-            {conceptResults.length > 0 && scopeAllows('topics') && (
+            {conceptResults.length > 0 && (
               <div className="search-section">
                 <h3 className="search-section-title">{isEnglish ? 'Topics and areas' : 'Temas y áreas'}</h3>
                 {conceptResults.map(concept => (
@@ -509,7 +439,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
-            {sourceResults.length > 0 && scopeAllows('papers') && (
+            {sourceResults.length > 0 && (
               <div className="search-section">
                 <h3 className="search-section-title">{isEnglish ? 'Journals and publications' : 'Revistas y publicaciones'}</h3>
                 {sourceResults.map(source => (
@@ -524,7 +454,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
-            {authorResults.length > 0 && scopeAllows('authors') && (
+            {authorResults.length > 0 && (
               <div className="search-section">
                 <h3 className="search-section-title">{isEnglish ? 'Authors' : 'Autores'}</h3>
                 {authorResults.map(author => {
@@ -550,7 +480,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
-            {paperResults.length > 0 && scopeAllows('papers') && (
+            {paperResults.length > 0 && (
               <div className="search-section">
                 <h3 className="search-section-title">{isEnglish ? 'Publications' : 'Publicaciones'}</h3>
                 {paperResults.map(paper => {
