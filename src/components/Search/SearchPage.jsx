@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { Children, useState, useEffect, useRef, useCallback } from 'react';
 import {
   Search,
   FileText,
@@ -11,6 +11,7 @@ import {
   Compass,
   TrendingUp,
   Check,
+  Plus,
   LoaderCircle,
   AlertCircle,
   RotateCw,
@@ -68,10 +69,20 @@ function handleSearchItemKeyDown(event, action) {
   }
 }
 
+function OrderedSearchSections({ children, preferredSection }) {
+  return Children.toArray(children).sort((left, right) => (
+    getSearchSectionOrder(left.props['data-section'], preferredSection)
+    - getSearchSectionOrder(right.props['data-section'], preferredSection)
+  ));
+}
+
 function FollowButton({ entity, isFollowing, isPending, onToggle }) {
   const { isEnglish } = useLanguage();
   const following = isFollowing(entity);
   const pending = isPending(entity);
+  const label = following
+    ? (isEnglish ? 'Following' : 'Siguiendo')
+    : (isEnglish ? 'Follow' : 'Seguir');
 
   return (
     <button
@@ -79,11 +90,13 @@ function FollowButton({ entity, isFollowing, isPending, onToggle }) {
       onClick={(event) => onToggle(event, entity)}
       disabled={pending}
       aria-pressed={following}
+      aria-label={label}
+      title={label}
     >
-      {following && <Check size={14} />}
-      <span>{following
-        ? (isEnglish ? 'Following' : 'Siguiendo')
-        : (isEnglish ? 'Follow' : 'Seguir')}</span>
+      {following
+        ? <Check size={14} aria-hidden="true" />
+        : <Plus size={14} aria-hidden="true" />}
+      <span>{label}</span>
     </button>
   );
 }
@@ -286,10 +299,6 @@ export default function SearchPage({ onSaveToList = () => {} }) {
       ]),
     },
   });
-  const sectionStyle = section => ({
-    order: getSearchSectionOrder(section, preferredSection),
-  });
-
   const suggestedQueries = [
     {
       label: isEnglish ? 'Cosmology' : 'Cosmología',
@@ -476,8 +485,9 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
+            <OrderedSearchSections preferredSection={preferredSection}>
             {institutionResults.length > 0 && (
-              <div className="search-section" style={sectionStyle('institutions')}>
+              <div className="search-section" data-section="institutions">
                 <h3 className="search-section-title">{isEnglish ? 'Universities and institutions' : 'Universidades e instituciones'}</h3>
                 {institutionResults.map((inst, index) => {
                   const localizedName = getLocalizedInstitutionName(inst, language);
@@ -519,7 +529,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             )}
 
             {projectResults.length > 0 && (
-              <div className="search-section" style={sectionStyle('projects')}>
+              <div className="search-section" data-section="projects">
                 <h3 className="search-section-title">{isEnglish ? 'Research projects' : 'Proyectos de investigación'}</h3>
                 {projectResults.map(project => (
                   <div
@@ -550,7 +560,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             )}
 
             {conceptResults.length > 0 && (
-              <div className="search-section" style={sectionStyle('topics')}>
+              <div className="search-section" data-section="topics">
                 <h3 className="search-section-title">{isEnglish ? 'Topics and areas' : 'Temas y áreas'}</h3>
                 {conceptResults.map(concept => (
                   <div
@@ -602,7 +612,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             )}
 
             {authorResults.length > 0 && (
-              <div className="search-section" style={sectionStyle('authors')}>
+              <div className="search-section" data-section="authors">
                 <h3 className="search-section-title">{isEnglish ? 'Authors' : 'Autores'}</h3>
                 {authorResults.map(author => {
                   const authorFollow = { type: 'author', id: author.id, displayName: author.display_name, source: 'openalex', externalIds: { orcid: author.orcid } };
@@ -638,7 +648,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             )}
 
             {paperResults.length > 0 && (
-              <div className="search-section" style={sectionStyle('papers')}>
+              <div className="search-section" data-section="papers">
                 <h3 className="search-section-title">{isEnglish ? 'Publications' : 'Publicaciones'}</h3>
                 {paperResults.map(paper => {
                   const authors = (paper.authors || []).map(author => author.name || author);
@@ -667,6 +677,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
                 })}
               </div>
             )}
+            </OrderedSearchSections>
           </div>
       </div>
 
