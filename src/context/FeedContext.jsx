@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useCallback, useEffect, useRef, useLayoutEffect } from 'react';
 import { IS_DEMO, db } from '../services/firebase';
-import { collection, getDocs, getDocsFromCache, doc, setDoc, updateDoc, deleteField, increment } from 'firebase/firestore';
+import { collection, getDocs, getDocsFromCache, doc, setDoc, updateDoc, deleteField, increment, writeBatch } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 import { useFollowing } from './FollowingContext';
 import { fetchPapers, clearCache, fetchPapersByIds, getAuthorPapers } from '../services/arxivService';
@@ -36,6 +36,7 @@ import {
 } from '../utils/feedEnrichment';
 import { resolveWithin, settleWithin } from '../utils/asyncTiming';
 import { shouldAbortFeedLoad } from '../utils/feedLoadGuard';
+import { dedupeInteractionPapers } from '../utils/feedInteractions';
 
 const FeedContext = createContext(null);
 const PAGE_SIZE = 15;
@@ -1430,29 +1431,43 @@ export function FeedProvider({ children }) {
     }
   }, [user, reRankFeed, traverseAndExpandNetwork]);
 
-  const trackSkip = useCallback(async (paper) => {
-    // ─── BOREDOM DETECTION: fast skip = +1 boredom ───
-    boredomLevel.current = Math.min(20, boredomLevel.current + 1);
-    
-    // Instantly update local weights for real-time re-ranking
-    applyCategoryAffinityDelta(categoryAffinities.current, paper, -1);
-    reRankFeed(paper.id);
+  const trackSkips = useCallback(async (papersToSkip) => {
+    const skippedPapers = dedupeInteractionPapers(papersToSkip);
+    if (skippedPapers.length === 0) return;
+
+    // A fast gesture may cross several cards. Keep every recommendation signal,
+    // but score and re-rank the remaining queue only once after the gesture.
+    boredomLevel.current = Math.min(20, boredomLevel.current + skippedPapers.length);
+    skippedPapers.forEach((paper) => {
+      applyCategoryAffinityDelta(categoryAffinities.current, paper, -1);
+    });
+    reRankFeed(skippedPapers[skippedPapers.length - 1].id);
 
     if (user && !IS_DEMO) {
       try {
-        const ref = doc(db, 'users', user.uid, 'interactions', paper.id);
-        await setDoc(ref, {
-          skip: increment(1),
-          paperCategory: paper.primaryCategory,
-          timestamp: new Date().toISOString(),
-          deviceType: getDeviceInfo().type,
-          context: 'feed',
-        }, { merge: true });
+        const batch = writeBatch(db);
+        const timestamp = new Date().toISOString();
+        const deviceType = getDeviceInfo().type;
+
+        skippedPapers.forEach((paper) => {
+          const ref = doc(db, 'users', user.uid, 'interactions', paper.id);
+          batch.set(ref, {
+            skip: increment(1),
+            paperCategory: paper.primaryCategory,
+            timestamp,
+            deviceType,
+            context: 'feed',
+          }, { merge: true });
+        });
+
+        await batch.commit();
       } catch (err) {
-        console.error('Error tracking skip:', err);
+        console.error('Error tracking skips:', err);
       }
     }
   }, [user, reRankFeed]);
+
+  const trackSkip = useCallback((paper) => trackSkips([paper]), [trackSkips]);
 
   const trackPdfBounce = useCallback(async (paper) => {
     // Deduct category affinity for bounce (user opened PDF but closed it instantly)
@@ -1657,7 +1672,7 @@ export function FeedProvider({ children }) {
     getRecommendationProfileSnapshot,
     toggleLike, markNotInterested, markSaved, markAsRead, unmarkAsRead,
     toggleReadLater, saveReadingMetadata,
-    trackViewTime, trackPdfOpened, trackSkip, trackPdfBounce
+    trackViewTime, trackPdfOpened, trackSkip, trackSkips, trackPdfBounce
   };
 
   return <FeedContext.Provider value={value}>{children}</FeedContext.Provider>;

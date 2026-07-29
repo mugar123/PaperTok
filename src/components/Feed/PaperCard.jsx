@@ -46,6 +46,7 @@ const RESOURCE_KIND_CONFIG = {
   material: { label: { es: 'Material', en: 'Material' }, Icon: PackageOpen },
   version: { label: { es: 'Versión', en: 'Version' }, Icon: History },
 };
+const ENRICHMENT_SETTLE_DELAY_MS = 240;
 
 const PaperCard = memo(function PaperCard({ 
   paper, 
@@ -76,6 +77,7 @@ const PaperCard = memo(function PaperCard({
   const [resolvedAccess, setResolvedAccess] = useState({ paperId: null, copy: null });
   const [linkedResources, setLinkedResources] = useState({ paperId: null, items: [] });
   const [isCardVisible, setIsCardVisible] = useState(false);
+  const [isCardSettled, setIsCardSettled] = useState(false);
   const { followedByType, isFollowing } = useFollowing();
   const { language, isEnglish } = useLanguage();
   const navigate = useNavigate();
@@ -101,8 +103,18 @@ const PaperCard = memo(function PaperCard({
   }, []);
 
   useEffect(() => {
+    if (!isCardVisible) {
+      setIsCardSettled(false);
+      return undefined;
+    }
+
+    const timer = setTimeout(() => setIsCardSettled(true), ENRICHMENT_SETTLE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [isCardVisible]);
+
+  useEffect(() => {
     let active = true;
-    if (!isCardVisible || !paper?.doi || paper.openAccess || paper.pdfUrl || paper.openAccessPdfUrl) {
+    if (!isCardSettled || !paper?.doi || paper.openAccess || paper.pdfUrl || paper.openAccessPdfUrl) {
       return () => { active = false; };
     }
 
@@ -111,16 +123,16 @@ const PaperCard = memo(function PaperCard({
     });
 
     return () => { active = false; };
-  }, [isCardVisible, paper?.doi, paper?.id, paper?.openAccess, paper?.openAccessPdfUrl, paper?.pdfUrl]);
+  }, [isCardSettled, paper?.doi, paper?.id, paper?.openAccess, paper?.openAccessPdfUrl, paper?.pdfUrl]);
 
   useEffect(() => {
     let active = true;
-    if (!isCardVisible || !paper?.doi) return () => { active = false; };
+    if (!isCardSettled || !paper?.doi) return () => { active = false; };
     getRelatedResearchResources(paper.doi, { title: paper.title }).then(items => {
       if (active) setLinkedResources({ paperId: paper.id, items });
     });
     return () => { active = false; };
-  }, [isCardVisible, paper?.doi, paper?.id, paper?.title]);
+  }, [isCardSettled, paper?.doi, paper?.id, paper?.title]);
 
   useEffect(() => {
     if (!cardRef.current || showRelated || selectedRelatedPaper) return;
@@ -169,14 +181,14 @@ const PaperCard = memo(function PaperCard({
 
   useEffect(() => {
     let isMounted = true;
-    if (!isCardVisible || !paper) return;
+    if (!isCardSettled || !paper) return;
     getProjectForPaper(paper.arxivId, paper.doi).then(proj => {
       if (isMounted && proj) {
         setProject(proj);
       }
     });
     return () => { isMounted = false; };
-  }, [isCardVisible, paper]);
+  }, [isCardSettled, paper]);
 
   const toggleExpanded = (e, newState) => {
     e.stopPropagation();

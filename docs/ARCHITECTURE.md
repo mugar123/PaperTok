@@ -64,6 +64,10 @@ diversity.
 - Browser storage is used only for bounded caches and must be namespaced by user when it
   contains personalized state.
 - Cloudflare KV stores notification and usage state.
+- Scheduled digests query native arXiv categories directly before falling back to OpenAlex,
+  avoiding the indexing delay for newly submitted physics and mathematics papers.
+- AI explanations bound PDF acquisition and provider retries within the browser request
+  deadline, while provider JSON is normalized before LaTeX-aware rendering.
 - The Kimi budget ledger uses a Durable Object for atomic monthly reservations.
 
 ## Worker
@@ -85,4 +89,3 @@ with `wrangler secret put`.
 - A push to `main` runs `.github/workflows/deploy.yml` and publishes `dist/` to GitHub Pages.
 - The Worker is deployed independently with `npx wrangler deploy`.
 - Frontend and Worker contracts must remain backward compatible during staggered deployments.
-

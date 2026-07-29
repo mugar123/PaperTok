@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeInstitutionWithRor, normalizeRorId, normalizeRorInstitution } from './rorService.js';
+import {
+  mergeInstitutionWithRor,
+  normalizeRorId,
+  normalizeRorInstitution,
+  searchRorInstitutions,
+} from './rorService.js';
 
 const ROR_RECORD = {
   id: 'https://ror.org/02f40zc51',
@@ -50,4 +55,28 @@ test('normalizes full and compact ROR identifiers', () => {
   assert.equal(normalizeRorId('https://ror.org/02F40ZC51'), '02f40zc51');
   assert.equal(normalizeRorId('02f40zc51'), '02f40zc51');
   assert.equal(normalizeRorId('not-ror'), '');
+});
+
+test('caches repeated institution searches in memory', async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCount = 0;
+  globalThis.fetch = async () => {
+    fetchCount += 1;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ items: [ROR_RECORD] }),
+    };
+  };
+
+  try {
+    const first = await searchRorInstitutions('PaperTok cache test institution', 5);
+    const second = await searchRorInstitutions('PaperTok cache test institution', 5);
+
+    assert.equal(fetchCount, 1);
+    assert.equal(first[0].display_name, 'Universidad de Salamanca');
+    assert.deepEqual(second, first);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

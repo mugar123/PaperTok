@@ -2,6 +2,8 @@ const API_BASE = 'https://api.ror.org/v2/organizations';
 const CACHE_PREFIX = 'papertok_ror_v2_';
 const CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
 const MEMORY_CACHE = new Map();
+const SEARCH_CACHE_TTL = 10 * 60 * 1000;
+const SEARCH_CACHE = new Map();
 
 export function normalizeRorId(value) {
   const match = String(value || '').trim().match(/(?:ror\.org\/)?(0[a-hj-km-np-tv-z0-9]{6}[0-9]{2})/i);
@@ -125,8 +127,11 @@ function writeCache(rorId, value) {
   }
 }
 
-async function fetchJson(url, timeoutMs = 7000) {
+async function fetchJson(url, timeoutMs = 7000, { signal } = {}) {
   const controller = new AbortController();
+  const abortFromSignal = () => controller.abort(signal?.reason);
+  if (signal?.aborted) abortFromSignal();
+  else signal?.addEventListener('abort', abortFromSignal, { once: true });
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, { signal: controller.signal });
@@ -135,6 +140,7 @@ async function fetchJson(url, timeoutMs = 7000) {
     return response.json();
   } finally {
     clearTimeout(timeout);
+    signal?.removeEventListener('abort', abortFromSignal);
   }
 }
 
@@ -153,16 +159,24 @@ function normalizeName(value) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
-export async function searchRorInstitutions(query, limit = 8) {
+export async function searchRorInstitutions(query, limit = 8, options = {}) {
   const cleanQuery = String(query || '').trim();
   if (!cleanQuery) return [];
+  const cacheKey = `${normalizeName(cleanQuery)}:${limit}`;
+  const cached = SEARCH_CACHE.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < SEARCH_CACHE_TTL) {
+    return cached.value;
+  }
+
   const url = new URL(API_BASE);
   url.searchParams.set('query', cleanQuery);
-  const payload = await fetchJson(url);
-  return (payload?.items || [])
+  const payload = await fetchJson(url, 7000, options);
+  const institutions = (payload?.items || [])
     .map(normalizeRorInstitution)
     .filter(Boolean)
     .slice(0, limit);
+  SEARCH_CACHE.set(cacheKey, { value: institutions, timestamp: Date.now() });
+  return institutions;
 }
 
 export async function resolveRorInstitution({ ror, name, domain } = {}) {

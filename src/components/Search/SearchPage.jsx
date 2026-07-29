@@ -16,8 +16,15 @@ import ScientificText from '../ScientificText';
 import './SearchPage.css';
 
 const paperSearchAdapter = new OpenAlexAdapter();
+const SEARCH_DEBOUNCE_MS = 220;
+const SEARCH_TIMEOUT_MS = 6000;
+const SEARCH_SECTIONS = ['papers', 'authors', 'institutions', 'concepts', 'sources', 'projects'];
 
-function withTimeout(promise, fallback = [], timeoutMs = 8000) {
+function createPendingSections(pending = false) {
+  return Object.fromEntries(SEARCH_SECTIONS.map(section => [section, pending]));
+}
+
+function withTimeout(promise, fallback = [], timeoutMs = SEARCH_TIMEOUT_MS) {
   return new Promise((resolve) => {
     let settled = false;
     const finish = (value) => {
@@ -73,6 +80,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
   const [isSearching, setIsSearching] = useState(false);
   const [isDebouncing, setIsDebouncing] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [pendingSections, setPendingSections] = useState(() => createPendingSections());
   
   const [paperResults, setPaperResults] = useState([]);
   const [authorResults, setAuthorResults] = useState([]);
@@ -85,7 +93,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
   const [pdfPaper, setPdfPaper] = useState(null);
   
   const timeoutRef = useRef(null);
-
+  const requestAbortRef = useRef(null);
   const searchIdRef = useRef(0);
   const getInteractionState = useCallback((paper) => ({
     isLiked: likedPaperIds.has(paper.id),
@@ -95,8 +103,13 @@ export default function SearchPage({ onSaveToList = () => {} }) {
 
   const performSearch = useCallback(async (searchTerm) => {
     const searchId = ++searchIdRef.current;
+    requestAbortRef.current?.abort();
+    const requestController = new AbortController();
+    requestAbortRef.current = requestController;
+
     setIsSearching(true);
     setHasSearched(true);
+    setPendingSections(createPendingSections(true));
     setPaperResults([]);
     setAuthorResults([]);
     setInstitutionResults([]);
@@ -104,8 +117,11 @@ export default function SearchPage({ onSaveToList = () => {} }) {
     setSourceResults([]);
     setProjectResults([]);
 
-    const publish = (setter) => (results) => {
-      if (searchId === searchIdRef.current) setter(results);
+    const publish = (section, setter) => (results) => {
+      if (searchId === searchIdRef.current && !requestController.signal.aborted) {
+        setter(results);
+        setPendingSections(current => ({ ...current, [section]: false }));
+      }
       return results;
     };
 
@@ -113,25 +129,34 @@ export default function SearchPage({ onSaveToList = () => {} }) {
       withTimeout(
         paperSearchAdapter.search(searchTerm, 1)
           .then(result => PaperBuilder.deduplicate(result.papers || []).slice(0, 10)),
-      ).then(publish(setPaperResults)),
-      withTimeout(searchAuthors(searchTerm)).then(publish(setAuthorResults)),
-      withTimeout(searchInstitutions(searchTerm)).then(publish(setInstitutionResults)),
-      withTimeout(searchConcepts(searchTerm)).then(publish(setConceptResults)),
-      withTimeout(searchSources(searchTerm)).then(publish(setSourceResults)),
+      ).then(publish('papers', setPaperResults)),
+      withTimeout(searchAuthors(searchTerm), [], 5000).then(publish('authors', setAuthorResults)),
+      withTimeout(
+        searchInstitutions(searchTerm, { signal: requestController.signal }),
+        [],
+        4500,
+      ).then(publish('institutions', setInstitutionResults)),
+      withTimeout(searchConcepts(searchTerm), [], 1000).then(publish('concepts', setConceptResults)),
+      withTimeout(searchSources(searchTerm), [], 5000).then(publish('sources', setSourceResults)),
       withTimeout(searchProjects(searchTerm).then(result => result.projects || []))
-        .then(publish(setProjectResults)),
+        .then(publish('projects', setProjectResults)),
     ];
 
     await Promise.allSettled(tasks);
     if (searchId === searchIdRef.current) {
       setIsSearching(false);
+      setPendingSections(createPendingSections());
+      if (requestAbortRef.current === requestController) {
+        requestAbortRef.current = null;
+      }
     }
   }, []);
 
   useEffect(() => {
     if (!query.trim()) {
+      requestAbortRef.current?.abort();
       searchIdRef.current += 1;
-      setTimeout(() => {
+      const resetStateTimeout = setTimeout(() => {
         setPaperResults([]);
         setAuthorResults([]);
         setInstitutionResults([]);
@@ -141,12 +166,14 @@ export default function SearchPage({ onSaveToList = () => {} }) {
         setIsSearching(false);
         setIsDebouncing(false);
         setHasSearched(false);
+        setPendingSections(createPendingSections());
       }, 0);
-      return;
+      return () => clearTimeout(resetStateTimeout);
     }
 
+    requestAbortRef.current?.abort();
     searchIdRef.current += 1;
-    setTimeout(() => {
+    const debounceStateTimeout = setTimeout(() => {
       setIsDebouncing(true);
       setIsSearching(false);
     }, 0);
@@ -155,9 +182,13 @@ export default function SearchPage({ onSaveToList = () => {} }) {
     timeoutRef.current = setTimeout(() => {
       setIsDebouncing(false);
       performSearch(query.trim());
-    }, 350);
+    }, SEARCH_DEBOUNCE_MS);
     
-    return () => clearTimeout(timeoutRef.current);
+    return () => {
+      clearTimeout(debounceStateTimeout);
+      clearTimeout(timeoutRef.current);
+      requestAbortRef.current?.abort();
+    };
   }, [query, performSearch]);
 
   const handleToggleFollow = async (e, entity) => {
@@ -206,6 +237,13 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
           />
+          {(isSearching || isDebouncing) && (
+            <Loader2
+              className="search-input-spinner spinning"
+              size={17}
+              aria-label={isEnglish ? 'Searching' : 'Buscando'}
+            />
+          )}
         </div>
       </div>
 
@@ -213,9 +251,22 @@ export default function SearchPage({ onSaveToList = () => {} }) {
       <div className="search-results custom-scrollbar">
         <div className="search-results-list animate-fade-in">
             {(isSearching || isDebouncing) && !hasResults && (
-              <div className="search-loading" role="status">
-                <Loader2 className="spinning" size={36} />
-                <span>{isEnglish ? 'Searching PaperTok...' : 'Buscando en PaperTok...'}</span>
+              <div className="search-loading search-loading-skeleton" role="status">
+                <div className="search-loading-label">
+                  <Loader2 className="spinning" size={17} />
+                  <span>{isEnglish ? 'Searching PaperTok...' : 'Buscando en PaperTok...'}</span>
+                </div>
+                <div className="search-skeleton-stack" aria-hidden="true">
+                  {[0, 1, 2].map(index => (
+                    <div className="search-skeleton-item" key={index}>
+                      <span className="search-skeleton-icon" />
+                      <span className="search-skeleton-copy">
+                        <span className="search-skeleton-line search-skeleton-line-title" />
+                        <span className="search-skeleton-line search-skeleton-line-meta" />
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -284,11 +335,33 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             )}
 
             {/* Institutions */}
+            {pendingSections.institutions && institutionResults.length === 0 && hasResults && (
+              <div className="search-section search-institution-loading" role="status">
+                <h3 className="search-section-title">
+                  {isEnglish ? 'Universities and institutions' : 'Universidades e instituciones'}
+                </h3>
+                {[0, 1].map(index => (
+                  <div className="search-skeleton-item" key={index} aria-hidden="true">
+                    <span className="search-skeleton-icon" />
+                    <span className="search-skeleton-copy">
+                      <span className="search-skeleton-line search-skeleton-line-title" />
+                      <span className="search-skeleton-line search-skeleton-line-meta" />
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {institutionResults.length > 0 && (
               <div className="search-section">
                 <h3 className="search-section-title">{isEnglish ? 'Universities and institutions' : 'Universidades e instituciones'}</h3>
-                {institutionResults.map(inst => (
-                  <div key={inst.id} className="search-item" onClick={() => navigate(`/explorer/institution/${inst.id.split('/').pop()}`)}>
+                {institutionResults.map((inst, index) => (
+                  <div
+                    key={inst.id}
+                    className="search-item search-item-enter"
+                    style={{ '--search-item-index': index }}
+                    onClick={() => navigate(`/explorer/institution/${inst.id.split('/').pop()}`)}
+                  >
                     <div className="search-item-icon"><Building2 size={22} /></div>
                     <div className="search-item-info">
                       <h4>{inst.display_name}</h4>

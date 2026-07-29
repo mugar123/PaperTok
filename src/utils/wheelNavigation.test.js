@@ -3,7 +3,12 @@ import assert from 'node:assert/strict';
 import {
   accumulateWheelGesture,
   shouldUseNativeWheelScroll,
+  WHEEL_LISTENER_OPTIONS,
 } from './wheelNavigation.js';
+
+test('keeps wheel observation passive so trackpad scrolling stays compositor-driven', () => {
+  assert.equal(WHEEL_LISTENER_OPTIONS.passive, true);
+});
 
 test('uses native scrolling for pixel-precise trackpad gestures', () => {
   assert.equal(shouldUseNativeWheelScroll(0), true);

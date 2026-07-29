@@ -8,6 +8,7 @@ import AnimatedAtom from './AnimatedAtom';
 import {
   accumulateWheelGesture,
   shouldUseNativeWheelScroll,
+  WHEEL_LISTENER_OPTIONS,
 } from '../../utils/wheelNavigation';
 import './FeedContainer.css';
 
@@ -16,6 +17,7 @@ import './FeedContainer.css';
 const savedScrollByKey = {};
 const WHEEL_GESTURE_RESET_MS = 180;
 const SCROLL_IDLE_DELAY_MS = 120;
+const SCROLL_INTERACTION_SETTLE_MS = 220;
 
 /**
  * `source` swaps WHERE the papers come from while every interaction (like,
@@ -28,7 +30,8 @@ export default function FeedContainer({ onOpenPdf, onSaveToList, source = null, 
   const { isEnglish } = useLanguage();
   const {
     trackPdfOpened,
-    likedPaperIds, savedPaperIds, readPaperIds, toggleLike, markNotInterested, markAsRead, trackViewTime, trackSkip
+    likedPaperIds, savedPaperIds, readPaperIds, toggleLike, markNotInterested, markAsRead,
+    trackViewTime, trackSkip, trackSkips: trackSkippedPapers,
   } = feed;
   const papers = source ? source.papers : feed.papers;
   const loading = source ? source.loading : feed.loading;
@@ -48,19 +51,41 @@ export default function FeedContainer({ onOpenPdf, onSaveToList, source = null, 
     source?.onPaperViewed?.(paper);
     trackViewTime(paper, seconds);
   }, [source, trackViewTime]);
-  const handleSkip = useCallback((paper) => {
-    source?.onPaperViewed?.(paper);
-    trackSkip(paper);
-  }, [source, trackSkip]);
   const feedRef = useRef(null);
   const sentinelRef = useRef(null);
   const [showLoader, setShowLoader] = useState(false);
   const scrollIdleTimerRef = useRef(null);
+  const skipFlushTimerRef = useRef(null);
+  const pendingSkippedPapersRef = useRef(new Map());
   const getInteractionState = useCallback((paper) => ({
     isLiked: likedPaperIds.has(paper.id),
     isSaved: savedPaperIds.has(paper.id),
     isRead: readPaperIds?.has(paper.id),
   }), [likedPaperIds, readPaperIds, savedPaperIds]);
+
+  const flushPendingSkips = useCallback(() => {
+    const skippedPapers = Array.from(pendingSkippedPapersRef.current.values());
+    pendingSkippedPapersRef.current.clear();
+    if (skippedPapers.length === 0) return;
+
+    if (trackSkippedPapers) {
+      void trackSkippedPapers(skippedPapers);
+      return;
+    }
+    skippedPapers.forEach((paper) => void trackSkip(paper));
+  }, [trackSkip, trackSkippedPapers]);
+
+  const schedulePendingSkipFlush = useCallback(() => {
+    if (skipFlushTimerRef.current) clearTimeout(skipFlushTimerRef.current);
+    skipFlushTimerRef.current = setTimeout(flushPendingSkips, SCROLL_INTERACTION_SETTLE_MS);
+  }, [flushPendingSkips]);
+
+  const handleSkip = useCallback((paper) => {
+    source?.onPaperViewed?.(paper);
+    if (!paper?.id) return;
+    pendingSkippedPapersRef.current.set(paper.id, paper);
+    schedulePendingSkipFlush();
+  }, [schedulePendingSkipFlush, source]);
 
   // Restore scroll position instantly before browser paints. Must run only once
   // per mount: re-assigning scrollTop on later papers.length changes (infinite
@@ -100,6 +125,7 @@ export default function FeedContainer({ onOpenPdf, onSaveToList, source = null, 
 
   useEffect(() => () => {
     if (scrollIdleTimerRef.current) clearTimeout(scrollIdleTimerRef.current);
+    if (skipFlushTimerRef.current) clearTimeout(skipFlushTimerRef.current);
   }, []);
 
   // Infinite scroll: observe sentinel element
@@ -149,9 +175,8 @@ export default function FeedContainer({ onOpenPdf, onSaveToList, source = null, 
         return;
       }
 
-      e.preventDefault();
-
-      // If currently scrolling/transitioning, lock wheel
+      // Traditional line/page mouse wheels still get one-card navigation, but
+      // the passive listener never blocks pixel-precise trackpad momentum.
       if (isScrollingRef.current) {
         return;
       }
@@ -191,7 +216,7 @@ export default function FeedContainer({ onOpenPdf, onSaveToList, source = null, 
       }
     };
 
-    container.addEventListener('wheel', handleWheel, { passive: false });
+    container.addEventListener('wheel', handleWheel, WHEEL_LISTENER_OPTIONS);
     return () => {
       container.removeEventListener('wheel', handleWheel);
       if (wheelResetTimerRef.current) clearTimeout(wheelResetTimerRef.current);
@@ -250,13 +275,19 @@ export default function FeedContainer({ onOpenPdf, onSaveToList, source = null, 
   const handleScroll = useCallback((event) => {
     const container = event.currentTarget;
     savedScrollByKey[scrollKey] = container.scrollTop;
-    container.classList.add('feed-container--scrolling');
+    if (!container.classList.contains('feed-container--scrolling')) {
+      container.classList.add('feed-container--scrolling');
+    }
 
     if (scrollIdleTimerRef.current) clearTimeout(scrollIdleTimerRef.current);
     scrollIdleTimerRef.current = setTimeout(() => {
       container.classList.remove('feed-container--scrolling');
     }, SCROLL_IDLE_DELAY_MS);
-  }, [scrollKey]);
+
+    if (pendingSkippedPapersRef.current.size > 0) {
+      schedulePendingSkipFlush();
+    }
+  }, [schedulePendingSkipFlush, scrollKey]);
 
   if (error && papers.length === 0) {
     return (

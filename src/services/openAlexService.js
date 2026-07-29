@@ -627,10 +627,10 @@ export async function searchAuthors(query) {
  * @param {string} query 
  * @returns {Promise<Array>}
  */
-export async function searchInstitutions(query) {
+export async function searchInstitutions(query, options = {}) {
   if (!query) return [];
   try {
-    const institutions = await searchRorInstitutions(query, 5);
+    const institutions = await searchRorInstitutions(query, 5, options);
     return institutions.map(institution => ({
       ...institution,
       country_code: institution.geo?.country || institution.country_code || '',

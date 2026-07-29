@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  AI_REQUEST_BUDGETS,
   AI_EXPLANATION_LEVELS,
   AIExplanationError,
   buildPaperExplanationPrompt,
@@ -10,6 +11,8 @@ import {
   getDailyQuotaReset,
   getProviderRetry,
   normalizePaperForExplanation,
+  parseExplanationText,
+  shouldRetryGeminiWithFallback,
   shouldFallbackToKimi,
 } from '../../worker/ai-explanation.js';
 
@@ -36,6 +39,27 @@ test('builds English-only explanations when the interface language is English', 
   assert.match(prompt, /You only have the abstract and metadata/);
   assert.match(prompt, /Known facts/);
   assert.doesNotMatch(prompt, /explicar fielmente un paper científico en español/);
+  assert.match(prompt, /below 1000 words/);
+});
+
+test('repairs raw LaTeX backslashes without corrupting valid JSON escapes', () => {
+  const explanation = parseExplanationText(String.raw`{
+    "overview": "Uses $X_\theta = \omega_b$ and \mathrm{Re}(A).",
+    "methodology": "Line one\nLine two",
+    "takeaway": "Done"
+  }`);
+
+  assert.equal(explanation.overview, String.raw`Uses $X_\theta = \omega_b$ and \mathrm{Re}(A).`);
+  assert.equal(explanation.methodology, 'Line one\nLine two');
+});
+
+test('keeps the complete cold-request budget below the browser timeout', () => {
+  const worstGeminiPath = AI_REQUEST_BUDGETS.pdfOnlySourceMs
+    + AI_REQUEST_BUDGETS.geminiPrimaryMs
+    + AI_REQUEST_BUDGETS.geminiFallbackMs;
+
+  assert.ok(worstGeminiPath < AI_REQUEST_BUDGETS.browserMs);
+  assert.equal(worstGeminiPath, 53_000);
 });
 
 test('keeps English and Spanish explanations in separate worker caches', async () => {
@@ -88,6 +112,12 @@ test('only routes to Kimi after Gemini confirms provider quota exhaustion', () =
     { scope: 'user' },
   )), false);
   assert.equal(shouldFallbackToKimi(new AIExplanationError('AI_BUSY', 429)), false);
+});
+
+test('retries Gemini with its lighter model for malformed structured output', () => {
+  assert.equal(shouldRetryGeminiWithFallback(new AIExplanationError('AI_INVALID_RESPONSE', 502)), true);
+  assert.equal(shouldRetryGeminiWithFallback(new AIExplanationError('AI_UNAVAILABLE', 502)), true);
+  assert.equal(shouldRetryGeminiWithFallback(new AIExplanationError('AI_QUOTA_EXHAUSTED', 429)), false);
 });
 
 test('distinguishes Kimi budget failures from transient rate limits', () => {

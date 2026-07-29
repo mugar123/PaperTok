@@ -7,7 +7,7 @@ import {
   usdToMicros,
 } from './kimi-budget-ledger.js';
 
-const PROMPT_VERSION = 'paper-explainer-v3';
+const PROMPT_VERSION = 'paper-explainer-v4';
 const DEFAULT_MODEL = 'gemini-3.5-flash';
 const DEFAULT_FALLBACK_MODEL = 'gemini-3.5-flash-lite';
 const DEFAULT_KIMI_MODEL = 'moonshotai/Kimi-K3';
@@ -20,6 +20,29 @@ const DEFAULT_GLOBAL_DAILY_LIMIT = 100;
 const MAX_REQUEST_BYTES = 100_000;
 const MAX_PDF_BYTES = 8 * 1024 * 1024;
 const EXPLANATION_CACHE_SECONDS = 7 * 24 * 60 * 60;
+export const AI_REQUEST_BUDGETS = Object.freeze({
+  pdfWithAbstractMs: 4_500,
+  pdfOnlySourceMs: 9_000,
+  geminiPrimaryMs: 12_000,
+  geminiFallbackMs: 32_000,
+  browserMs: 70_000,
+});
+
+const LATEX_JSON_COMMANDS = new Set([
+  'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'varepsilon', 'zeta', 'eta',
+  'theta', 'vartheta', 'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'pi',
+  'varpi', 'rho', 'varrho', 'sigma', 'varsigma', 'tau', 'upsilon', 'phi',
+  'varphi', 'chi', 'psi', 'omega', 'Gamma', 'Delta', 'Theta', 'Lambda', 'Xi',
+  'Pi', 'Sigma', 'Upsilon', 'Phi', 'Psi', 'Omega', 'ell', 'frac', 'dfrac',
+  'tfrac', 'sqrt', 'text', 'textrm', 'textit', 'mathrm', 'mathbf', 'mathit',
+  'mathcal', 'operatorname', 'left', 'right', 'begin', 'end', 'sum', 'prod',
+  'int', 'iint', 'iiint', 'oint', 'partial', 'nabla', 'infty', 'approx',
+  'sim', 'simeq', 'cong', 'equiv', 'neq', 'leq', 'geq', 'll', 'gg', 'times',
+  'cdot', 'pm', 'mp', 'to', 'mapsto', 'rightarrow', 'leftarrow', 'Rightarrow',
+  'Leftarrow', 'overline', 'underline', 'hat', 'bar', 'vec', 'dot', 'ddot',
+  'boldsymbol', 'sin', 'cos', 'tan', 'log', 'ln', 'exp', 'max', 'min', 'sup',
+  'inf', 'det', 'gcd', 'lim',
+]);
 
 const LEVELS = {
   beginner: {
@@ -218,12 +241,13 @@ export function buildPaperExplanationPrompt(paper, level, sourceBasis = 'abstrac
     concepts: paper.concepts,
     abstract: paper.abstract,
   }, null, 2);
+  const responseBudget = level === 'researcher' ? 1_500 : level === 'university' ? 1_000 : 700;
 
   if (isEnglish) {
-    return `Task: faithfully explain a scientific paper in English. Every explanatory field in the returned JSON must be written in English. Keep quoted titles, proper nouns, and standard scientific notation in their original form when appropriate, but do not mix Spanish prose into the explanation.\n\nLevel: ${levelConfig.labelEn}\n${levelConfig.instructionEn}\n\n${sourceNotice}\n\nPaper metadata:\n${paperMetadata}\n\nScientific formatting:\n- Use LaTeX whenever you mention variables, symbols, subscripts, superscripts, equations, or units with exponents.\n- Enclose inline expressions in $...$ and standalone equations in $$...$$. For example, write $\\omega_b$, $A_s$, and $10^{-4}$; never write ω_b, A_s, or 10^-4 as plain text.\n- Correctly escape backslashes in LaTeX commands inside the JSON.\n- Do not use Markdown code blocks or delimiters other than those specified above.\n- In keyPoints, return one idea per item and do not add leading dashes, numbers, or bullet symbols; the interface renders the list.\n\nReturn only the requested JSON object. If the source cannot support a section, say so briefly and explicitly in English.`;
+    return `Task: faithfully explain a scientific paper in English. Every explanatory field in the returned JSON must be written in English. Keep quoted titles, proper nouns, and standard scientific notation in their original form when appropriate, but do not mix Spanish prose into the explanation.\n\nLevel: ${levelConfig.labelEn}\n${levelConfig.instructionEn}\n\n${sourceNotice}\n\nPaper metadata:\n${paperMetadata}\n\nScientific formatting:\n- Use LaTeX whenever you mention variables, symbols, subscripts, superscripts, equations, or units with exponents.\n- Enclose inline expressions in $...$ and standalone equations in $$...$$. For example, write $\\omega_b$, $A_s$, and $10^{-4}$; never write ω_b, A_s, or 10^-4 as plain text.\n- Correctly escape backslashes in LaTeX commands inside the JSON.\n- Do not use Markdown code blocks or delimiters other than those specified above.\n- In keyPoints, return one idea per item and do not add leading dashes, numbers, or bullet symbols; the interface renders the list.\n- Keep the complete response below ${responseBudget} words. Prefer concise, complete sentences over exhaustive detail.\n\nReturn only the requested JSON object. If the source cannot support a section, say so briefly and explicitly in English.`;
   }
 
-  return `Tarea: explicar fielmente un paper científico en español. Todos los campos explicativos del JSON devuelto deben estar escritos en español. Conserva títulos citados, nombres propios y notación científica estándar en su forma original cuando corresponda, pero no mezcles prosa inglesa en la explicación.\n\nNivel: ${levelConfig.label}\n${levelConfig.instruction}\n\n${sourceNotice}\n\nMetadatos del paper:\n${paperMetadata}\n\nFormato científico:\n- Usa LaTeX siempre que menciones variables, símbolos, subíndices, superíndices, ecuaciones o unidades con exponentes.\n- Encierra las expresiones en línea entre $...$ y las ecuaciones independientes entre $$...$$. Por ejemplo, escribe $\\omega_b$, $A_s$ y $10^{-4}$; nunca escribas ω_b, A_s ni 10^-4 como texto plano.\n- Escapa correctamente las barras inversas de los comandos LaTeX dentro del JSON.\n- No uses bloques de código Markdown ni delimitadores distintos a los indicados.\n- En keyPoints devuelve una idea por elemento y no añadas guiones, números o símbolos de viñeta: la interfaz los mostrará como una lista.\n\nDevuelve exclusivamente el objeto JSON solicitado. Si la fuente no permite responder una sección, indícalo de forma breve y explícita en español.`;
+  return `Tarea: explicar fielmente un paper científico en español. Todos los campos explicativos del JSON devuelto deben estar escritos en español. Conserva títulos citados, nombres propios y notación científica estándar en su forma original cuando corresponda, pero no mezcles prosa inglesa en la explicación.\n\nNivel: ${levelConfig.label}\n${levelConfig.instruction}\n\n${sourceNotice}\n\nMetadatos del paper:\n${paperMetadata}\n\nFormato científico:\n- Usa LaTeX siempre que menciones variables, símbolos, subíndices, superíndices, ecuaciones o unidades con exponentes.\n- Encierra las expresiones en línea entre $...$ y las ecuaciones independientes entre $$...$$. Por ejemplo, escribe $\\omega_b$, $A_s$ y $10^{-4}$; nunca escribas ω_b, A_s ni 10^-4 como texto plano.\n- Escapa correctamente las barras inversas de los comandos LaTeX dentro del JSON.\n- No uses bloques de código Markdown ni delimitadores distintos a los indicados.\n- En keyPoints devuelve una idea por elemento y no añadas guiones, números o símbolos de viñeta: la interfaz los mostrará como una lista.\n- Mantén la respuesta completa por debajo de ${responseBudget} palabras. Prefiere frases concisas y completas frente al detalle exhaustivo.\n\nDevuelve exclusivamente el objeto JSON solicitado. Si la fuente no permite responder una sección, indícalo de forma breve y explícita en español.`;
 }
 
 function buildSystemInstruction(language = 'es') {
@@ -269,10 +293,10 @@ function bytesToBase64(bytes) {
   return btoa(binary);
 }
 
-async function fetchPaperPdf(pdfUrl) {
+async function fetchPaperPdf(pdfUrl, timeoutMs = AI_REQUEST_BUDGETS.pdfOnlySourceMs) {
   if (!isAIReadablePdfUrl(pdfUrl)) return null;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(pdfUrl, {
       signal: controller.signal,
@@ -315,7 +339,56 @@ function normalizeExplanation(value) {
   };
 }
 
-function parseExplanationText(text) {
+function hasOddEscapingBackslash(text, index) {
+  let count = 0;
+  for (let cursor = index - 1; cursor >= 0 && text[cursor] === '\\'; cursor -= 1) count += 1;
+  return count % 2 === 1;
+}
+
+function escapeLatexBackslashesInJson(value, { broad = false } = {}) {
+  const text = String(value || '');
+  let output = '';
+  let mathDelimiter = '';
+  let cursor = 0;
+
+  while (cursor < text.length) {
+    if (text[cursor] === '$' && !hasOddEscapingBackslash(text, cursor)) {
+      const delimiter = text.startsWith('$$', cursor) ? '$$' : '$';
+      if (!mathDelimiter) mathDelimiter = delimiter;
+      else if (mathDelimiter === delimiter) mathDelimiter = '';
+      output += delimiter;
+      cursor += delimiter.length;
+      continue;
+    }
+    if (text[cursor] !== '\\') {
+      output += text[cursor];
+      cursor += 1;
+      continue;
+    }
+
+    let runEnd = cursor;
+    while (text[runEnd] === '\\') runEnd += 1;
+    const slashCount = runEnd - cursor;
+    output += '\\'.repeat(slashCount);
+    if (slashCount % 2 === 1) {
+      const tail = text.slice(runEnd);
+      const next = tail[0] || '';
+      const command = tail.match(/^([A-Za-z]+)/)?.[1] || '';
+      const validUnicodeEscape = next === 'u' && /^[0-9a-fA-F]{4}/.test(tail.slice(1, 5));
+      const validJsonEscape = /["\\/bfnrt]/.test(next) || validUnicodeEscape;
+      const latexSpecial = /[()[\]{}%_,;:!$]/.test(next);
+      const knownLatexCommand = LATEX_JSON_COMMANDS.has(command);
+      const broadCommand = broad && command.length > 1;
+      if (mathDelimiter || latexSpecial || knownLatexCommand || broadCommand || !validJsonEscape) {
+        output += '\\';
+      }
+    }
+    cursor = runEnd;
+  }
+  return output;
+}
+
+export function parseExplanationText(text) {
   if (!text) throw new AIExplanationError('AI_UNAVAILABLE', 502);
   try {
     const unfenced = String(text).replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
@@ -324,7 +397,14 @@ function parseExplanationText(text) {
     const jsonText = firstBrace >= 0 && lastBrace > firstBrace
       ? unfenced.slice(firstBrace, lastBrace + 1)
       : unfenced;
-    const explanation = normalizeExplanation(JSON.parse(jsonText));
+    const latexSafeJson = escapeLatexBackslashesInJson(jsonText);
+    let parsed;
+    try {
+      parsed = JSON.parse(latexSafeJson);
+    } catch {
+      parsed = JSON.parse(escapeLatexBackslashesInJson(jsonText, { broad: true }));
+    }
+    const explanation = normalizeExplanation(parsed);
     if (!explanation.overview || !explanation.takeaway) throw new Error('Incomplete explanation');
     return explanation;
   } catch {
@@ -389,6 +469,7 @@ async function requestGeminiExplanation({ paper, level, language, pdfBase64, env
   const parts = [{ text: buildPaperExplanationPrompt(paper, level, sourceBasis, language) }];
   if (pdfBase64) parts.push({ inlineData: { mimeType: 'application/pdf', data: pdfBase64 } });
 
+  const startedAt = Date.now();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -407,6 +488,7 @@ async function requestGeminiExplanation({ paper, level, language, pdfBase64, env
           responseMimeType: 'application/json',
           responseSchema: buildResponseSchema(language),
           maxOutputTokens: level === 'researcher' ? 7_000 : 5_000,
+          temperature: 0.2,
         },
       }),
     });
@@ -424,10 +506,30 @@ async function requestGeminiExplanation({ paper, level, language, pdfBase64, env
             : null,
       );
     }
-    return { explanation: parseGeminiPayload(payload), model, sourceBasis };
+    const result = { explanation: parseGeminiPayload(payload), model, sourceBasis };
+    console.info('AI provider attempt', JSON.stringify({
+      provider: 'gemini',
+      model,
+      language,
+      sourceBasis,
+      outcome: 'success',
+      durationMs: Date.now() - startedAt,
+      finishReason: cleanText(payload?.candidates?.[0]?.finishReason, 80),
+    }));
+    return result;
   } catch (error) {
-    if (error instanceof AIExplanationError) throw error;
-    throw new AIExplanationError('AI_UNAVAILABLE', 502);
+    const normalizedError = error instanceof AIExplanationError
+      ? error
+      : new AIExplanationError('AI_UNAVAILABLE', 502);
+    console.warn('AI provider attempt', JSON.stringify({
+      provider: 'gemini',
+      model,
+      language,
+      sourceBasis,
+      outcome: normalizedError.code,
+      durationMs: Date.now() - startedAt,
+    }));
+    throw normalizedError;
   } finally {
     clearTimeout(timeout);
   }
@@ -446,7 +548,8 @@ async function isModelCoolingDown(model) {
 }
 
 async function rememberModelCooldown(model, error) {
-  const retryAfterSeconds = safeInteger(error?.quota?.retryAfterSeconds, 60, 5, 300);
+  const defaultCooldown = error?.code === 'AI_UNAVAILABLE' ? 180 : 60;
+  const retryAfterSeconds = safeInteger(error?.quota?.retryAfterSeconds, defaultCooldown, 5, 300);
   try {
     await caches.default.put(modelCooldownKey(model), new Response('busy', {
       headers: { 'cache-control': `public, max-age=${retryAfterSeconds}` },
@@ -454,6 +557,11 @@ async function rememberModelCooldown(model, error) {
   } catch {
     // A missed cooldown only affects latency; the fallback remains available.
   }
+}
+
+export function shouldRetryGeminiWithFallback(error) {
+  return error instanceof AIExplanationError
+    && ['AI_BUSY', 'AI_UNAVAILABLE', 'AI_INVALID_RESPONSE'].includes(error.code);
 }
 
 async function explainWithGemini({ paper, level, language, pdfBase64, env }) {
@@ -471,12 +579,11 @@ async function explainWithGemini({ paper, level, language, pdfBase64, env }) {
         pdfBase64,
         env,
         model: primaryModel,
-        timeoutMs: 22_000,
+        timeoutMs: AI_REQUEST_BUDGETS.geminiPrimaryMs,
       });
     } catch (error) {
       const canFallback = canUseFallback
-        && error instanceof AIExplanationError
-        && ['AI_BUSY', 'AI_UNAVAILABLE'].includes(error.code);
+        && shouldRetryGeminiWithFallback(error);
       if (!canFallback) throw error;
       await rememberModelCooldown(primaryModel, error);
     }
@@ -489,7 +596,7 @@ async function explainWithGemini({ paper, level, language, pdfBase64, env }) {
     pdfBase64,
     env,
     model: fallbackModel,
-    timeoutMs: 28_000,
+    timeoutMs: AI_REQUEST_BUDGETS.geminiFallbackMs,
   });
 }
 
@@ -946,7 +1053,12 @@ export async function handleAIExplanation(request, env) {
   if (cached) return { ...(await cached.json()), remainingUses: null, cached: true };
 
   const quota = await assertWithinQuota(env, uid);
-  const pdfBase64 = await fetchPaperPdf(paper.pdfUrl);
+  const pdfBase64 = await fetchPaperPdf(
+    paper.pdfUrl,
+    paper.abstract
+      ? AI_REQUEST_BUDGETS.pdfWithAbstractMs
+      : AI_REQUEST_BUDGETS.pdfOnlySourceMs,
+  );
   if (!pdfBase64 && !paper.abstract) throw new AIExplanationError('AI_INVALID_PAPER', 400);
   const result = await explainWithProviderChain({
     providerName,

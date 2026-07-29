@@ -13,6 +13,8 @@ const {
   sanitizeFollow,
   sanitizePreferences,
   mergePapers,
+  arxivCategoriesForFollow,
+  parseArxivDigestFeed,
   selectDigestPapers,
   isSubscriptionDue,
   resendSendErrorCode,
@@ -31,6 +33,14 @@ function jsonResponse(status, body) {
     status,
     ok: status >= 200 && status < 300,
     json: async () => body,
+  };
+}
+
+function textResponse(status, body) {
+  return {
+    status,
+    ok: status >= 200 && status < 300,
+    text: async () => body,
   };
 }
 
@@ -160,6 +170,116 @@ test('sends daily subscriptions once per day and weekly subscriptions on Monday'
   assert.equal(isSubscriptionDue({ enabled: true, frequency: 'daily' }, monday), true);
   assert.equal(isSubscriptionDue({ enabled: true, frequency: 'weekly' }, monday), true);
   assert.equal(isSubscriptionDue({ enabled: true, frequency: 'weekly' }, tuesday), false);
+});
+
+test('maps native arXiv categories to their exact followed topics', () => {
+  const galacticFollow = {
+    type: 'topic',
+    canonicalId: 'astro-ph.GA',
+    displayName: 'Astrofísica Galáctica',
+    metadata: { categoryIds: ['astro-ph.GA'] },
+  };
+  const quantumFollow = {
+    type: 'topic',
+    canonicalId: 'quant-ph',
+    displayName: 'Física Cuántica',
+    metadata: { categoryIds: ['quant-ph'] },
+  };
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+    <feed xmlns="http://www.w3.org/2005/Atom" xmlns:arxiv="http://arxiv.org/schemas/atom">
+      <entry>
+        <id>http://arxiv.org/abs/2607.26058v1</id>
+        <title>The evolution of galaxy dust scaling relations</title>
+        <published>2026-07-28T17:59:59Z</published>
+        <updated>2026-07-28T17:59:59Z</updated>
+        <link href="https://arxiv.org/abs/2607.26058v1" rel="alternate" type="text/html"/>
+        <category term="astro-ph.GA"/>
+        <author><name>Aswin P. Vijayan</name></author>
+      </entry>
+    </feed>`;
+
+  assert.deepEqual(arxivCategoriesForFollow(galacticFollow), ['astro-ph.GA']);
+  const papers = parseArxivDigestFeed(xml, [galacticFollow, quantumFollow]);
+  assert.equal(papers.length, 1);
+  assert.equal(papers[0].id, '2607.26058');
+  assert.equal(papers[0].published, '2026-07-28T17:59:59Z');
+  assert.equal(papers[0].matches[0].canonicalId, 'astro-ph.GA');
+  assert.equal(papers[0].url, 'https://arxiv.org/abs/2607.26058v1');
+});
+
+test('scheduled digest fetches native arXiv follows before OpenAlex indexes them', async () => {
+  const now = new Date('2026-07-29T07:00:00Z');
+  const subscriptionKey = 'notification:subscription:arxiv-reader';
+  const kv = createMemoryKv({
+    [subscriptionKey]: {
+      uid: 'arxiv-reader',
+      email: 'reader@example.com',
+      displayName: 'Reader',
+      enabled: true,
+      frequency: 'daily',
+      maxPapers: 5,
+      unsubscribeToken: 'unsubscribe-token',
+      lastSentAt: '2026-07-28T07:00:00Z',
+      sentPaperKeys: [],
+      follows: [{
+        type: 'topic',
+        canonicalId: 'astro-ph.GA',
+        displayName: 'Astrofísica Galáctica',
+        externalIds: {},
+        metadata: { categoryIds: ['astro-ph.GA'] },
+      }],
+      previewItems: [],
+    },
+  });
+  const arxivXml = `<?xml version="1.0" encoding="UTF-8"?>
+    <feed xmlns="http://www.w3.org/2005/Atom">
+      <entry>
+        <id>http://arxiv.org/abs/2607.26058v1</id>
+        <title>The evolution of galaxy dust scaling relations</title>
+        <published>2026-07-28T17:59:59Z</published>
+        <updated>2026-07-28T17:59:59Z</updated>
+        <link href="https://arxiv.org/abs/2607.26058v1" rel="alternate" type="text/html"/>
+        <category term="astro-ph.GA"/>
+        <author><name>Aswin P. Vijayan</name></author>
+      </entry>
+    </feed>`;
+  let arxivQuery = '';
+  let brevoPayload;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, options = {}) => {
+    const url = new URL(String(input));
+    if (url.hostname === 'export.arxiv.org') {
+      arxivQuery = url.searchParams.get('search_query') || '';
+      return textResponse(200, arxivXml);
+    }
+    if (url.hostname === 'api.brevo.com' && url.pathname === '/v3/smtp/email') {
+      brevoPayload = JSON.parse(options.body);
+      return jsonResponse(201, { messageId: 'arxiv-email-id' });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+
+  try {
+    const result = await runEmailNotificationSchedule({
+      NOTIFICATION_STORE: kv,
+      EMAIL_PROVIDER: 'brevo',
+      BREVO_API_KEY: 'xkeysib-test',
+      BREVO_FROM_EMAIL: 'papertok@example.com',
+    }, now.getTime());
+
+    assert.deepEqual(result, { sent: 1, failed: 0 });
+    assert.equal(arxivQuery, 'cat:astro-ph.GA');
+    assert.equal(brevoPayload.subject, '1 novedad científica para ti');
+    assert.equal(
+      brevoPayload.htmlContent.includes('The evolution of galaxy dust scaling relations'),
+      true,
+    );
+    const storedSubscription = await kv.get(subscriptionKey, 'json');
+    assert.equal(storedSubscription.lastSentAt, now.toISOString());
+    assert.equal(storedSubscription.sentPaperKeys.includes('id:2607.26058'), true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('scheduled digest fetches and emails papers from every followed entity type', async () => {

@@ -1,5 +1,6 @@
 export const WHEEL_NAVIGATION_THRESHOLD = 110;
 export const PIXEL_DELTA_MODE = 0;
+export const WHEEL_LISTENER_OPTIONS = Object.freeze({ passive: true });
 
 export function shouldUseNativeWheelScroll(deltaMode) {
   return deltaMode === PIXEL_DELTA_MODE;

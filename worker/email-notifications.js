@@ -1,7 +1,10 @@
+import { XMLParser } from 'fast-xml-parser';
+
 const SUBSCRIPTION_PREFIX = 'notification:subscription:';
 const UNSUBSCRIBE_PREFIX = 'notification:unsubscribe:';
 const BREVO_API = 'https://api.brevo.com/v3';
 const RESEND_API = 'https://api.resend.com';
+const ARXIV_API = 'https://export.arxiv.org/api/query';
 const PAPER_TOK_URL = 'https://mugar123.github.io/papertok/#/following';
 const MAX_FOLLOWS = 40;
 const MAX_QUERIED_FOLLOWS = 24;
@@ -15,6 +18,20 @@ const FUTURE_DATE_TOLERANCE_MS = DAY_MS;
 const FOLLOWED_PAPER_MIN_SCORE = 55;
 const EXPLORATION_PAPER_MIN_SCORE = 70;
 const EXPLORATION_MIN_CITATIONS = 3;
+const MAX_ARXIV_DIGEST_CATEGORIES = 24;
+const MAX_ARXIV_DIGEST_RESULTS = 40;
+const ARXIV_CATEGORY_PREFIXES = [
+  'cs', 'math', 'physics', 'eess', 'q-bio', 'q-fin', 'stat', 'econ',
+  'astro-ph', 'cond-mat', 'gr-qc', 'hep-ex', 'hep-lat', 'hep-ph',
+  'hep-th', 'nlin', 'nucl-ex', 'nucl-th', 'quant-ph', 'math-ph',
+];
+const ARXIV_XML_PARSER = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: '@_',
+  removeNSPrefix: true,
+  parseTagValue: false,
+  trimValues: true,
+});
 
 export class EmailNotificationError extends Error {
   constructor(code, status = 400, message = code) {
@@ -328,6 +345,106 @@ function sanitizePreferences(input = {}) {
     frequency,
     maxPapers,
   };
+}
+
+function asArray(value) {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function isArxivCategory(value) {
+  const category = cleanText(value, 80);
+  if (!/^[a-z-]+(?:\.[A-Za-z-]+)?$/.test(category)) return false;
+  return ARXIV_CATEGORY_PREFIXES.some(prefix => (
+    category === prefix || category.startsWith(`${prefix}.`)
+  ));
+}
+
+function arxivCategoriesForFollow(follow = {}) {
+  const metadataCategories = Array.isArray(follow.metadata?.categoryIds)
+    ? follow.metadata.categoryIds
+    : [];
+  const candidates = metadataCategories.length ? metadataCategories : [follow.canonicalId];
+  return [...new Set(candidates.map(category => cleanText(category, 80)).filter(isArxivCategory))];
+}
+
+function parseArxivDigestFeed(xml, follows = []) {
+  const parsed = ARXIV_XML_PARSER.parse(String(xml || ''));
+  const entries = asArray(parsed?.feed?.entry);
+  const followsByCategory = new Map();
+
+  follows.forEach((follow) => {
+    arxivCategoriesForFollow(follow).forEach((category) => {
+      const matches = followsByCategory.get(category) || [];
+      matches.push(follow);
+      followsByCategory.set(category, matches);
+    });
+  });
+
+  return entries.map((entry) => {
+    const arxivId = cleanText(entry?.id, 300)
+      .replace(/^https?:\/\/arxiv\.org\/abs\//i, '')
+      .replace(/v\d+$/i, '');
+    if (!arxivId) return null;
+
+    const categories = asArray(entry?.category)
+      .map(category => cleanText(category?.['@_term'], 80))
+      .filter(Boolean);
+    const matches = [...new Set(categories.flatMap(category => followsByCategory.get(category) || []))];
+    if (!matches.length) return null;
+
+    const authors = asArray(entry?.author)
+      .map(author => cleanText(author?.name, 120))
+      .filter(Boolean);
+    const links = asArray(entry?.link);
+    const landingPageUrl = safeUrl(
+      links.find(link => link?.['@_rel'] === 'alternate')?.['@_href']
+      || `https://arxiv.org/abs/${arxivId}`,
+    );
+
+    return sanitizePaper({
+      id: arxivId,
+      doi: cleanText(entry?.doi, 300),
+      title: cleanText(entry?.title, 500),
+      authors,
+      published: cleanText(entry?.published || entry?.updated, 40),
+      journal: cleanText(entry?.journal_ref, 200) || 'arXiv',
+      citationCount: 0,
+      openAccess: true,
+      landingPageUrl,
+      matches,
+    });
+  }).filter(Boolean);
+}
+
+async function fetchArxivTopicUpdates(follows) {
+  const categories = [...new Set(
+    follows.flatMap(arxivCategoriesForFollow),
+  )].slice(0, MAX_ARXIV_DIGEST_CATEGORIES);
+  if (!categories.length) return [];
+
+  const url = new URL(ARXIV_API);
+  url.searchParams.set('search_query', categories.map(category => `cat:${category}`).join(' OR '));
+  url.searchParams.set('start', '0');
+  url.searchParams.set('max_results', String(MAX_ARXIV_DIGEST_RESULTS));
+  url.searchParams.set('sortBy', 'submittedDate');
+  url.searchParams.set('sortOrder', 'descending');
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        accept: 'application/atom+xml, application/xml, text/xml;q=0.9',
+        'user-agent': 'PaperTok/1.0 (mailto:app@papertok.io)',
+      },
+    });
+    if (!response.ok) throw new Error(`arXiv digest error: ${response.status}`);
+    return parseArxivDigestFeed(await response.text(), follows);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 async function verifyFirebaseIdentity(request, env) {
@@ -670,10 +787,21 @@ function selectDigestPapers(papers, {
 
 async function collectDigestPapers(subscription, env, { test = false, now = Date.now() } = {}) {
   const follows = (subscription.follows || []).slice(0, MAX_QUERIED_FOLLOWS);
-  const fresh = await mapWithConcurrency(follows, 4, follow => (
+  const arxivFollows = follows.filter(follow => arxivCategoriesForFollow(follow).length > 0);
+  const indexedFollows = follows.filter(follow => arxivCategoriesForFollow(follow).length === 0);
+  const indexedFreshPromise = mapWithConcurrency(indexedFollows, 4, follow => (
     follow.type === 'project' ? fetchProjectUpdates(follow, env) : fetchOpenAlexUpdates(follow, env, now)
   ));
-  const combined = mergePapers([...fresh, ...(subscription.previewItems || [])]);
+  const arxivFreshPromise = fetchArxivTopicUpdates(arxivFollows).catch(async (error) => {
+    console.warn('arXiv digest unavailable, using OpenAlex fallback', error?.message || error);
+    return mapWithConcurrency(arxivFollows, 2, follow => fetchOpenAlexUpdates(follow, env, now));
+  });
+  const [indexedFresh, arxivFresh] = await Promise.all([indexedFreshPromise, arxivFreshPromise]);
+  const combined = mergePapers([
+    ...indexedFresh,
+    ...arxivFresh,
+    ...(subscription.previewItems || []),
+  ]);
   const fallbackDays = subscription.frequency === 'weekly' ? 8 : 2;
   const cutoff = subscription.lastSentAt
     ? Date.parse(subscription.lastSentAt) - 60 * 60 * 1000
@@ -692,7 +820,10 @@ async function collectDigestPapers(subscription, env, { test = false, now = Date
     ...sentKeys,
     ...followedSelection.flatMap(paperIdentityKeys),
   ]);
-  const exploration = await fetchExplorationUpdates(env, now);
+  const exploration = await fetchExplorationUpdates(env, now).catch((error) => {
+    console.warn('Digest exploration unavailable', error?.message || error);
+    return [];
+  });
   const discovery = selectDigestPapers(exploration, {
     limit: 1,
     now,
@@ -1105,6 +1236,8 @@ export const emailNotificationInternals = {
   sanitizePaper,
   sanitizePreferences,
   mergePapers,
+  arxivCategoriesForFollow,
+  parseArxivDigestFeed,
   selectDigestPapers,
   isSubscriptionDue,
   resendSendErrorCode,

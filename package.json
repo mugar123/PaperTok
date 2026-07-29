@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@vnedyalk0v/react19-simple-maps": "^2.0.9",
+    "fast-xml-parser": "^5.10.1",
     "firebase": "^12.14.0",
     "framer-motion": "^12.40.0",
     "katex": "^0.17.0",
