@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, FileText, Users, ArrowLeft, Building2, Lightbulb, Briefcase, Sparkles, Compass, TrendingUp, Check, X } from 'lucide-react';
+import { Search, FileText, Users, ArrowLeft, Building2, Lightbulb, Briefcase, Sparkles, Compass, TrendingUp, Check, LoaderCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   searchAuthors,
@@ -302,19 +302,13 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               autoFocus
             />
             {isSearching && (
-              <span className="search-input-status" role="status">
-                {isEnglish ? 'Searching...' : 'Buscando...'}
-              </span>
-            )}
-            {query && (
-              <button
-                type="button"
-                className="search-clear-btn"
-                onClick={clearSearch}
-                aria-label={isEnglish ? 'Clear search' : 'Borrar búsqueda'}
+              <span
+                className="search-input-loader"
+                role="status"
+                aria-label={isEnglish ? 'Searching' : 'Buscando'}
               >
-                <X size={17} />
-              </button>
+                <LoaderCircle size={17} aria-hidden="true" />
+              </span>
             )}
           </div>
         </div>
