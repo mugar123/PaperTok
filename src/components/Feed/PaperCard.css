@@ -217,7 +217,8 @@
 
 .pc-project-badge-slot-inner {
   min-height: 0;
-  overflow: hidden;
+  overflow: clip;
+  overflow-clip-margin: 18px;
 }
 
 .pc-project-badge-motion {
@@ -245,6 +246,7 @@
   cursor: pointer;
   font-family: inherit;
   text-align: left;
+  transform-origin: left center;
   transform: translateY(0) scale(1);
   transition:
     color 180ms ease,
@@ -260,7 +262,7 @@
   background: rgba(29, 161, 242, 0.23);
   border-color: rgba(125, 211, 252, 0.58);
   box-shadow: 0 6px 16px rgba(14, 165, 233, 0.18);
-  transform: translateY(-2px) scale(1.015);
+  transform: translateY(-2px);
   outline: none;
 }
 
