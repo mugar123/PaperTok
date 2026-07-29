@@ -258,11 +258,11 @@
 
 .pc-project-badge:hover:not(:disabled),
 .pc-project-badge:focus-visible:not(:disabled) {
-  color: #7dd3fc;
-  background: rgba(29, 161, 242, 0.23);
-  border-color: rgba(125, 211, 252, 0.58);
-  box-shadow: 0 6px 16px rgba(14, 165, 233, 0.18);
-  transform: translateY(-2px);
+  color: #67c7f5;
+  background: rgba(29, 161, 242, 0.19);
+  border-color: rgba(125, 211, 252, 0.44);
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.1);
+  transform: translateY(-1px);
   outline: none;
 }
 
@@ -281,7 +281,7 @@
 
 .pc-project-badge:hover:not(:disabled) svg,
 .pc-project-badge:focus-visible:not(:disabled) svg {
-  transform: translateY(-1px) rotate(-6deg) scale(1.08);
+  transform: translateX(1px);
 }
 
 .pc-project-badge span {

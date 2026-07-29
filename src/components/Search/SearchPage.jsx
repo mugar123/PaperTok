@@ -299,6 +299,9 @@ export default function SearchPage({ onSaveToList = () => {} }) {
       ]),
     },
   });
+  const openAlexUnavailable = searchIssue?.unavailableSections
+    ?.filter(section => ['papers', 'authors', 'topics'].includes(section))
+    .length >= 2;
   const suggestedQueries = [
     {
       label: isEnglish ? 'Cosmology' : 'Cosmología',
@@ -432,10 +435,16 @@ export default function SearchPage({ onSaveToList = () => {} }) {
                 <AlertCircle size={20} aria-hidden="true" />
                 <div className="search-service-copy">
                   <strong>{hasResults
-                    ? (isEnglish ? 'Partial results' : 'Resultados parciales')
+                    ? (openAlexUnavailable
+                        ? (isEnglish ? 'OpenAlex is temporarily unavailable' : 'OpenAlex no está disponible temporalmente')
+                        : (isEnglish ? 'Partial results' : 'Resultados parciales'))
                     : (isEnglish ? 'Search is temporarily unavailable' : 'La búsqueda no está disponible temporalmente')}</strong>
                   <span>{hasResults
-                    ? (isEnglish ? 'Some sources did not respond.' : 'Algunas fuentes no han respondido.')
+                    ? (openAlexUnavailable
+                        ? (isEnglish
+                            ? 'Some papers, authors, and topics may be missing until its quota resets.'
+                            : 'Pueden faltar papers, autores y temas hasta que se restablezca su cuota.')
+                        : (isEnglish ? 'Some sources did not respond.' : 'Algunas fuentes no han respondido.'))
                     : (isEnglish ? 'Please try again in a moment.' : 'Vuelve a intentarlo dentro de un momento.')}</span>
                 </div>
                 <button

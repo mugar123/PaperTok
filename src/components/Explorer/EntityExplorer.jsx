@@ -628,7 +628,13 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
       
       try {
         const resolvedId = entity.id || id;
-        const { authors, total } = await getAuthorsByEntity(type, resolvedId, authorsPage, debouncedSearch);
+        const { authors, total } = await getAuthorsByEntity(
+          type,
+          resolvedId,
+          authorsPage,
+          debouncedSearch,
+          entity.display_name,
+        );
         
         if (isCancelled) return;
         if (authorsPage === 1) {
@@ -1614,7 +1620,9 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
                 <div className="ee-author-info">
                   <h4>{author.display_name}</h4>
                   <p className="ee-author-metrics">
-                    H-Index: {author.h_index} • {author.cited_by_count.toLocaleString(locale)} {isEnglish ? 'citations' : 'citas'}
+                    {author.source === 'crossref'
+                      ? `${author.works_count.toLocaleString(locale)} ${isEnglish ? 'matching publications' : 'publicaciones coincidentes'}`
+                      : `H-Index: ${author.h_index} • ${author.cited_by_count.toLocaleString(locale)} ${isEnglish ? 'citations' : 'citas'}`}
                   </p>
                 </div>
                 <ChevronRight size={18} className="ee-author-arrow" />

@@ -16,7 +16,10 @@ import {
   resolveRorInstitution,
   searchRorInstitutions,
 } from './rorService.js';
-import { getInstitutionWorksFromCrossref } from './crossrefInstitutionService.js';
+import {
+  getInstitutionAuthorsFromCrossref,
+  getInstitutionWorksFromCrossref,
+} from './crossrefInstitutionService.js';
 import {
   isOpenAlexRateLimitError,
   openAlexFetch,
@@ -1206,7 +1209,7 @@ export async function getWorksByEntity(type, id, sortBy = 'cited_by_count:desc',
 /**
  * Fetch authors for a specific entity (e.g. institution or concept)
  */
-export async function getAuthorsByEntity(type, id, page = 1, searchQuery = '') {
+export async function getAuthorsByEntity(type, id, page = 1, searchQuery = '', entityName = '') {
   if (!id || type === 'author') return { authors: [], total: 0 };
   
   const cleanId = id.includes('/') ? id.split('/').pop() : id;
@@ -1220,16 +1223,25 @@ export async function getAuthorsByEntity(type, id, page = 1, searchQuery = '') {
   }
   
   const filterId = isRor ? (id.startsWith('http') ? id : `https://ror.org/${cleanId}`) : cleanId;
-  let url = `https://api.openalex.org/authors?filter=${filterKey}:${filterId}&sort=cited_by_count:desc&per-page=30&page=${page}`;
-  if (searchQuery) {
-     url += `&search=${encodeURIComponent(searchQuery)}`;
-  }
+  const params = new URLSearchParams({
+    filter: `${filterKey}:${filterId}`,
+    sort: 'cited_by_count:desc',
+    'per-page': '30',
+    page: String(page),
+  });
+  if (searchQuery) params.set('search', searchQuery);
+  const url = `https://api.openalex.org/authors?${params}`;
+  const authorsCacheKey = `entity-authors:${type}:${cleanId}:${page}:${searchQuery.trim().toLowerCase()}`;
   
   try {
-    const response = await fetchWithTimeout(url, 10000);
-    if (!response.ok) throw new Error(`OpenAlex API error: ${response.status}`);
-    
-    const data = await response.json();
+    const data = await openAlexJson(url, {
+      timeoutMs: 7000,
+      retries: 0,
+      cacheTtlMs: 5 * 60 * 1000,
+      persistentKey: authorsCacheKey,
+      persistentTtlMs: ENTITY_WORKS_CACHE_TTL_MS,
+      staleIfError: true,
+    });
     if (data && data.results) {
        const authors = data.results.map(author => ({
           id: author.id,
@@ -1246,6 +1258,18 @@ export async function getAuthorsByEntity(type, id, page = 1, searchQuery = '') {
     }
   } catch (err) {
     console.error(`OpenAlex getAuthorsByEntity failed for ${type} ${id}`, err);
+    if (type === 'institution') {
+      try {
+        return await getInstitutionAuthorsFromCrossref(
+          entityName,
+          page,
+          searchQuery,
+          crossrefUrl => fetchWithTimeout(crossrefUrl, 10000),
+        );
+      } catch (fallbackError) {
+        console.error(`Crossref institution authors fallback failed for ${entityName || id}`, fallbackError);
+      }
+    }
     throw err;
   }
   return { authors: [], total: 0 };

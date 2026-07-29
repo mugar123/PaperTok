@@ -1,4 +1,5 @@
 const CROSSREF_WORKS_LIMIT = 30;
+const CROSSREF_AUTHORS_WORKS_LIMIT = 100;
 
 function stripMarkup(value) {
   return String(value || '')
@@ -84,4 +85,67 @@ export async function getInstitutionWorksFromCrossref(institutionName, page, sea
     ? page * CROSSREF_WORKS_LIMIT + 1
     : (page - 1) * CROSSREF_WORKS_LIMIT + papers.length;
   return { papers, total, source: 'crossref' };
+}
+
+function normalizeAuthorSearchValue(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+export async function getInstitutionAuthorsFromCrossref(institutionName, page, searchQuery, request) {
+  if (!institutionName || page > 1) {
+    return { authors: [], total: 0, source: 'crossref' };
+  }
+
+  const url = new URL('https://api.crossref.org/works');
+  url.searchParams.set('query.affiliation', institutionName);
+  url.searchParams.set('rows', String(CROSSREF_AUTHORS_WORKS_LIMIT));
+  url.searchParams.set('select', 'DOI,author,is-referenced-by-count');
+  if (searchQuery) url.searchParams.set('query.author', searchQuery);
+
+  const response = await request(url.toString());
+  if (!response.ok) throw new Error(`Crossref API error: ${response.status}`);
+  const payload = await response.json();
+  const normalizedQuery = normalizeAuthorSearchValue(searchQuery);
+  const authorsByIdentity = new Map();
+
+  (payload.message?.items || []).forEach((work) => {
+    const citations = Number(work['is-referenced-by-count']) || 0;
+    (work.author || []).forEach((author) => {
+      const displayName = [author.given, author.family].filter(Boolean).join(' ').trim()
+        || String(author.name || '').trim();
+      const normalizedName = normalizeAuthorSearchValue(displayName);
+      if (!normalizedName || (normalizedQuery && !normalizedName.includes(normalizedQuery))) return;
+
+      const orcid = String(author.ORCID || '').replace(/^https?:\/\/orcid\.org\//i, '');
+      const identity = orcid || normalizedName;
+      const existing = authorsByIdentity.get(identity) || {
+        id: orcid ? `https://orcid.org/${orcid}` : `crossref-author:${encodeURIComponent(normalizedName)}`,
+        display_name: displayName,
+        works_count: 0,
+        cited_by_count: 0,
+        h_index: null,
+        institution: institutionName,
+        concepts: [],
+        source: 'crossref',
+      };
+      existing.works_count += 1;
+      existing.cited_by_count += citations;
+      authorsByIdentity.set(identity, existing);
+    });
+  });
+
+  const authors = [...authorsByIdentity.values()]
+    .sort((left, right) => (
+      right.works_count - left.works_count
+      || right.cited_by_count - left.cited_by_count
+      || left.display_name.localeCompare(right.display_name)
+    ))
+    .slice(0, 30);
+
+  return { authors, total: authors.length, source: 'crossref' };
 }
