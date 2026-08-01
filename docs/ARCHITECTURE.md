@@ -44,7 +44,7 @@ Application providers are user-scoped in this order:
 flowchart LR
     A["Provider adapters"] --> N["PaperBuilder / normalized Paper"]
     N --> D["Identity + deduplication"]
-    D --> X["OpenAlex and domain enrichment"]
+    D --> X["OpenAlex, iCite and domain enrichment"]
     X --> R["Recommendation or report ranking"]
     R --> C["Paper cards and explorer pages"]
 ```
@@ -78,11 +78,18 @@ The Worker entry point is `worker/report-api.js`. Its route groups include:
 - discovery: `/report/trends`, `/related`, `/citation-graph`, `/arxiv`
 - open access: `/oa`
 - specialist sources: `/sources/*`
+- biomedical metrics: `/enrich/icite`
+- associated AI resources: `/resources/huggingface`
 - AI: `/ai/explain`
 - notifications: `/notifications/*` (authenticated preferences include the active `es`/`en` locale used by digest and unsubscribe copy)
 
 The browser calls the Worker through `VITE_PAPER_API_BASE_URL`. Worker credentials are stored
 with `wrangler secret put`.
+
+OpenReview and Hugging Face contribute optional AI and computer-science candidates. NIH iCite
+enriches PubMed-indexed candidates in one bounded batch and never blocks the feed when the
+service is unavailable. Hugging Face model and dataset links are loaded only for papers whose
+normalized provenance includes Hugging Face.
 
 ## Deployment
 

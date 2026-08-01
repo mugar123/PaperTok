@@ -646,6 +646,7 @@
 }
 
 .pc-linked-resource--dataset { color: #67e8f9; }
+.pc-linked-resource--model { color: #93c5fd; }
 .pc-linked-resource--software { color: #a7f3d0; }
 .pc-linked-resource--material { color: #fde68a; }
 .pc-linked-resource--version { color: #c4b5fd; }

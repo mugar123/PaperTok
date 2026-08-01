@@ -16,6 +16,7 @@ import './PaperCard.css';
 import RelatedPapersSheet from './RelatedPapersSheet';
 import { findOpenAccessCopy } from '../../services/unpaywallService';
 import { getRelatedResearchResources } from '../../services/dataCiteService';
+import { getHuggingFaceResearchResources } from '../../services/huggingFaceService';
 import { resolvePaperTopic, topicExplorerPath } from '../../utils/topicNavigation';
 import AIExplanationSheet from './AIExplanationSheet';
 import { canExplainPaper } from '../../services/aiExplanationService';
@@ -42,11 +43,22 @@ const AREA_BG_ICONS = {
 
 const RESOURCE_KIND_CONFIG = {
   dataset: { label: { es: 'Datos', en: 'Data' }, Icon: Database },
+  model: { label: { es: 'Modelo IA', en: 'AI model' }, Icon: Brain },
   software: { label: { es: 'Código', en: 'Code' }, Icon: Code2 },
   material: { label: { es: 'Material', en: 'Material' }, Icon: PackageOpen },
   version: { label: { es: 'Versión', en: 'Version' }, Icon: History },
 };
 const ENRICHMENT_SETTLE_DELAY_MS = 240;
+
+function mergeResearchResources(...groups) {
+  const seen = new Set();
+  return groups.flat().filter(Boolean).filter(resource => {
+    const key = `${resource.kind || ''}:${resource.url || resource.id || ''}`.toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 8);
+}
 
 const PaperCard = memo(function PaperCard({ 
   paper, 
@@ -127,12 +139,28 @@ const PaperCard = memo(function PaperCard({
 
   useEffect(() => {
     let active = true;
-    if (!isCardSettled || !paper?.doi) return () => { active = false; };
-    getRelatedResearchResources(paper.doi, { title: paper.title }).then(items => {
-      if (active) setLinkedResources({ paperId: paper.id, items });
+    const baseResources = paper?.researchResources || [];
+    setLinkedResources({ paperId: paper?.id, items: baseResources });
+    if (!isCardSettled) return () => { active = false; };
+
+    const providers = new Set([paper?.sources?.primary, ...(paper?.sources?.enrichedBy || [])]);
+    const requests = [];
+    if (paper?.doi) requests.push(getRelatedResearchResources(paper.doi, { title: paper.title }));
+    if (paper?.arxivId && providers.has('huggingface')) {
+      requests.push(getHuggingFaceResearchResources(paper.arxivId));
+    }
+    if (requests.length === 0) return () => { active = false; };
+
+    Promise.allSettled(requests).then(results => {
+      if (!active) return;
+      const remoteResources = results.flatMap(result => result.status === 'fulfilled' ? result.value : []);
+      setLinkedResources({
+        paperId: paper.id,
+        items: mergeResearchResources(baseResources, remoteResources),
+      });
     });
     return () => { active = false; };
-  }, [isCardSettled, paper?.doi, paper?.id, paper?.title]);
+  }, [isCardSettled, paper?.arxivId, paper?.doi, paper?.id, paper?.researchResources, paper?.sources, paper?.title]);
 
   useEffect(() => {
     if (!cardRef.current || showRelated || selectedRelatedPaper) return;

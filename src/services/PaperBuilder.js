@@ -39,6 +39,12 @@ export class PaperBuilder {
       adsUrl: data.adsUrl || undefined,
       inspireId: data.inspireId || undefined,
       inspireUrl: data.inspireUrl || undefined,
+      openReviewId: data.openReviewId || undefined,
+      openReviewUrl: data.openReviewUrl || undefined,
+      openReviewVenueId: data.openReviewVenueId || undefined,
+      huggingFaceId: data.huggingFaceId || undefined,
+      huggingFaceUrl: data.huggingFaceUrl || undefined,
+      huggingFaceUpvotes: data.huggingFaceUpvotes ?? undefined,
       journal: data.journal || undefined,
       conference: data.conference || undefined,
       year: data.year || new Date().getFullYear(),
@@ -76,6 +82,8 @@ export class PaperBuilder {
       citationNormalizedPercentile: data.citationNormalizedPercentile || data.citation_normalized_percentile || null,
       citedByPercentileYear: data.citedByPercentileYear || data.cited_by_percentile_year || null,
       countsByYear: data.countsByYear || data.counts_by_year || [],
+      iciteMetrics: data.iciteMetrics || undefined,
+      researchResources: data.researchResources || [],
       published: data.published || data.publishedDate || '',
       sourceType: data.sourceType || undefined,
       summary: data.summary || data.abstract || '',
@@ -126,6 +134,14 @@ export class PaperBuilder {
     if (!merged.adsUrl && enrichmentData.adsUrl) merged.adsUrl = enrichmentData.adsUrl;
     if (!merged.inspireId && enrichmentData.inspireId) merged.inspireId = enrichmentData.inspireId;
     if (!merged.inspireUrl && enrichmentData.inspireUrl) merged.inspireUrl = enrichmentData.inspireUrl;
+    if (!merged.openReviewId && enrichmentData.openReviewId) merged.openReviewId = enrichmentData.openReviewId;
+    if (!merged.openReviewUrl && enrichmentData.openReviewUrl) merged.openReviewUrl = enrichmentData.openReviewUrl;
+    if (!merged.openReviewVenueId && enrichmentData.openReviewVenueId) merged.openReviewVenueId = enrichmentData.openReviewVenueId;
+    if (!merged.huggingFaceId && enrichmentData.huggingFaceId) merged.huggingFaceId = enrichmentData.huggingFaceId;
+    if (!merged.huggingFaceUrl && enrichmentData.huggingFaceUrl) merged.huggingFaceUrl = enrichmentData.huggingFaceUrl;
+    if (merged.huggingFaceUpvotes === undefined && enrichmentData.huggingFaceUpvotes !== undefined) {
+      merged.huggingFaceUpvotes = enrichmentData.huggingFaceUpvotes;
+    }
 
     // Merge string fields (prefer existing if they are solid, but enrichment might have better data like journal name)
     if (!merged.journal && enrichmentData.journal) merged.journal = enrichmentData.journal;
@@ -182,6 +198,19 @@ export class PaperBuilder {
     if (enrichmentData.biomedicalTerms?.length) {
       merged.biomedicalTerms = [...new Set([...(merged.biomedicalTerms || []), ...enrichmentData.biomedicalTerms])];
     }
+    if (enrichmentData.researchResources?.length) {
+      const resources = [...(merged.researchResources || []), ...enrichmentData.researchResources];
+      const seenResources = new Set();
+      merged.researchResources = resources.filter(resource => {
+        const key = `${resource?.kind || ''}:${resource?.url || resource?.id || ''}`.toLowerCase();
+        if (!resource || !key || seenResources.has(key)) return false;
+        seenResources.add(key);
+        return true;
+      });
+    }
+    if (enrichmentData.iciteMetrics) {
+      merged.iciteMetrics = { ...(merged.iciteMetrics || {}), ...enrichmentData.iciteMetrics };
+    }
     merged.hasReferences = Boolean(merged.hasReferences || enrichmentData.hasReferences);
     merged.hasData = Boolean(merged.hasData || enrichmentData.hasData);
     merged.hasSupplement = Boolean(merged.hasSupplement || enrichmentData.hasSupplement);
@@ -227,7 +256,7 @@ export class PaperBuilder {
 
   /**
    * Deduplicates and merges an array of papers coming from different adapters.
-   * Uses DOI primarily, and Title + First Author as a fallback heuristic.
+   * Uses stable provider identifiers before Title + First Author as a fallback heuristic.
    * @param {Array<Object>} papers - Array of paper objects from adapters
    * @returns {Array<Object>} Deduplicated and merged array
    */
@@ -239,7 +268,7 @@ export class PaperBuilder {
     for (const paper of papers) {
       if (!paper) continue;
 
-      // 1. Determine deduplication keys
+      // 1. Determine stable deduplication keys before the title heuristic.
       let doiKey = paper.doi ? paper.doi.toLowerCase().trim() : null;
       if (doiKey && doiKey.startsWith('https://doi.org/')) {
         doiKey = doiKey.replace('https://doi.org/', '');
@@ -249,14 +278,33 @@ export class PaperBuilder {
       const cleanTitle = (paper.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
       const firstAuthor = paper.authors && paper.authors.length > 0 ? (paper.authors[0].name || '').toLowerCase().split(' ').pop() : '';
       const heuristicKey = cleanTitle && firstAuthor ? `${cleanTitle}_${firstAuthor}` : null;
+      const idValue = String(paper.id || '');
+      const normalizedArxivId = String(
+        paper.arxivId
+        || paper.huggingFaceId
+        || (idValue.toLowerCase().startsWith('arxiv:') ? idValue : ''),
+      )
+        .trim()
+        .replace(/^arxiv:/i, '')
+        .replace(/v\d+$/i, '')
+        .toLowerCase();
+      const stableKeys = [
+        doiKey,
+        normalizedArxivId ? `arxiv:${normalizedArxivId}` : null,
+        (paper.pmid || idValue.toLowerCase().startsWith('pmid:'))
+          ? `pmid:${String(paper.pmid || idValue).replace(/^pmid:/i, '')}`
+          : null,
+        (paper.openReviewId || idValue.toLowerCase().startsWith('openreview:'))
+          ? `openreview:${String(paper.openReviewId || idValue).replace(/^openreview:/i, '').toLowerCase()}`
+          : null,
+        paper.scopusId ? `scopus:${String(paper.scopusId).toLowerCase()}` : null,
+        paper.adsBibcode ? `ads:${String(paper.adsBibcode).toLowerCase()}` : null,
+        paper.inspireId ? `inspire:${String(paper.inspireId).toLowerCase()}` : null,
+      ].filter(Boolean);
+      const allKeys = [...stableKeys, heuristicKey].filter(Boolean);
 
       // 2. Find existing match
-      let matchKey = null;
-      if (doiKey && mergedMap.has(doiKey)) {
-        matchKey = doiKey;
-      } else if (heuristicKey && mergedMap.has(heuristicKey)) {
-        matchKey = heuristicKey;
-      }
+      const matchKey = allKeys.find(key => mergedMap.has(key)) || null;
 
       // 3. Merge or Add
       if (matchKey) {
@@ -269,16 +317,14 @@ export class PaperBuilder {
         }
         
         // Ensure both keys point to the same merged object to prevent future duplicates missing the link
-        if (doiKey) mergedMap.set(doiKey, merged);
-        if (heuristicKey) mergedMap.set(heuristicKey, merged);
+        allKeys.forEach(key => mergedMap.set(key, merged));
       } else {
         // Create base paper using the builder to normalize
         const basePaper = this.create(paper);
-        if (doiKey) mergedMap.set(doiKey, basePaper);
-        if (heuristicKey) mergedMap.set(heuristicKey, basePaper);
+        allKeys.forEach(key => mergedMap.set(key, basePaper));
         
         // If neither key exists (very rare, no title/author and no DOI), just use ID
-        if (!doiKey && !heuristicKey) {
+        if (allKeys.length === 0) {
            mergedMap.set(paper.id, basePaper);
         }
       }

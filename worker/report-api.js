@@ -41,6 +41,10 @@ const SOURCE_CACHE_SECONDS = {
   nasa: 60 * 60,
   physics: 6 * 60 * 60,
   scopus: 6 * 60 * 60,
+  openreview: 30 * 60,
+  huggingface: 15 * 60,
+  icite: 24 * 60 * 60,
+  huggingFaceResources: 7 * 24 * 60 * 60,
 };
 const ARXIV_PARAMS = ['search_query', 'id_list', 'start', 'max_results', 'sortBy', 'sortOrder'];
 
@@ -609,6 +613,151 @@ async function handleEuropePmc(request, env) {
   });
 }
 
+function compactOpenReviewNote(note) {
+  const allowedContent = [
+    'title',
+    'abstract',
+    'authors',
+    'authorids',
+    'venue',
+    'venueid',
+    'pdf',
+    'html',
+    'keywords',
+    'doi',
+    'arxiv',
+    'arxiv_id',
+    'external_id',
+  ];
+  return {
+    id: note?.id,
+    forum: note?.forum,
+    domain: note?.domain,
+    cdate: note?.cdate,
+    tcdate: note?.tcdate,
+    pdate: note?.pdate,
+    content: Object.fromEntries(allowedContent
+      .filter(key => note?.content?.[key] !== undefined)
+      .map(key => [key, note.content[key]])),
+  };
+}
+
+function isOpenReviewSubmission(note) {
+  const domain = String(note?.domain || '').toLowerCase();
+  return ![
+    'dblp.org',
+    'openreview.net/public_article',
+    'openreview.net/arxiv',
+    'openreview.net/orcid',
+  ].some(prefix => domain.startsWith(prefix));
+}
+
+async function handleOpenReview(request, env) {
+  const context = sourceRequestContext(request, env);
+  if (context.error) return context.error;
+  const query = safeSourceQuery(context.requestUrl.searchParams.get('q'));
+  if (!query) return json({ error: 'Missing OpenReview query' }, 400, corsHeaders(context.origin, env));
+
+  return cacheResponse(request, context.origin, env, SOURCE_CACHE_SECONDS.openreview, async () => {
+    const url = new URL('https://api2.openreview.net/notes/search');
+    url.searchParams.set('query', query);
+    url.searchParams.set('source', 'forum');
+    url.searchParams.set('limit', String(Math.min(50, context.limit * 3)));
+    url.searchParams.set('offset', String((context.page - 1) * context.limit));
+    if (context.sort === 'recent') url.searchParams.set('sort', 'tcdate:desc');
+    const payload = await fetchJsonUpstream(url);
+    return {
+      notes: (payload?.notes || [])
+        .filter(isOpenReviewSubmission)
+        .slice(0, context.limit)
+        .map(compactOpenReviewNote),
+      count: Number(payload?.count) || 0,
+    };
+  });
+}
+
+async function handleHuggingFacePapers(request, env) {
+  const context = sourceRequestContext(request, env);
+  if (context.error) return context.error;
+  const query = safeSourceQuery(context.requestUrl.searchParams.get('q'));
+  if (!query) return json({ error: 'Missing Hugging Face query' }, 400, corsHeaders(context.origin, env));
+
+  return cacheResponse(request, context.origin, env, SOURCE_CACHE_SECONDS.huggingface, async () => {
+    const url = new URL('https://huggingface.co/api/papers/search');
+    url.searchParams.set('q', query);
+    url.searchParams.set('limit', String(context.limit));
+    url.searchParams.set('p', String(context.page - 1));
+    const payload = await fetchJsonUpstream(url);
+    const papers = Array.isArray(payload) ? payload : payload?.papers || [];
+    if (context.sort === 'recent') {
+      papers.sort((a, b) => Date.parse(b?.paper?.publishedAt || b?.publishedAt || 0)
+        - Date.parse(a?.paper?.publishedAt || a?.publishedAt || 0));
+    }
+    return { papers: papers.slice(0, context.limit) };
+  });
+}
+
+async function handleICite(request, env) {
+  const requestUrl = new URL(request.url);
+  const origin = request.headers.get('origin') || '';
+  if (origin && !allowedOrigins(env).has(origin)) return json({ error: 'Origin not allowed' }, 403);
+  const pmids = [...new Set(String(requestUrl.searchParams.get('pmids') || '')
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean))];
+  if (pmids.length === 0 || pmids.length > 200 || pmids.some(pmid => !/^\d{1,12}$/.test(pmid))) {
+    return json({ error: 'Invalid PubMed identifiers' }, 400, corsHeaders(origin, env));
+  }
+
+  return cacheResponse(request, origin, env, SOURCE_CACHE_SECONDS.icite, async () => {
+    const url = new URL('https://icite.od.nih.gov/api/pubs');
+    url.searchParams.set('pmids', pmids.join(','));
+    url.searchParams.set('fl', [
+      'pmid',
+      'doi',
+      'title',
+      'apt',
+      'citation_count',
+      'relative_citation_ratio',
+      'nih_percentile',
+      'is_clinical',
+      'provisional',
+    ].join(','));
+    const payload = await fetchJsonUpstream(url);
+    return { data: Array.isArray(payload?.data) ? payload.data : [] };
+  });
+}
+
+async function handleHuggingFaceResources(request, env) {
+  const requestUrl = new URL(request.url);
+  const origin = request.headers.get('origin') || '';
+  if (origin && !allowedOrigins(env).has(origin)) return json({ error: 'Origin not allowed' }, 403);
+  const arxivId = String(requestUrl.searchParams.get('arxiv_id') || '').trim().replace(/v\d+$/i, '');
+  if (!/^\d{4}\.\d{4,5}$/.test(arxivId)) {
+    return json({ error: 'Invalid arXiv identifier' }, 400, corsHeaders(origin, env));
+  }
+
+  return cacheResponse(request, origin, env, SOURCE_CACHE_SECONDS.huggingFaceResources, async () => {
+    const payload = await fetchJsonUpstream(`https://huggingface.co/api/papers/${encodeURIComponent(arxivId)}`);
+    return {
+      id: payload?.id || arxivId,
+      githubRepo: payload?.githubRepo || null,
+      projectPage: payload?.projectPage || null,
+      linkedModels: (payload?.linkedModels || []).slice(0, 6).map(model => ({
+        id: model?.id,
+        downloads: Number(model?.downloads) || 0,
+        likes: Number(model?.likes) || 0,
+        pipeline_tag: model?.pipeline_tag || null,
+      })),
+      linkedDatasets: (payload?.linkedDatasets || []).slice(0, 6).map(dataset => ({
+        id: dataset?.id,
+        downloads: Number(dataset?.downloads) || 0,
+        likes: Number(dataset?.likes) || 0,
+      })),
+    };
+  });
+}
+
 async function handleCore(request, env) {
   const context = sourceRequestContext(request, env);
   if (context.error) return context.error;
@@ -899,6 +1048,10 @@ const DOMAIN_SOURCE_HANDLERS = {
   '/sources/nasa': handleNasa,
   '/sources/physics': handlePhysicsLiterature,
   '/sources/scopus': handleScopus,
+  '/sources/openreview': handleOpenReview,
+  '/sources/huggingface': handleHuggingFacePapers,
+  '/enrich/icite': handleICite,
+  '/resources/huggingface': handleHuggingFaceResources,
 };
 
 export default {

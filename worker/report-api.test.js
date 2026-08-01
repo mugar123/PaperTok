@@ -2,6 +2,25 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import reportApi from './report-api.js';
 
+async function withWorkerFetchMock(fetchImplementation, callback) {
+  const originalFetch = globalThis.fetch;
+  const originalCaches = globalThis.caches;
+  globalThis.fetch = fetchImplementation;
+  globalThis.caches = {
+    default: {
+      match: async () => null,
+      put: async () => undefined,
+    },
+  };
+  try {
+    return await callback();
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalCaches === undefined) delete globalThis.caches;
+    else globalThis.caches = originalCaches;
+  }
+}
+
 test('allows the notification preferences PUT request through CORS', async () => {
   const request = new Request('https://papertok-report-api.example/notifications/preferences', {
     method: 'OPTIONS',
@@ -30,4 +49,67 @@ test('returns only the Cloudflare country code for automatic language selection'
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('access-control-allow-origin'), 'https://mugar123.github.io');
   assert.deepEqual(await response.json(), { country: 'MX' });
+});
+
+test('proxies OpenReview forum papers while excluding imported public records', async () => {
+  let upstreamUrl = '';
+  const response = await withWorkerFetchMock(async url => {
+    upstreamUrl = String(url);
+    return new Response(JSON.stringify({
+      count: 2,
+      notes: [
+        { id: 'imported', forum: 'imported', domain: 'DBLP.org/2026', content: { title: { value: 'Imported' } } },
+        {
+          id: 'submission',
+          forum: 'submission',
+          domain: 'ICLR.cc/2026/Conference',
+          content: { title: { value: 'Learning result' }, abstract: { value: 'Abstract.' } },
+        },
+      ],
+    }), { headers: { 'content-type': 'application/json' } });
+  }, () => reportApi.fetch(new Request(
+    'https://papertok-report-api.example/sources/openreview?q=machine%20learning&limit=5&sort=recent',
+    { headers: { origin: 'https://mugar123.github.io' } },
+  ), {}));
+
+  assert.equal(response.status, 200);
+  assert.match(upstreamUrl, /api2\.openreview\.net\/notes\/search/);
+  assert.match(upstreamUrl, /source=forum/);
+  const payload = await response.json();
+  assert.equal(payload.notes.length, 1);
+  assert.equal(payload.notes[0].id, 'submission');
+});
+
+test('proxies Hugging Face paper search through the specialist source contract', async () => {
+  const response = await withWorkerFetchMock(async url => {
+    assert.match(String(url), /huggingface\.co\/api\/papers\/search/);
+    return new Response(JSON.stringify([{ paper: { id: '2607.12345', title: 'Model paper' } }]), {
+      headers: { 'content-type': 'application/json' },
+    });
+  }, () => reportApi.fetch(new Request(
+    'https://papertok-report-api.example/sources/huggingface?q=language%20models&limit=4',
+    { headers: { origin: 'https://mugar123.github.io' } },
+  ), {}));
+
+  assert.equal(response.status, 200);
+  const payload = await response.json();
+  assert.equal(payload.papers[0].paper.id, '2607.12345');
+});
+
+test('validates and batches NIH iCite PubMed identifiers', async () => {
+  let upstreamUrl = '';
+  const response = await withWorkerFetchMock(async url => {
+    upstreamUrl = String(url);
+    return new Response(JSON.stringify({ data: [{ pmid: 123, citation_count: 7 }] }), {
+      headers: { 'content-type': 'application/json' },
+    });
+  }, () => reportApi.fetch(new Request(
+    'https://papertok-report-api.example/enrich/icite?pmids=123,456',
+    { headers: { origin: 'https://mugar123.github.io' } },
+  ), {}));
+
+  assert.equal(response.status, 200);
+  assert.match(upstreamUrl, /icite\.od\.nih\.gov\/api\/pubs/);
+  assert.match(upstreamUrl, /pmids=123%2C456/);
+  assert.deepEqual(await response.json(), { data: [{ pmid: 123, citation_count: 7 }] });
 });

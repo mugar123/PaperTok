@@ -56,6 +56,9 @@ Core sources include:
 - **arXiv** — preprints across physics, mathematics, computer science and other fields
 - **OpenAlex** — publication metadata, citations, concepts, institutions and open-access information
 - **PubMed** — biomedical and life-science literature
+- **OpenReview** — current conference and journal submissions in machine learning and computer science
+- **NIH iCite** — citation and translation metrics for PubMed-indexed papers
+- **Hugging Face Hub** — AI papers and their linked models, datasets, code and project pages
 
 The project also contains integrations and enrichment tools for additional scientific services and domain-specific sources.
 

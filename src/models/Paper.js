@@ -22,6 +22,8 @@
  * @property {string} [doi]
  * @property {string} [pmid]
  * @property {string} [pmcid]
+ * @property {string} [openReviewId]
+ * @property {string} [huggingFaceId]
  * @property {string} [journal]
  * @property {string} [conference]
  * @property {number} year
@@ -39,6 +41,8 @@
  * // Metadatos aplanados
  * @property {number} [citationCount]
  * @property {number} [referenceCount]
+ * @property {{relativeCitationRatio: number|null, nihPercentile: number|null, approximatePotentialToTranslate: number|null}} [iciteMetrics]
+ * @property {Array<{id: string, kind: string, title: string, url: string}>} [researchResources]
  * @property {Array<{id: string, display_name: string, level: number}>} [concepts]
  * @property {string[]} [keywords]
  * @property {string[]} [categories] - Legacy/arXiv categories

@@ -105,3 +105,28 @@ test('deduplicates the same title and author when only one source has a DOI', ()
   assert.equal(deduplicated.length, 1);
   assert.equal(deduplicated[0].doi, '10.1000/example');
 });
+
+test('deduplicates provider records by a stable arXiv identifier before title matching', () => {
+  const deduplicated = PaperBuilder.deduplicate([
+    {
+      id: 'arxiv:2607.12345v2',
+      arxivId: '2607.12345v2',
+      title: 'Original title',
+      authors: [{ name: 'Ada Researcher' }],
+      provider: 'arxiv',
+    },
+    {
+      id: 'hf-paper',
+      huggingFaceId: '2607.12345',
+      arxivId: '2607.12345',
+      title: 'Revised title from the Hub',
+      authors: [{ name: 'Ada Researcher' }],
+      huggingFaceUpvotes: 12,
+      provider: 'huggingface',
+    },
+  ]);
+
+  assert.equal(deduplicated.length, 1);
+  assert.equal(deduplicated[0].huggingFaceUpvotes, 12);
+  assert.ok(deduplicated[0].sources.enrichedBy.includes('huggingface'));
+});

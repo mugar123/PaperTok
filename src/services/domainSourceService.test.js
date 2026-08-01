@@ -21,12 +21,16 @@ test('routes biology and engineering categories only to relevant specialist sour
   assert.equal(plan.biorxivCategory, 'cell biology');
   assert.deepEqual(plan.osti, ['chemeng.energy']);
   assert.deepEqual(plan.nasa, ['mech.aero']);
+  assert.deepEqual(plan.openReview, []);
+  assert.deepEqual(plan.huggingFace, []);
 });
 
 test('routes high-energy physics to the INSPIRE fallback while keeping all physics eligible for ADS', () => {
   const plan = getDomainSourcePlan(['hep-ph', 'astro-ph.CO', 'cs.AI']);
   assert.deepEqual(plan.physics, ['hep-ph', 'astro-ph.CO']);
   assert.deepEqual(plan.inspirePhysics, ['hep-ph']);
+  assert.deepEqual(plan.openReview, ['cs.AI']);
+  assert.deepEqual(plan.huggingFace, ['cs.AI']);
 });
 
 test('maps a bioRxiv preprint without losing its selected PaperTok category', () => {

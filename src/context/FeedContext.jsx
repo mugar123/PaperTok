@@ -37,6 +37,7 @@ import {
 import { resolveWithin, settleWithin } from '../utils/asyncTiming';
 import { shouldAbortFeedLoad } from '../utils/feedLoadGuard';
 import { dedupeInteractionPapers } from '../utils/feedInteractions';
+import { fetchICiteMetrics, mergeICiteEnrichment } from '../services/iCiteService';
 
 const FeedContext = createContext(null);
 const PAGE_SIZE = 15;
@@ -46,6 +47,7 @@ const FEED_SOURCE_RENDER_BUDGET_MS = 5000;
 const OPTIONAL_SOURCE_RENDER_BUDGET_MS = 3500;
 const OPENALEX_FEED_REQUEST_TIMEOUT_MS = 6500;
 const OPENALEX_FEED_WAIT_BUDGET_MS = 4500;
+const ICITE_FEED_WAIT_BUDGET_MS = 1800;
 const INTERACTIONS_CACHE_TIMEOUT_MS = 800;
 const INTERACTIONS_NETWORK_TIMEOUT_MS = 5000;
 const INTERACTIONS_CACHED_REFRESH_TIMEOUT_MS = 1500;
@@ -1009,13 +1011,19 @@ export function FeedProvider({ children }) {
         });
       });
 
-      const initialOpenAlexData = await waitForInitialEnrichment(
-        enrichmentPromise,
-        OPENALEX_FEED_WAIT_BUDGET_MS,
-      );
+      const iCitePmids = [...new Set(filtered.map(paper => paper?.pmid).filter(Boolean))];
+      const iCitePromise = fetchICiteMetrics(iCitePmids);
+
+      const [initialOpenAlexData, initialICiteData] = await Promise.all([
+        waitForInitialEnrichment(enrichmentPromise, OPENALEX_FEED_WAIT_BUDGET_MS),
+        resolveWithin(iCitePromise, ICITE_FEED_WAIT_BUDGET_MS, null),
+      ]);
       if (requestId !== feedRequestId.current) return;
       if (initialOpenAlexData) {
         filtered = mergeOpenAlexEnrichment(filtered, initialOpenAlexData);
+      }
+      if (initialICiteData) {
+        filtered = mergeICiteEnrichment(filtered, initialICiteData);
       }
 
       if (activeMode === 'top' || activeMode === null) {
@@ -1060,6 +1068,21 @@ export function FeedProvider({ children }) {
           if (feedSessionId.current !== activeSessionId || !lateEnrichment || Object.keys(lateEnrichment).length === 0) return;
           setPapers(current => {
             const enriched = mergeOpenAlexEnrichment(current, lateEnrichment);
+            const cachedMode = feedCache.current[activeMode];
+            if (cachedMode) {
+              feedCache.current[activeMode] = { ...cachedMode, papers: enriched };
+              writeFeedSnapshot(activeUserId.current, preferenceSignature, feedCache.current[activeMode]);
+            }
+            return enriched;
+          });
+        });
+      }
+
+      if (!initialICiteData && iCitePmids.length > 0) {
+        iCitePromise.then((lateMetrics) => {
+          if (feedSessionId.current !== activeSessionId || !lateMetrics || Object.keys(lateMetrics).length === 0) return;
+          setPapers(current => {
+            const enriched = mergeICiteEnrichment(current, lateMetrics);
             const cachedMode = feedCache.current[activeMode];
             if (cachedMode) {
               feedCache.current[activeMode] = { ...cachedMode, papers: enriched };

@@ -2,6 +2,8 @@ import { CATEGORIES } from '../data/categories.js';
 import { PaperBuilder } from './PaperBuilder.js';
 import { isScopusEnabled, ScopusAdapter } from './adapters/ScopusAdapter.js';
 import { isTechnicalClassification } from '../utils/scientificClassification.js';
+import { mapOpenReviewNote } from './openReviewService.js';
+import { mapHuggingFacePaper } from './huggingFaceService.js';
 
 const PAPER_API_BASE = import.meta.env?.VITE_PAPER_API_BASE_URL?.replace(/\/$/, '') || '';
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -56,6 +58,25 @@ const INSPIRE_PHYSICS_CATEGORIES = new Set([
   'nucl-ex',
   'astro-ph.HE',
 ]);
+
+const HUGGING_FACE_CATEGORIES = new Set([
+  'cs.AI',
+  'cs.CL',
+  'cs.CV',
+  'cs.IR',
+  'cs.LG',
+  'cs.MM',
+  'cs.NE',
+  'cs.RO',
+  'cs.SD',
+  'stat.ML',
+  'eess.IV',
+  'bio.comp',
+]);
+
+function isOpenReviewCategory(categoryId) {
+  return /^(?:cs\.|stat\.(?:ML|CO)$|eess\.(?:IV|SY)$)/i.test(categoryId);
+}
 
 function isPhysicsCategory(categoryId) {
   return /^(?:astro-ph(?:\.|$)|cond-mat(?:\.|$)|gr-qc$|hep-|math-ph$|nucl-|physics\.|quant-ph$|nlin\.)/i.test(categoryId);
@@ -446,6 +467,8 @@ export function getDomainSourcePlan(categories = []) {
     biorxivCategory: biology.map(category => BIORXIV_CATEGORIES[category]).find(Boolean) || '',
     osti: engineering.filter(category => OSTI_CATEGORIES.has(category)),
     nasa: engineering.filter(category => NASA_CATEGORIES.has(category)),
+    openReview: unique.filter(isOpenReviewCategory),
+    huggingFace: unique.filter(category => HUGGING_FACE_CATEGORIES.has(category)),
   };
 }
 
@@ -522,6 +545,26 @@ export async function fetchDomainPapers(categories, page = 1, limit = 8, queryMo
       }
       return (data?.hits?.hits || []).map(item => mapInspirePaper(item, plan.physics));
     }));
+  }
+
+  if (plan.openReview.length > 0) {
+    const selectedCategory = plan.openReview[(safePage - 1) % plan.openReview.length];
+    requests.push(fetchJson('/sources/openreview', {
+      q: categoryLabel(selectedCategory),
+      page: safePage,
+      limit: safeLimit,
+      sort: queryMode,
+    }).then(data => (data?.notes || []).map(item => mapOpenReviewNote(item, [selectedCategory]))));
+  }
+
+  if (plan.huggingFace.length > 0) {
+    const selectedCategory = plan.huggingFace[(safePage - 1) % plan.huggingFace.length];
+    requests.push(fetchJson('/sources/huggingface', {
+      q: categoryLabel(selectedCategory),
+      page: safePage,
+      limit: safeLimit,
+      sort: queryMode,
+    }).then(data => (data?.papers || []).map(item => mapHuggingFacePaper(item, [selectedCategory]))));
   }
 
   if (requests.length === 0) return [];
