@@ -48,6 +48,15 @@ const SEARCH_TIMEOUT_MS = 6000;
 const SEARCH_MIN_LOADING_MS = 180;
 const SEARCH_INITIAL_REVEAL_MS = 520;
 
+const SEARCH_FILTER_OPTIONS = [
+  { id: 'all', labelEs: 'Todo', labelEn: 'All', Icon: Search },
+  { id: 'papers', labelEs: 'Papers', labelEn: 'Papers', Icon: FileText },
+  { id: 'institutions', labelEs: 'Instituciones', labelEn: 'Institutions', Icon: Building2 },
+  { id: 'authors', labelEs: 'Autores', labelEn: 'Authors', Icon: Users },
+  { id: 'projects', labelEs: 'Proyectos', labelEn: 'Projects', Icon: Briefcase },
+  { id: 'topics', labelEs: 'Temas', labelEn: 'Topics', Icon: Lightbulb },
+];
+
 const wait = (delayMs) => new Promise(resolve => setTimeout(resolve, delayMs));
 
 function settleSearch(promise, fallback = [], timeoutMs = SEARCH_TIMEOUT_MS) {
@@ -128,6 +137,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [searchIntent, setSearchIntent] = useState(null);
+  const [activeSearchFilter, setActiveSearchFilter] = useState('all');
   const [searchIssue, setSearchIssue] = useState(null);
   
   const [paperResults, setPaperResults] = useState([]);
@@ -305,12 +315,25 @@ export default function SearchPage({ onSaveToList = () => {} }) {
   const orcidMatch = query.match(/\b(\d{4}-\d{4}-\d{4}-\d{3}[\dX])\b/i);
   const cleanOrcid = orcidMatch ? orcidMatch[1].toUpperCase() : null;
 
-  const hasResults = paperResults.length > 0
+  const hasSearchSectionResults = paperResults.length > 0
     || authorResults.length > 0
     || institutionResults.length > 0
     || conceptResults.length > 0
-    || projectResults.length > 0
-    || !!cleanOrcid;
+    || projectResults.length > 0;
+  const hasResults = hasSearchSectionResults || !!cleanOrcid;
+  const hasVisibleResults = activeSearchFilter === 'all'
+    ? hasResults
+    : activeSearchFilter === 'papers'
+      ? paperResults.length > 0
+      : activeSearchFilter === 'institutions'
+        ? institutionResults.length > 0
+        : activeSearchFilter === 'authors'
+          ? authorResults.length > 0 || !!cleanOrcid
+          : activeSearchFilter === 'projects'
+            ? projectResults.length > 0
+            : conceptResults.length > 0;
+  const activeFilterOption = SEARCH_FILTER_OPTIONS.find(option => option.id === activeSearchFilter)
+    || SEARCH_FILTER_OPTIONS[0];
   const preferredSection = resolvePreferredSearchSection({
     query,
     hint: searchIntent,
@@ -376,63 +399,97 @@ export default function SearchPage({ onSaveToList = () => {} }) {
     },
   ];
 
-  const updateQuery = (nextQuery, intent = null) => {
+  const updateQuery = (nextQuery, intent = null, filter = activeSearchFilter) => {
     requestAbortRef.current?.abort();
     clearResults();
     setQuery(nextQuery);
     setSearchIntent(intent);
+    setActiveSearchFilter(filter);
     setSearchIssue(null);
     setHasSearched(false);
     setIsSearching(Boolean(nextQuery.trim()));
   };
 
   const handleSuggestedSearch = (suggestion) => {
-    updateQuery(suggestion.query, suggestion.section);
+    updateQuery(suggestion.query, suggestion.section, suggestion.section);
+  };
+
+  const handleSearchFilterChange = (filterId) => {
+    setActiveSearchFilter(filterId);
+    setSearchIntent(filterId === 'all' ? null : filterId);
   };
 
   const clearSearch = () => {
-    updateQuery('');
+    updateQuery('', null, 'all');
   };
 
   return (
     <div className="search-page-container">
       <div className="search-header">
-        <button
-          type="button"
-          className="search-back-btn"
-          onClick={() => navigate('/')}
-          aria-label={isEnglish ? 'Back' : 'Volver'}
+        <div className="search-header-main">
+          <button
+            type="button"
+            className="search-back-btn"
+            onClick={() => navigate('/')}
+            aria-label={isEnglish ? 'Back' : 'Volver'}
+          >
+            <ArrowLeft size={22} />
+          </button>
+          <div className={`search-input-wrapper ${isSearching ? 'is-searching' : ''}`}>
+            <Search className="search-icon" size={18} />
+            <input
+              type="search"
+              className="search-input"
+              placeholder={isEnglish ? 'Search PaperTok...' : 'Buscar en PaperTok...'}
+              value={query}
+              onChange={(event) => updateQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape' && query) clearSearch();
+              }}
+              autoComplete="off"
+              autoFocus
+            />
+            {isSearching && (
+              <span
+                className="search-input-loader"
+                role="status"
+                aria-label={isEnglish ? 'Searching' : 'Buscando'}
+              >
+                <LoaderCircle size={17} aria-hidden="true" />
+              </span>
+            )}
+          </div>
+        </div>
+        <div
+          className="search-filter-bar"
+          role="tablist"
+          aria-label={isEnglish ? 'Filter search results' : 'Filtrar resultados de búsqueda'}
         >
-          <ArrowLeft size={22} />
-        </button>
-        <div className={`search-input-wrapper ${isSearching ? 'is-searching' : ''}`}>
-          <Search className="search-icon" size={18} />
-          <input
-            type="search"
-            className="search-input"
-            placeholder={isEnglish ? 'Search PaperTok...' : 'Buscar en PaperTok...'}
-            value={query}
-            onChange={(event) => updateQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape' && query) clearSearch();
-            }}
-            autoComplete="off"
-            autoFocus
-          />
-          {isSearching && (
-            <span
-              className="search-input-loader"
-              role="status"
-              aria-label={isEnglish ? 'Searching' : 'Buscando'}
-            >
-              <LoaderCircle size={17} aria-hidden="true" />
-            </span>
-          )}
+          {SEARCH_FILTER_OPTIONS.map(({ id, labelEs, labelEn, Icon }) => {
+            const isActive = activeSearchFilter === id;
+            const label = isEnglish ? labelEn : labelEs;
+            return (
+              <button
+                key={id}
+                id={`search-filter-${id}`}
+                type="button"
+                className={`search-filter-pill ${isActive ? 'active' : ''}`}
+                role="tab"
+                aria-selected={isActive}
+                aria-controls="search-results-panel"
+                onClick={() => handleSearchFilterChange(id)}
+                title={label}
+              >
+                <Icon size={15} aria-hidden="true" />
+                <span>{label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
       <div className="search-results custom-scrollbar">
-        <div className="search-results-list" aria-busy={isSearching}>
+        <div id="search-results-panel" className="search-results-list" aria-busy={isSearching}>
             {!query.trim() && !isSearching && (
               <div className="search-initial-state">
                 <div className="search-initial-hero">
@@ -494,7 +551,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
-            {query.trim() && isSearching && !hasResults && (
+            {query.trim() && isSearching && !hasVisibleResults && (
               <div
                 className="search-loading-state"
                 role="status"
@@ -512,43 +569,51 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
-            {!hasResults && query && hasSearched && !isSearching && !searchIssue && (
+            {!hasVisibleResults && query && hasSearched && !isSearching && !searchIssue && (
               <div className="search-empty">
                 <Search size={40} className="search-empty-icon" />
-                <p>{isEnglish ? `No results found for "${query}"` : `No se encontraron resultados para "${query}"`}</p>
-                <span>{isEnglish ? 'Try a different search term' : 'Intenta con otros términos o busca en inglés'}</span>
+                <p>{hasResults && activeSearchFilter !== 'all'
+                  ? (isEnglish
+                    ? `No ${activeFilterOption.labelEn.toLowerCase()} found for "${query}"`
+                    : `No se encontraron ${activeFilterOption.labelEs.toLowerCase()} para "${query}"`)
+                  : (isEnglish ? `No results found for "${query}"` : `No se encontraron resultados para "${query}"`)}</p>
+                <span>{hasResults && activeSearchFilter !== 'all'
+                  ? (isEnglish ? 'Try another filter or search term' : 'Prueba otro filtro o término de búsqueda')
+                  : (isEnglish ? 'Try a different search term' : 'Intenta con otros términos o busca en inglés')}</span>
               </div>
             )}
 
-            {/* Direct ORCID */}
-            {cleanOrcid && (
-              <div className="search-section" style={{ order: 0 }}>
-                <h3 className="search-section-title">{isEnglish ? 'Direct ORCID search' : 'Búsqueda directa ORCID'}</h3>
-                <div
-                  className="search-item"
-                  role="link"
-                  tabIndex={0}
-                  onClick={() => navigate(`/explorer/author/https%3A%2F%2Forcid.org%2F${cleanOrcid}`)}
-                  onKeyDown={event => handleSearchItemKeyDown(
-                    event,
-                    () => navigate(`/explorer/author/https%3A%2F%2Forcid.org%2F${cleanOrcid}`),
-                  )}
-                >
-                  <div className="search-item-icon" style={{ background: '#a6ce39', color: 'white' }}>
-                    <Users size={22} />
+            {hasVisibleResults && (
+              <div key={activeSearchFilter} className="search-filtered-results">
+                {/* Direct ORCID */}
+                {cleanOrcid && (activeSearchFilter === 'all' || activeSearchFilter === 'authors') && (
+                  <div className="search-section" style={{ order: 0 }}>
+                    <h3 className="search-section-title">{isEnglish ? 'Direct ORCID search' : 'Búsqueda directa ORCID'}</h3>
+                    <div
+                      className="search-item"
+                      role="link"
+                      tabIndex={0}
+                      onClick={() => navigate(`/explorer/author/https%3A%2F%2Forcid.org%2F${cleanOrcid}`)}
+                      onKeyDown={event => handleSearchItemKeyDown(
+                        event,
+                        () => navigate(`/explorer/author/https%3A%2F%2Forcid.org%2F${cleanOrcid}`),
+                      )}
+                    >
+                      <div className="search-item-icon" style={{ background: '#a6ce39', color: 'white' }}>
+                        <Users size={22} />
+                      </div>
+                      <div className="search-item-info">
+                        <h4 style={{ color: '#a6ce39' }}>{isEnglish ? 'View ORCID profile' : 'Ver perfil ORCID'} {cleanOrcid}</h4>
+                        <p>{isEnglish
+                          ? 'Explore the author and their work through a verified unique identifier'
+                          : 'Explorar autor e historial mediante su identificador único verificado'}</p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="search-item-info">
-                    <h4 style={{ color: '#a6ce39' }}>{isEnglish ? 'View ORCID profile' : 'Ver perfil ORCID'} {cleanOrcid}</h4>
-                    <p>{isEnglish
-                      ? 'Explore the author and their work through a verified unique identifier'
-                      : 'Explorar autor e historial mediante su identificador único verificado'}</p>
-                  </div>
-                </div>
-              </div>
-            )}
+                )}
 
-            <OrderedSearchSections preferredSection={preferredSection}>
-            {institutionResults.length > 0 && (
+                <OrderedSearchSections preferredSection={preferredSection}>
+            {institutionResults.length > 0 && (activeSearchFilter === 'all' || activeSearchFilter === 'institutions') && (
               <div className="search-section" data-section="institutions">
                 <h3 className="search-section-title">{isEnglish ? 'Universities and institutions' : 'Universidades e instituciones'}</h3>
                 {institutionResults.map((inst, index) => {
@@ -590,7 +655,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
-            {projectResults.length > 0 && (
+            {projectResults.length > 0 && (activeSearchFilter === 'all' || activeSearchFilter === 'projects') && (
               <div className="search-section" data-section="projects">
                 <h3 className="search-section-title">{isEnglish ? 'Research projects' : 'Proyectos de investigación'}</h3>
                 {projectResults.map((project, index) => (
@@ -622,7 +687,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
-            {conceptResults.length > 0 && (
+            {conceptResults.length > 0 && (activeSearchFilter === 'all' || activeSearchFilter === 'topics') && (
               <div className="search-section" data-section="topics">
                 <h3 className="search-section-title">{isEnglish ? 'Topics and areas' : 'Temas y áreas'}</h3>
                 {conceptResults.map((concept, index) => (
@@ -675,7 +740,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
-            {authorResults.length > 0 && (
+            {authorResults.length > 0 && (activeSearchFilter === 'all' || activeSearchFilter === 'authors') && (
               <div className="search-section" data-section="authors">
                 <h3 className="search-section-title">{isEnglish ? 'Authors' : 'Autores'}</h3>
                 {authorResults.map((author, index) => {
@@ -716,7 +781,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
-            {paperResults.length > 0 && (
+            {paperResults.length > 0 && (activeSearchFilter === 'all' || activeSearchFilter === 'papers') && (
               <div className="search-section" data-section="papers">
                 <h3 className="search-section-title">{isEnglish ? 'Publications' : 'Publicaciones'}</h3>
                 {paperResults.map((paper, index) => {
@@ -747,7 +812,9 @@ export default function SearchPage({ onSaveToList = () => {} }) {
                 })}
               </div>
             )}
-            </OrderedSearchSections>
+                </OrderedSearchSections>
+              </div>
+            )}
           </div>
       </div>
 
