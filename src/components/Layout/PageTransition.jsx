@@ -2,29 +2,29 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
 
 const routeVariants = {
-  initial: (isExplorer) => ({
+  initial: ({ isExplorer, isProject }) => ({
     opacity: 0,
-    x: isExplorer ? 14 : 0,
-    y: isExplorer ? 0 : 8,
-    scale: 0.997,
+    x: isProject ? 8 : isExplorer ? 14 : 0,
+    y: isProject ? 3 : isExplorer ? 0 : 8,
+    scale: isProject ? 0.995 : 0.997,
   }),
-  enter: {
+  enter: ({ isProject }) => ({
     opacity: 1,
     x: 0,
     y: 0,
     scale: 1,
     transition: {
-      duration: 0.28,
+      duration: isProject ? 0.24 : 0.28,
       ease: [0.16, 1, 0.3, 1],
     },
-  },
-  exit: (isExplorer) => ({
+  }),
+  exit: ({ isExplorer, isProject }) => ({
     opacity: 0,
-    x: isExplorer ? -8 : 0,
-    y: isExplorer ? 0 : -4,
-    scale: 0.999,
+    x: isProject ? -4 : isExplorer ? -8 : 0,
+    y: isProject ? -2 : isExplorer ? 0 : -4,
+    scale: isProject ? 0.997 : 0.999,
     transition: {
-      duration: 0.12,
+      duration: isProject ? 0.14 : 0.12,
       ease: [0.4, 0, 1, 1],
     },
   }),
@@ -40,10 +40,12 @@ export default function PageTransition({ children }) {
   const location = useLocation();
   const prefersReducedMotion = useReducedMotion();
   const isExplorer = location.pathname.startsWith('/explorer/');
+  const isProject = location.pathname.startsWith('/explorer/project/');
+  const routeContext = { isExplorer, isProject };
 
   return (
     <motion.div
-      custom={isExplorer}
+      custom={routeContext}
       initial="initial"
       animate="enter"
       exit="exit"

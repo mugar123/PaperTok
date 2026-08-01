@@ -25,9 +25,11 @@
   transition: all 0.2s;
 }
 
-.rf-toggle:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: rgba(255, 255, 255, 0.7);
+@media (hover: hover) and (pointer: fine) {
+  .rf-toggle:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.7);
+  }
 }
 
 .rf-toggle-left {
@@ -101,9 +103,14 @@
   text-transform: uppercase;
 }
 
-.rf-country-toggle:hover,
 .rf-country-toggle:focus-visible {
   color: rgba(255, 255, 255, 0.65);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .rf-country-toggle:hover {
+    color: rgba(255, 255, 255, 0.65);
+  }
 }
 
 .rf-country-controls {
@@ -135,9 +142,11 @@
   white-space: nowrap;
 }
 
-.rf-pill:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.8);
+@media (hover: hover) and (pointer: fine) {
+  .rf-pill:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.8);
+  }
 }
 
 .rf-pill.active {
@@ -228,8 +237,10 @@
   border-bottom: none;
 }
 
-.rf-search-result:hover {
-  background: rgba(255, 255, 255, 0.06);
+@media (hover: hover) and (pointer: fine) {
+  .rf-search-result:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
 }
 
 .rf-search-result.selected {
@@ -277,8 +288,10 @@
   transition: background 0.15s;
 }
 
-.rf-country-pill button:hover {
-  background: rgba(255, 255, 255, 0.4);
+@media (hover: hover) and (pointer: fine) {
+  .rf-country-pill button:hover {
+    background: rgba(255, 255, 255, 0.4);
+  }
 }
 
 /* Clear button */
@@ -299,9 +312,11 @@
   align-self: flex-start;
 }
 
-.rf-clear:hover {
-  color: rgba(255, 255, 255, 0.7);
-  border-color: rgba(255, 255, 255, 0.15);
+@media (hover: hover) and (pointer: fine) {
+  .rf-clear:hover {
+    color: rgba(255, 255, 255, 0.7);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
 }
 
 /* ── Chevron rotatorio ── */
@@ -334,9 +349,11 @@
   transition: background 0.18s ease, border-color 0.18s ease;
 }
 
-.rf-active-chip:hover {
-  background: rgba(139, 92, 246, 0.2);
-  border-color: rgba(139, 92, 246, 0.45);
+@media (hover: hover) and (pointer: fine) {
+  .rf-active-chip:hover {
+    background: rgba(139, 92, 246, 0.2);
+    border-color: rgba(139, 92, 246, 0.45);
+  }
 }
 
 .rf-active-chip svg { opacity: 0.7; }

@@ -155,9 +155,11 @@
   border: none;
 }
 
-.login-google-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg), 0 0 30px rgba(255, 255, 255, 0.1);
+@media (hover: hover) and (pointer: fine) {
+  .login-google-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg), 0 0 30px rgba(255, 255, 255, 0.1);
+  }
 }
 
 .login-google-btn:active:not(:disabled) {

@@ -159,11 +159,13 @@
   width: 40px;
 }
 
-.settings-photo-button:hover,
-.settings-photo-restore:hover {
-  border-color: rgba(167, 139, 250, 0.45);
-  color: #c4b5fd;
-  background: rgba(124, 58, 237, 0.1);
+@media (hover: hover) and (pointer: fine) {
+  .settings-photo-button:hover,
+  .settings-photo-restore:hover {
+    border-color: rgba(167, 139, 250, 0.45);
+    color: #c4b5fd;
+    background: rgba(124, 58, 237, 0.1);
+  }
 }
 
 .settings-photo-button:disabled,
@@ -305,10 +307,12 @@
   transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
 }
 
-.settings-row-action:hover {
-  border-color: rgba(167, 139, 250, 0.4);
-  color: #fff;
-  background: rgba(124, 58, 237, 0.08);
+@media (hover: hover) and (pointer: fine) {
+  .settings-row-action:hover {
+    border-color: rgba(167, 139, 250, 0.4);
+    color: #fff;
+    background: rgba(124, 58, 237, 0.08);
+  }
 }
 
 .settings-follow-summary,
@@ -380,10 +384,12 @@
   transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
 }
 
-.settings-levels button:hover {
-  border-color: var(--border-strong);
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.035);
+@media (hover: hover) and (pointer: fine) {
+  .settings-levels button:hover {
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.035);
+  }
 }
 
 .settings-levels button.is-active {
@@ -434,8 +440,10 @@
     box-shadow var(--transition-fast);
 }
 
-.settings-language button:hover {
-  color: var(--text-primary);
+@media (hover: hover) and (pointer: fine) {
+  .settings-language button:hover {
+    color: var(--text-primary);
+  }
 }
 
 .settings-language button.is-active {
@@ -508,10 +516,12 @@
   transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
 }
 
-.settings-signout:hover {
-  border-color: rgba(239, 68, 68, 0.42);
-  color: #ff9aaa;
-  background: rgba(239, 68, 68, 0.07);
+@media (hover: hover) and (pointer: fine) {
+  .settings-signout:hover {
+    border-color: rgba(239, 68, 68, 0.42);
+    color: #ff9aaa;
+    background: rgba(239, 68, 68, 0.07);
+  }
 }
 
 @keyframes settingsRowIn {

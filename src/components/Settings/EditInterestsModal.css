@@ -94,9 +94,11 @@
   transition: all 0.2s ease;
 }
 
-.eim-close-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
+@media (hover: hover) and (pointer: fine) {
+  .eim-close-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+  }
 }
 
 .eim-body {
@@ -119,8 +121,10 @@
   background: rgba(255, 255, 255, 0.1);
   border-radius: 4px;
 }
-.eim-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+@media (hover: hover) and (pointer: fine) {
+  .eim-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
 }
 
 .eim-area {
@@ -148,10 +152,12 @@
   transition: all 0.2s ease;
 }
 
-.eim-area-toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--text-primary);
-  border-color: rgba(255, 255, 255, 0.3);
+@media (hover: hover) and (pointer: fine) {
+  .eim-area-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    border-color: rgba(255, 255, 255, 0.3);
+  }
 }
 
 .eim-area-icon {
@@ -205,11 +211,13 @@
     box-shadow 0.3s ease;
 }
 
-.eim-pill:hover {
-  transform: translateY(-2px);
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.15);
-  color: #fff;
+@media (hover: hover) and (pointer: fine) {
+  .eim-pill:hover {
+    transform: translateY(-2px);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #fff;
+  }
 }
 
 .eim-pill:active {
@@ -227,9 +235,11 @@
   text-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
 }
 
-.eim-pill--selected:hover {
-  background: rgba(255, 255, 255, 0.2);
-  box-shadow: 0 0 20px rgba(255, 255, 255, 0.15), inset 0 0 15px rgba(255, 255, 255, 0.1);
+@media (hover: hover) and (pointer: fine) {
+  .eim-pill--selected:hover {
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.15), inset 0 0 15px rgba(255, 255, 255, 0.1);
+  }
 }
 
 /* Selected icon checkmark */
@@ -278,9 +288,11 @@
   gap: 8px;
 }
 
-.eim-save-btn:hover:not(:disabled) {
-  transform: scale(1.05);
-  box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+@media (hover: hover) and (pointer: fine) {
+  .eim-save-btn:hover:not(:disabled) {
+    transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+  }
 }
 
 .eim-save-btn:disabled {

@@ -28,6 +28,7 @@ import { useEmailNotifications } from '../../context/EmailNotificationsContext';
 import { AI_EXPLANATION_LEVELS } from '../../services/aiExplanationService';
 import { CATEGORIES } from '../../data/categories';
 import { prepareProfileImage } from '../../utils/profileImage';
+import { getUiErrorMessage } from '../../utils/errorMessages';
 import EditInterestsModal from './EditInterestsModal';
 import EmailNotificationModal from '../Following/EmailNotificationModal';
 import './SettingsPage.css';
@@ -309,7 +310,7 @@ export default function SettingsPage() {
     } catch (error) {
       setPhotoFeedback({
         tone: 'error',
-        text: error?.message || copy.photoSaveError,
+        text: getUiErrorMessage(error, language, 'PROFILE_PHOTO_SAVE_FAILED'),
       });
     } finally {
       setSavingPhoto(false);

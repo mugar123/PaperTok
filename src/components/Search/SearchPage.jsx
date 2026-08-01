@@ -44,6 +44,10 @@ import './SearchPage.css';
 const paperSearchAdapter = new OpenAlexAdapter();
 const SEARCH_DEBOUNCE_MS = 320;
 const SEARCH_TIMEOUT_MS = 6000;
+const SEARCH_MIN_LOADING_MS = 180;
+const SEARCH_INITIAL_REVEAL_MS = 520;
+
+const wait = (delayMs) => new Promise(resolve => setTimeout(resolve, delayMs));
 
 function settleSearch(promise, fallback = [], timeoutMs = SEARCH_TIMEOUT_MS) {
   return new Promise((resolve) => {
@@ -151,6 +155,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
   }, []);
 
   const performSearch = useCallback(async (searchTerm) => {
+    const searchStartedAt = Date.now();
     const searchId = ++searchIdRef.current;
     requestAbortRef.current?.abort();
     const requestController = new AbortController();
@@ -160,21 +165,34 @@ export default function SearchPage({ onSaveToList = () => {} }) {
     setIsSearching(true);
     setHasSearched(true);
     setSearchIssue(null);
-    setConceptResults(localTopics);
 
-    const publish = (section, setter) => (outcome) => {
-      if (searchId === searchIdRef.current && !requestController.signal.aborted) {
-        setter(outcome.value);
-      }
-      return { ...outcome, section };
+    const sectionSetters = {
+      papers: setPaperResults,
+      authors: setAuthorResults,
+      institutions: setInstitutionResults,
+      topics: setConceptResults,
+      projects: setProjectResults,
     };
+    const resolvedOutcomes = new Map();
+    let initialResultsRevealed = false;
+    const isCurrentSearch = () => (
+      searchId === searchIdRef.current && !requestController.signal.aborted
+    );
+    const track = (section, promise) => promise.then((outcome) => {
+      const trackedOutcome = { ...outcome, section };
+      resolvedOutcomes.set(section, trackedOutcome);
+      if (initialResultsRevealed && isCurrentSearch()) {
+        sectionSetters[section](outcome.value);
+      }
+      return trackedOutcome;
+    });
 
     const tasks = [
-      settleSearch(
+      track('papers', settleSearch(
         paperSearchAdapter.search(searchTerm, 1, { signal: requestController.signal })
           .then(result => PaperBuilder.deduplicate(result.papers || []).slice(0, 10)),
-      ).then(publish('papers', setPaperResults)),
-      settleSearch(
+      )),
+      track('authors', settleSearch(
         searchAuthors(searchTerm, {
           signal: requestController.signal,
           throwOnError: true,
@@ -185,16 +203,16 @@ export default function SearchPage({ onSaveToList = () => {} }) {
         )),
         [],
         5000,
-      ).then(publish('authors', setAuthorResults)),
-      settleSearch(
+      )),
+      track('institutions', settleSearch(
         searchInstitutions(searchTerm, {
           signal: requestController.signal,
           throwOnError: true,
         }),
         [],
         4500,
-      ).then(publish('institutions', setInstitutionResults)),
-      settleSearch(
+      )),
+      track('topics', settleSearch(
         searchConcepts(searchTerm, {
           language,
           limit: 8,
@@ -202,8 +220,8 @@ export default function SearchPage({ onSaveToList = () => {} }) {
         }),
         localTopics,
         4500,
-      ).then(publish('topics', setConceptResults)),
-      settleSearch(
+      )),
+      track('projects', settleSearch(
         searchProjects(searchTerm, 1, {
           signal: requestController.signal,
           throwOnError: true,
@@ -213,11 +231,25 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             result.projects || [],
             project => [project.acronym, project.title, project.funder],
           )),
-      ).then(publish('projects', setProjectResults)),
+      )),
     ];
 
-    const outcomes = await Promise.all(tasks);
-    if (searchId === searchIdRef.current) {
+    const allOutcomesPromise = Promise.all(tasks);
+    await Promise.race([allOutcomesPromise, wait(SEARCH_INITIAL_REVEAL_MS)]);
+    const remainingMinimumDelay = Math.max(
+      0,
+      SEARCH_MIN_LOADING_MS - (Date.now() - searchStartedAt),
+    );
+    if (remainingMinimumDelay > 0) await wait(remainingMinimumDelay);
+
+    if (!isCurrentSearch()) return;
+    resolvedOutcomes.forEach(outcome => {
+      sectionSetters[outcome.section](outcome.value);
+    });
+    initialResultsRevealed = true;
+
+    const outcomes = await allOutcomesPromise;
+    if (isCurrentSearch()) {
       const unavailableSections = outcomes
         .filter(outcome => outcome.status !== 'fulfilled')
         .map(outcome => outcome.section);
@@ -459,6 +491,24 @@ export default function SearchPage({ onSaveToList = () => {} }) {
               </div>
             )}
 
+            {query.trim() && isSearching && !hasResults && (
+              <div
+                className="search-loading-state"
+                role="status"
+                aria-label={isEnglish ? 'Preparing search results' : 'Preparando resultados de búsqueda'}
+              >
+                {[0, 1, 2].map(index => (
+                  <div className="search-loading-row" key={index} style={{ '--loading-row-index': index }}>
+                    <span className="search-loading-icon" />
+                    <span className="search-loading-copy">
+                      <span className="search-loading-line search-loading-line--title" />
+                      <span className="search-loading-line search-loading-line--detail" />
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {!hasResults && query && hasSearched && !isSearching && !searchIssue && (
               <div className="search-empty">
                 <Search size={40} className="search-empty-icon" />
@@ -540,10 +590,11 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             {projectResults.length > 0 && (
               <div className="search-section" data-section="projects">
                 <h3 className="search-section-title">{isEnglish ? 'Research projects' : 'Proyectos de investigación'}</h3>
-                {projectResults.map(project => (
+                {projectResults.map((project, index) => (
                   <div
                     key={project.id}
-                    className="search-item"
+                    className="search-item search-item-enter"
+                    style={{ '--search-item-index': Math.min(index, 6) }}
                     role="link"
                     tabIndex={0}
                     onClick={() => navigate(`/explorer/project/${project.id}?name=${encodeURIComponent(project.acronym || project.title)}&funder=${encodeURIComponent(project.funder)}`)}
@@ -571,10 +622,11 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             {conceptResults.length > 0 && (
               <div className="search-section" data-section="topics">
                 <h3 className="search-section-title">{isEnglish ? 'Topics and areas' : 'Temas y áreas'}</h3>
-                {conceptResults.map(concept => (
+                {conceptResults.map((concept, index) => (
                   <div
                     key={concept.id}
-                    className="search-item search-topic-item"
+                    className="search-item search-topic-item search-item-enter"
+                    style={{ '--search-item-index': Math.min(index, 6) }}
                     role="link"
                     tabIndex={0}
                     onClick={() => navigate(`/explorer/topic/${encodeURIComponent(String(concept.id).split('/').pop())}`)}
@@ -623,12 +675,13 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             {authorResults.length > 0 && (
               <div className="search-section" data-section="authors">
                 <h3 className="search-section-title">{isEnglish ? 'Authors' : 'Autores'}</h3>
-                {authorResults.map(author => {
+                {authorResults.map((author, index) => {
                   const authorFollow = { type: 'author', id: author.id, displayName: author.display_name, source: 'openalex', externalIds: { orcid: author.orcid } };
                   return (
                     <div
                       key={author.id}
-                      className="search-item"
+                      className="search-item search-item-enter"
+                      style={{ '--search-item-index': Math.min(index, 6) }}
                       role="link"
                       tabIndex={0}
                       onClick={() => navigate(`/explorer/author/${author.id.split('/').pop()}`)}
@@ -659,12 +712,13 @@ export default function SearchPage({ onSaveToList = () => {} }) {
             {paperResults.length > 0 && (
               <div className="search-section" data-section="papers">
                 <h3 className="search-section-title">{isEnglish ? 'Publications' : 'Publicaciones'}</h3>
-                {paperResults.map(paper => {
+                {paperResults.map((paper, index) => {
                   const authors = (paper.authors || []).map(author => author.name || author);
                   return (
                     <div
                       key={paper.id}
-                      className="search-item paper-item"
+                      className="search-item paper-item search-item-enter"
+                      style={{ '--search-item-index': Math.min(index, 6) }}
                       role="button"
                       tabIndex={0}
                       onClick={() => setSelectedPaper(paper)}

@@ -44,8 +44,10 @@ body {
   border-radius: var(--radius-full);
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--border-strong);
+@media (hover: hover) and (pointer: fine) {
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--border-strong);
+  }
 }
 
 /* Firefox */
@@ -67,8 +69,10 @@ a {
   transition: color var(--transition-fast);
 }
 
-a:hover {
-  color: var(--accent-primary);
+@media (hover: hover) and (pointer: fine) {
+  a:hover {
+    color: var(--accent-primary);
+  }
 }
 
 /* ── Headings ── */

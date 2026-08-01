@@ -1,6 +1,7 @@
 import { useRef, useEffect, useLayoutEffect, useCallback, useMemo, useState } from 'react';
 import { useFeed } from '../../context/FeedContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { getUiErrorMessage } from '../../utils/errorMessages';
 
 import PaperCard from './PaperCard';
 import SkeletonCard from './SkeletonCard';
@@ -27,7 +28,7 @@ const SCROLL_INTERACTION_SETTLE_MS = 220;
  */
 export default function FeedContainer({ onOpenPdf, onSaveToList, source = null, scrollKey = 'forYou' }) {
   const feed = useFeed();
-  const { isEnglish } = useLanguage();
+  const { language, isEnglish } = useLanguage();
   const {
     trackPdfOpened,
     likedPaperIds, savedPaperIds, readPaperIds, toggleLike, markNotInterested, markAsRead,
@@ -294,7 +295,7 @@ export default function FeedContainer({ onOpenPdf, onSaveToList, source = null, 
       <div className="feed-empty">
         <div className="feed-empty-icon">⚠️</div>
         <h2>{isEnglish ? 'Error loading papers' : 'Error cargando papers'}</h2>
-        <p>{error}</p>
+        <p>{getUiErrorMessage(error, language, 'FEED_LOAD_FAILED')}</p>
         <button className="feed-retry-btn" onClick={handleRefresh}>
           {isEnglish ? 'Try again' : 'Reintentar'}
         </button>

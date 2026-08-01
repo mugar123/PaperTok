@@ -85,7 +85,9 @@
   cursor: pointer;
 }
 
-.ai-explanation-close:hover { color: #fff; background: rgba(255, 255, 255, 0.13); }
+@media (hover: hover) and (pointer: fine) {
+  .ai-explanation-close:hover { color: #fff; background: rgba(255, 255, 255, 0.13); }
+}
 
 .ai-explanation-levels {
   display: grid;
@@ -112,7 +114,9 @@
   transition: color 160ms ease, background 160ms ease, box-shadow 160ms ease;
 }
 
-.ai-explanation-levels button:hover { color: rgba(255, 255, 255, 0.9); }
+@media (hover: hover) and (pointer: fine) {
+  .ai-explanation-levels button:hover { color: rgba(255, 255, 255, 0.9); }
+}
 .ai-explanation-levels button:disabled { cursor: default; opacity: 0.72; }
 .ai-explanation-levels button.is-active {
   color: #fff;
@@ -170,7 +174,9 @@
   transition: transform 160ms ease, background 160ms ease;
 }
 
-.ai-explanation-generate:hover { background: #8b5cf6; transform: translateY(-1px); }
+@media (hover: hover) and (pointer: fine) {
+  .ai-explanation-generate:hover { background: #8b5cf6; transform: translateY(-1px); }
+}
 .ai-explanation-generate:active { transform: scale(0.97); }
 
 .ai-explanation-orbit {

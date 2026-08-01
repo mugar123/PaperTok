@@ -344,6 +344,7 @@ function sanitizePreferences(input = {}) {
     enabled: Boolean(input.enabled),
     frequency,
     maxPapers,
+    language: input.language === 'en' ? 'en' : 'es',
   };
 }
 
@@ -475,6 +476,7 @@ function publicSubscription(subscription, email) {
     enabled: Boolean(subscription?.enabled),
     frequency: subscription?.frequency || 'daily',
     maxPapers: subscription?.maxPapers || 5,
+    language: subscription?.language === 'en' ? 'en' : 'es',
     email,
     lastSentAt: subscription?.lastSentAt || null,
     lastTestAt: subscription?.lastTestAt || null,
@@ -921,43 +923,93 @@ function brevoSendErrorCode(status, payload = {}) {
   return 'EMAIL_SEND_FAILED';
 }
 
-function paperReason(paper) {
-  const names = (paper.matches || []).map(match => match.displayName).filter(Boolean);
-  return names.length
-    ? `Porque sigues ${names.slice(0, 2).join(' y ')}`
-    : 'Descubrimiento destacado de PaperTok';
+const EMAIL_COPY = {
+  es: {
+    header: 'PAPERTOK · NOVEDADES SEGUIDAS',
+    testTitle: 'Tu correo de PaperTok funciona',
+    testSubject: 'PaperTok: correo de prueba',
+    greeting: 'Hola',
+    selection: frequency => `Esta es tu selección ${frequency === 'weekly' ? 'semanal' : 'diaria'}.`,
+    digestTitle: count => (count === 1 ? '1 novedad científica para ti' : `${count} novedades científicas para ti`),
+    followReason: names => `Porque sigues ${names.slice(0, 2).join(' y ')}`,
+    discoveryReason: 'Descubrimiento destacado de PaperTok',
+    authorUnavailable: 'Autoría no disponible',
+    citations: count => `${count} ${count === 1 ? 'cita' : 'citas'}`,
+    empty: 'La conexión está lista. Todavía no hemos encontrado publicaciones recientes entre tus seguimientos.',
+    openInbox: 'Abrir mi bandeja',
+    footer: 'Recibes este correo porque activaste las novedades por email en PaperTok.',
+    unsubscribe: 'Darme de baja',
+    openPaperTok: 'Abrir PaperTok',
+    unavailable: 'Servicio no disponible',
+    invalidLink: 'Enlace de baja no válido',
+    disabledTitle: 'Correos desactivados',
+    disabledBody: 'Ya no recibirás novedades de PaperTok por email.',
+    returnToPaperTok: 'Volver a PaperTok',
+  },
+  en: {
+    header: 'PAPERTOK · FOLLOWING UPDATES',
+    testTitle: 'Your PaperTok email works',
+    testSubject: 'PaperTok: test email',
+    greeting: 'Hi',
+    selection: frequency => `This is your ${frequency === 'weekly' ? 'weekly' : 'daily'} selection.`,
+    digestTitle: count => (count === 1 ? '1 scientific update for you' : `${count} scientific updates for you`),
+    followReason: names => `Because you follow ${names.slice(0, 2).join(' and ')}`,
+    discoveryReason: 'A highlighted PaperTok discovery',
+    authorUnavailable: 'Authors unavailable',
+    citations: count => `${count} ${count === 1 ? 'citation' : 'citations'}`,
+    empty: 'Your connection is ready. We have not found recent publications from what you follow yet.',
+    openInbox: 'Open my feed',
+    footer: 'You are receiving this email because you enabled email updates in PaperTok.',
+    unsubscribe: 'Unsubscribe',
+    openPaperTok: 'Open PaperTok',
+    unavailable: 'Service unavailable',
+    invalidLink: 'Invalid unsubscribe link',
+    disabledTitle: 'Emails disabled',
+    disabledBody: 'You will no longer receive PaperTok updates by email.',
+    returnToPaperTok: 'Return to PaperTok',
+  },
+};
+
+function subscriptionLanguage(subscription) {
+  return subscription?.language === 'en' ? 'en' : 'es';
 }
 
-function digestTitle(paperCount) {
-  return paperCount === 1
-    ? '1 novedad científica para ti'
-    : `${paperCount} novedades científicas para ti`;
+function paperReason(paper, language = 'es') {
+  const copy = EMAIL_COPY[language];
+  const names = (paper.matches || []).map(match => match.displayName).filter(Boolean);
+  return names.length
+    ? copy.followReason(names)
+    : copy.discoveryReason;
 }
 
 function renderDigest(subscription, papers, unsubscribeUrl, test) {
-  const greeting = subscription.displayName ? `Hola, ${subscription.displayName.split(' ')[0]}` : 'Hola';
-  const title = test ? 'Tu correo de PaperTok funciona' : digestTitle(papers.length);
+  const language = subscriptionLanguage(subscription);
+  const copy = EMAIL_COPY[language];
+  const greeting = subscription.displayName
+    ? `${copy.greeting}, ${subscription.displayName.split(' ')[0]}`
+    : copy.greeting;
+  const title = test ? copy.testTitle : copy.digestTitle(papers.length);
   const paperHtml = papers.length
     ? papers.map(paper => `
       <div style="padding:20px 0;border-bottom:1px solid #2b2933">
-        <div style="font-size:12px;color:#a98cf7;margin-bottom:7px">${escapeHtml(paperReason(paper))}</div>
+        <div style="font-size:12px;color:#a98cf7;margin-bottom:7px">${escapeHtml(paperReason(paper, language))}</div>
         <a href="${escapeHtml(paper.url || PAPER_TOK_URL)}" style="color:#f6f4fb;text-decoration:none;font-size:18px;font-weight:700;line-height:1.35">${renderScientificHtml(paper.title)}</a>
-        <div style="color:#a7a2b3;font-size:13px;margin-top:8px">${escapeHtml(paper.authors?.slice(0, 3).join(', ') || 'Autoría no disponible')}</div>
-        <div style="color:#787381;font-size:12px;margin-top:6px">${escapeHtml([paper.published, paper.journal, paper.citationCount ? `${paper.citationCount} citas` : ''].filter(Boolean).join(' · '))}</div>
+        <div style="color:#a7a2b3;font-size:13px;margin-top:8px">${escapeHtml(paper.authors?.slice(0, 3).join(', ') || copy.authorUnavailable)}</div>
+        <div style="color:#787381;font-size:12px;margin-top:6px">${escapeHtml([paper.published, paper.journal, paper.citationCount ? copy.citations(paper.citationCount) : ''].filter(Boolean).join(' · '))}</div>
       </div>`).join('')
-    : '<div style="padding:24px 0;color:#b9b4c3">La conexión está lista. Todavía no hemos encontrado publicaciones recientes entre tus seguimientos.</div>';
+    : `<div style="padding:24px 0;color:#b9b4c3">${escapeHtml(copy.empty)}</div>`;
 
   const html = `<!doctype html><html><body style="margin:0;background:#0c0b10;color:#f6f4fb;font-family:Arial,sans-serif">
     <div style="max-width:640px;margin:0 auto;padding:36px 24px">
-      <div style="color:#8b5cf6;font-size:12px;font-weight:700;letter-spacing:1px">PAPERTOK · NOVEDADES SEGUIDAS</div>
+      <div style="color:#8b5cf6;font-size:12px;font-weight:700;letter-spacing:1px">${escapeHtml(copy.header)}</div>
       <h1 style="font-size:28px;line-height:1.15;margin:14px 0 8px">${escapeHtml(title)}</h1>
-      <p style="color:#a7a2b3;margin:0 0 16px">${escapeHtml(greeting)}. Esta es tu selección ${subscription.frequency === 'weekly' ? 'semanal' : 'diaria'}.</p>
+      <p style="color:#a7a2b3;margin:0 0 16px">${escapeHtml(`${greeting}. ${copy.selection(subscription.frequency)}`)}</p>
       ${paperHtml}
-      <a href="${PAPER_TOK_URL}" style="display:inline-block;margin-top:24px;padding:12px 18px;background:#8b5cf6;color:white;text-decoration:none;border-radius:6px;font-weight:700">Abrir mi bandeja</a>
-      <p style="color:#676270;font-size:11px;line-height:1.5;margin-top:34px">Recibes este correo porque activaste las novedades por email en PaperTok. <a href="${escapeHtml(unsubscribeUrl)}" style="color:#9b93a8">Darme de baja</a>.</p>
+      <a href="${PAPER_TOK_URL}" style="display:inline-block;margin-top:24px;padding:12px 18px;background:#8b5cf6;color:white;text-decoration:none;border-radius:6px;font-weight:700">${escapeHtml(copy.openInbox)}</a>
+      <p style="color:#676270;font-size:11px;line-height:1.5;margin-top:34px">${escapeHtml(copy.footer)} <a href="${escapeHtml(unsubscribeUrl)}" style="color:#9b93a8">${escapeHtml(copy.unsubscribe)}</a>.</p>
     </div></body></html>`;
-  const text = `${title}\n\n${greeting}.\n\n${papers.map(paper => `${renderScientificText(paper.title)}\n${paperReason(paper)}\n${paper.url || PAPER_TOK_URL}`).join('\n\n')}\n\nAbrir PaperTok: ${PAPER_TOK_URL}\nDarme de baja: ${unsubscribeUrl}`;
-  return { html, text, subject: test ? 'PaperTok: correo de prueba' : title };
+  const text = `${title}\n\n${greeting}. ${copy.selection(subscription.frequency)}\n\n${papers.map(paper => `${renderScientificText(paper.title)}\n${paperReason(paper, language)}\n${paper.url || PAPER_TOK_URL}`).join('\n\n')}\n\n${copy.openPaperTok}: ${PAPER_TOK_URL}\n${copy.unsubscribe}: ${unsubscribeUrl}`;
+  return { html, text, subject: test ? copy.testSubject : title };
 }
 
 async function sendWithBrevo(subscription, content, env, { test = false } = {}) {
@@ -1027,7 +1079,7 @@ async function sendDigest(subscription, papers, env, { test = false } = {}) {
   if (!provider) throw new EmailNotificationError('EMAIL_NOT_CONFIGURED', 503);
   const sendState = await assertDailySendAvailable(env);
   const workerBase = cleanText(env.WORKER_PUBLIC_URL, 500) || 'https://papertok-report-api.papertok-mugar123.workers.dev';
-  const unsubscribeUrl = `${workerBase}/notifications/unsubscribe?token=${encodeURIComponent(subscription.unsubscribeToken)}`;
+  const unsubscribeUrl = `${workerBase}/notifications/unsubscribe?token=${encodeURIComponent(subscription.unsubscribeToken)}&lang=${subscriptionLanguage(subscription)}`;
   const content = renderDigest(subscription, papers, unsubscribeUrl, test);
   const providerId = provider === 'brevo'
     ? await sendWithBrevo(subscription, content, env, { test })
@@ -1077,15 +1129,23 @@ export async function handleEmailNotificationRequest(request, env, pathname) {
 }
 
 export async function handleEmailUnsubscribe(request, env) {
-  if (!env.NOTIFICATION_STORE) return new Response('Servicio no disponible', { status: 503 });
-  const token = cleanText(new URL(request.url).searchParams.get('token'), 100);
-  if (!token) return new Response('Enlace de baja no válido', { status: 400 });
+  const requestUrl = new URL(request.url);
+  const requestedLanguage = requestUrl.searchParams.get('lang') === 'en'
+    || (!requestUrl.searchParams.has('lang') && /^en(?:-|,|$)/i.test(request.headers.get('accept-language') || ''))
+    ? 'en'
+    : 'es';
+  if (!env.NOTIFICATION_STORE) return new Response(EMAIL_COPY[requestedLanguage].unavailable, { status: 503 });
+  const token = cleanText(requestUrl.searchParams.get('token'), 100);
+  if (!token) return new Response(EMAIL_COPY[requestedLanguage].invalidLink, { status: 400 });
   const uid = await env.NOTIFICATION_STORE.get(`${UNSUBSCRIBE_PREFIX}${token}`);
+  let language = requestedLanguage;
   if (uid) {
     const subscription = await env.NOTIFICATION_STORE.get(`${SUBSCRIPTION_PREFIX}${uid}`, 'json');
+    language = subscriptionLanguage(subscription);
     await deleteSubscription(env, uid, subscription);
   }
-  return new Response(`<!doctype html><html><body style="background:#0c0b10;color:#f6f4fb;font-family:Arial,sans-serif;text-align:center;padding:80px 20px"><h1>Correos desactivados</h1><p style="color:#aaa3b6">Ya no recibirás novedades de PaperTok por email.</p><a href="${PAPER_TOK_URL}" style="color:#a98cf7">Volver a PaperTok</a></body></html>`, {
+  const copy = EMAIL_COPY[language];
+  return new Response(`<!doctype html><html lang="${language}"><body style="background:#0c0b10;color:#f6f4fb;font-family:Arial,sans-serif;text-align:center;padding:80px 20px"><h1>${escapeHtml(copy.disabledTitle)}</h1><p style="color:#aaa3b6">${escapeHtml(copy.disabledBody)}</p><a href="${PAPER_TOK_URL}" style="color:#a98cf7">${escapeHtml(copy.returnToPaperTok)}</a></body></html>`, {
     status: 200,
     headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
   });

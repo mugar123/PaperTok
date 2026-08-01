@@ -29,6 +29,7 @@ import { fetchDomainPapers } from '../../services/domainSourceService';
 import { settleWithin } from '../../utils/asyncTiming';
 import { getEntityWikiInfo } from '../../services/wikiService';
 import { getLocalizedInstitutionName } from '../../utils/institutionLocalization';
+import { getUiErrorMessage } from '../../utils/errorMessages';
 import 'katex/dist/katex.min.css';
 import './EntityExplorer.css';
 
@@ -382,7 +383,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
       if (isCancelled) return;
       console.error('Failed to load entity', error);
       setEntity(null);
-      setEntityError('No se pudo cargar esta entidad. Comprueba tu conexión e inténtalo de nuevo.');
+      setEntityError('ENTITY_LOAD_FAILED');
       setIsLoadingEntity(false);
     });
     return () => {
@@ -605,7 +606,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
         console.error("Failed to load papers for entity", err);
         if (isCancelled) return;
         if (page === 1) setPapers([]);
-        setPapersError('No se pudieron cargar las publicaciones. Comprueba tu conexión e inténtalo de nuevo.');
+        setPapersError('PUBLICATIONS_LOAD_FAILED');
         setHasMore(false); // Stop infinite looping on errors
       }
       if (isCancelled) return;
@@ -651,7 +652,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
         console.error("Failed to load authors for entity", err);
         if (isCancelled) return;
         if (authorsPage === 1) setEntityAuthors([]);
-        setAuthorsError('No se pudieron cargar los autores. Comprueba tu conexión e inténtalo de nuevo.');
+        setAuthorsError('AUTHORS_LOAD_FAILED');
         setHasMoreAuthors(false); // Stop infinite looping on errors
       }
       if (isCancelled) return;
@@ -830,7 +831,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
           : (isEnglish ? 'Entity not found' : 'Entidad no encontrada')}</h2>
         {entityError && (
           <>
-            <p role="alert">{isEnglish ? 'Check your connection and try again.' : entityError}</p>
+            <p role="alert">{getUiErrorMessage(entityError, language, 'ENTITY_LOAD_FAILED')}</p>
             <button className="explorer-clear-btn" onClick={retryEntity}>{isEnglish ? 'Try again' : 'Reintentar'}</button>
           </>
         )}
@@ -1586,7 +1587,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
               <div className="explorer-empty">
                 {papersError ? (
                   <>
-                    <p role="alert">{isEnglish ? 'Publications could not be loaded. Check your connection and try again.' : papersError}</p>
+                    <p role="alert">{getUiErrorMessage(papersError, language, 'PUBLICATIONS_LOAD_FAILED')}</p>
                     <button className="explorer-clear-btn" onClick={retryPapers}>{isEnglish ? 'Try again' : 'Reintentar'}</button>
                   </>
                 ) : (
@@ -1598,7 +1599,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
             )}
             {!isLoadingPapers && papersError && filteredPapers.length > 0 && (
               <div className="explorer-inline-error" role="alert">
-                <span>{isEnglish ? 'Some publications could not be loaded.' : papersError}</span>
+                <span>{getUiErrorMessage('PARTIAL_PUBLICATIONS_LOAD_FAILED', language)}</span>
                 <button onClick={retryPapers}>{isEnglish ? 'Try again' : 'Reintentar'}</button>
               </div>
             )}
@@ -1655,7 +1656,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
               <div className="explorer-empty">
                 {authorsError ? (
                   <>
-                    <p role="alert">{isEnglish ? 'Authors could not be loaded. Check your connection and try again.' : authorsError}</p>
+                    <p role="alert">{getUiErrorMessage(authorsError, language, 'AUTHORS_LOAD_FAILED')}</p>
                     <button className="explorer-clear-btn" onClick={retryAuthors}>{isEnglish ? 'Try again' : 'Reintentar'}</button>
                   </>
                 ) : (
@@ -1665,7 +1666,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
             )}
             {!isLoadingAuthors && authorsError && entityAuthors.length > 0 && (
               <div className="explorer-inline-error" role="alert">
-                <span>{isEnglish ? 'Some authors could not be loaded.' : authorsError}</span>
+                <span>{getUiErrorMessage('PARTIAL_AUTHORS_LOAD_FAILED', language)}</span>
                 <button onClick={retryAuthors}>{isEnglish ? 'Try again' : 'Reintentar'}</button>
               </div>
             )}

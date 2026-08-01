@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useFeed } from '../../context/FeedContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { getUiErrorMessage } from '../../utils/errorMessages';
 import { getScientificReport } from '../../services/scientificReportService';
 import { getScientificTrends } from '../../services/scientificTrendService';
 import { findOpenAccessCopy } from '../../services/unpaywallService';
@@ -180,7 +181,7 @@ export default function ScientificReport({ onOpenPdf, onSaveToList }) {
     } catch (err) {
       console.error('Error fetching report:', err);
       if (requestId === reportRequestId.current) {
-        setError('No se pudo cargar la edición. Reinténtalo.');
+        setError('REPORT_LOAD_FAILED');
       }
       return false;
     } finally {
@@ -311,7 +312,7 @@ export default function ScientificReport({ onOpenPdf, onSaveToList }) {
         <div className="sr-state"><div className="sr-spinner" /><p>{isEnglish ? 'Compiling the edition...' : 'Compilando la edición...'}</p></div>
       ) : error && totalPapers === 0 ? (
         <div className="sr-state">
-          <p>{isEnglish ? 'The edition could not be loaded.' : error}</p>
+          <p>{getUiErrorMessage(error, language, 'REPORT_LOAD_FAILED')}</p>
           <button className="sr-retry" onClick={() => fetchReport(timeframe, filters, 1, { refreshTrends: true })}>
             {isEnglish ? 'Try again' : 'Reintentar'}
           </button>

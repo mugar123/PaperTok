@@ -30,5 +30,39 @@ test('serializes a compact paper preview with follow reasons', () => {
     _followedEntityMatches: [{ type: 'topic', canonicalId: 'T1', displayName: 'Physics' }],
   });
   assert.equal(preview.abstract, undefined);
-  assert.equal(preview.matches[0].displayName, 'Physics');
+  assert.equal(preview.matches[0].displayName, 'Física');
+});
+
+test('localizes followed topics and institutions for English digests', () => {
+  assert.equal(serializeFollowForNotifications({
+    type: 'topic',
+    canonicalId: 'astro-ph.GA',
+    displayName: 'Astrofísica Galáctica',
+  }, 'en').displayName, 'Astrophysics of Galaxies');
+
+  assert.equal(serializeFollowForNotifications({
+    type: 'institution',
+    canonicalId: 'I1',
+    displayName: 'Universidad de Salamanca',
+    metadata: {
+      localizedNames: {
+        en: 'University of Salamanca',
+        es: 'Universidad de Salamanca',
+      },
+    },
+  }, 'en').displayName, 'University of Salamanca');
+});
+
+test('uses the requested language for paper follow reasons', () => {
+  const preview = serializeUpdateForNotifications({
+    id: 'paper-2',
+    title: 'Another paper',
+    _followedEntityMatches: [{
+      type: 'topic',
+      canonicalId: 'quant-ph',
+      displayName: 'Física Cuántica',
+    }],
+  }, 'en');
+
+  assert.equal(preview.matches[0].displayName, 'Quantum Physics');
 });

@@ -256,14 +256,24 @@
     transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.pc-project-badge:hover:not(:disabled),
 .pc-project-badge:focus-visible:not(:disabled) {
   color: #67c7f5;
   background: rgba(29, 161, 242, 0.19);
   border-color: rgba(125, 211, 252, 0.44);
-  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.1);
-  transform: translateY(-1px);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.08);
+  transform: none;
   outline: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pc-project-badge:hover:not(:disabled) {
+    color: #67c7f5;
+    background: rgba(29, 161, 242, 0.19);
+    border-color: rgba(125, 211, 252, 0.44);
+    box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.08);
+    transform: none;
+    outline: none;
+  }
 }
 
 .pc-project-badge:active:not(:disabled) {
@@ -279,9 +289,14 @@
   transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.pc-project-badge:hover:not(:disabled) svg,
 .pc-project-badge:focus-visible:not(:disabled) svg {
   transform: translateX(1px);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pc-project-badge:hover:not(:disabled) svg {
+    transform: translateX(1px);
+  }
 }
 
 .pc-project-badge span {
@@ -296,10 +311,8 @@
     transition-duration: 0.01ms;
   }
 
-  .pc-project-badge:hover:not(:disabled),
   .pc-project-badge:focus-visible:not(:disabled),
   .pc-project-badge:active:not(:disabled),
-  .pc-project-badge:hover:not(:disabled) svg,
   .pc-project-badge:focus-visible:not(:disabled) svg {
     transform: none;
   }
@@ -310,12 +323,20 @@
   transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
 }
 
-.pc-topic-link:hover,
 .pc-topic-link:focus-visible {
   background: rgba(139, 92, 246, 0.24);
   border-color: rgba(167, 139, 250, 0.65);
   color: #fff;
   outline: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .pc-topic-link:hover {
+    background: rgba(139, 92, 246, 0.24);
+    border-color: rgba(167, 139, 250, 0.65);
+    color: #fff;
+    outline: none;
+  }
 }
 
 .pc-topic-link:active { transform: scale(0.96); }
@@ -426,9 +447,11 @@
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 
-.pc-tooltip:hover::after {
-  opacity: 1;
-  transform: translateX(-50%) translateY(-2px);
+@media (hover: hover) and (pointer: fine) {
+  .pc-tooltip:hover::after {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-2px);
+  }
 }
 
 /* ── Journal Ticker (TikTok style) ── */
@@ -454,10 +477,12 @@
   cursor: pointer;
 }
 
-.pc-journal-ticker--clickable:hover {
-  background: rgba(29, 161, 242, 0.15);
-  border-color: rgba(29, 161, 242, 0.3);
-  transform: scale(1.02);
+@media (hover: hover) and (pointer: fine) {
+  .pc-journal-ticker--clickable:hover {
+    background: rgba(29, 161, 242, 0.15);
+    border-color: rgba(29, 161, 242, 0.3);
+    transform: scale(1.02);
+  }
 }
 
 .pc-journal-ticker--clickable:active {
@@ -486,8 +511,10 @@
   white-space: nowrap;
 }
 
-.pc-journal-ticker:hover .pc-journal-ticker-text {
-  animation: tickerMarquee 8s linear infinite alternate;
+@media (hover: hover) and (pointer: fine) {
+  .pc-journal-ticker:hover .pc-journal-ticker-text {
+    animation: tickerMarquee 8s linear infinite alternate;
+  }
 }
 
 @keyframes tickerMarquee {
@@ -540,9 +567,11 @@
   display: inline-block;
 }
 
-.pc-expand-btn:hover { 
-  background: rgba(255,255,255,0.2);
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .pc-expand-btn:hover {
+    background: rgba(255,255,255,0.2);
+    transform: translateY(-1px);
+  }
 }
 
 .pc-arxiv-id {
@@ -608,10 +637,12 @@
   transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
 }
 
-.pc-linked-resource:hover {
-  background: rgba(255, 255, 255, 0.13);
-  border-color: rgba(255, 255, 255, 0.24);
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .pc-linked-resource:hover {
+    background: rgba(255, 255, 255, 0.13);
+    border-color: rgba(255, 255, 255, 0.24);
+    transform: translateY(-1px);
+  }
 }
 
 .pc-linked-resource--dataset { color: #67e8f9; }
@@ -638,9 +669,11 @@
   box-shadow: 0 4px 15px rgba(255, 255, 255, 0.1);
 }
 
-.pc-read-btn:hover {
-  transform: translateY(-3px) scale(1.02);
-  box-shadow: 0 10px 30px rgba(255, 255, 255, 0.25);
+@media (hover: hover) and (pointer: fine) {
+  .pc-read-btn:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 10px 30px rgba(255, 255, 255, 0.25);
+  }
 }
 
 .pc-read-btn:active {
@@ -679,11 +712,13 @@
   transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), background 180ms ease, border-color 180ms ease;
 }
 
-.pc-ai-btn:hover {
-  color: #fff;
-  background: rgba(124, 58, 237, 0.34);
-  border-color: rgba(196, 181, 253, 0.5);
-  transform: translateY(-2px);
+@media (hover: hover) and (pointer: fine) {
+  .pc-ai-btn:hover {
+    color: #fff;
+    background: rgba(124, 58, 237, 0.34);
+    border-color: rgba(196, 181, 253, 0.5);
+    transform: translateY(-2px);
+  }
 }
 
 .pc-ai-btn:active { transform: scale(0.96); }
@@ -704,7 +739,9 @@
   cursor: pointer;
 }
 
-.pc-related-btn:hover { background: rgba(255, 255, 255, 0.18); }
+@media (hover: hover) and (pointer: fine) {
+  .pc-related-btn:hover { background: rgba(255, 255, 255, 0.18); }
+}
 
 .related-overlay {
   position: fixed;
@@ -782,7 +819,9 @@
   transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
 }
 
-.related-mode-tabs button:hover:not(:disabled) { color: #fff; }
+@media (hover: hover) and (pointer: fine) {
+  .related-mode-tabs button:hover:not(:disabled) { color: #fff; }
+}
 .related-mode-tabs button:active:not(:disabled) { transform: scale(0.985); }
 .related-mode-tabs button.is-active {
   background: rgba(139, 92, 246, 0.18);
@@ -820,11 +859,18 @@
   transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
 }
 
-.knowledge-path button:hover,
 .knowledge-path button.is-active {
   border-color: rgba(167, 139, 250, 0.5);
   background: rgba(139, 92, 246, 0.14);
   color: #fff;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .knowledge-path button:hover {
+    border-color: rgba(167, 139, 250, 0.5);
+    background: rgba(139, 92, 246, 0.14);
+    color: #fff;
+  }
 }
 
 .knowledge-path button:active { transform: scale(0.98); }
@@ -905,10 +951,12 @@
   animation-delay: calc(80ms + var(--related-index, 0) * 35ms);
 }
 
-.related-item:hover {
-  background: rgba(139, 92, 246, 0.12);
-  border-color: rgba(139, 92, 246, 0.34);
-  transform: translateX(3px);
+@media (hover: hover) and (pointer: fine) {
+  .related-item:hover {
+    background: rgba(139, 92, 246, 0.12);
+    border-color: rgba(139, 92, 246, 0.34);
+    transform: translateX(3px);
+  }
 }
 
 .related-item:active { transform: translateX(2px) scale(0.988); }
@@ -919,9 +967,11 @@
   transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), color 0.18s ease;
 }
 
-.related-item:hover > svg {
-  color: #b799ff;
-  transform: translateX(3px);
+@media (hover: hover) and (pointer: fine) {
+  .related-item:hover > svg {
+    color: #b799ff;
+    transform: translateX(3px);
+  }
 }
 
 .related-item::before {
@@ -937,9 +987,12 @@
   transition: transform 0.18s ease;
 }
 
-.related-item:hover::before,
 .related-item:focus-visible::before,
 .related-item.is-selected::before { transform: scaleY(1); }
+
+@media (hover: hover) and (pointer: fine) {
+  .related-item:hover::before { transform: scaleY(1); }
+}
 
 .related-item:focus-visible {
   outline: 2px solid rgba(167, 139, 250, 0.7);
@@ -1023,9 +1076,11 @@
   transition: background 0.18s ease, transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.related-card-back:hover {
-  background: rgba(255, 255, 255, 0.16);
-  transform: scale(1.06);
+@media (hover: hover) and (pointer: fine) {
+  .related-card-back:hover {
+    background: rgba(255, 255, 255, 0.16);
+    transform: scale(1.06);
+  }
 }
 
 .related-card-back:active { transform: scale(0.94); }
@@ -1141,9 +1196,11 @@
   .knowledge-source { padding-inline: 11px; }
 }
 
-.pc-read-btn--secondary:hover {
-  background: rgba(255, 255, 255, 0.2);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+@media (hover: hover) and (pointer: fine) {
+  .pc-read-btn--secondary:hover {
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  }
 }
 
 /* ── Side actions (TikTok vertical buttons) ── */
@@ -1202,10 +1259,12 @@
   filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
 }
 
-.pc-side-btn:hover .pc-side-icon {
-  background: rgba(255, 255, 255, 0.15);
-  transform: scale(1.1) translateY(-2px);
-  border-color: rgba(255,255,255,0.4);
+@media (hover: hover) and (pointer: fine) {
+  .pc-side-btn:hover .pc-side-icon {
+    background: rgba(255, 255, 255, 0.15);
+    transform: scale(1.1) translateY(-2px);
+    border-color: rgba(255,255,255,0.4);
+  }
 }
 
 /* Liked state */
@@ -1268,12 +1327,16 @@
 }
 
 /* Skip */
-.pc-side-btn--skip:hover {
-  color: var(--accent-danger);
+@media (hover: hover) and (pointer: fine) {
+  .pc-side-btn--skip:hover {
+    color: var(--accent-danger);
+  }
 }
-.pc-side-btn--skip:hover .pc-side-icon {
-  background: rgba(239, 68, 68, 0.15);
-  border-color: rgba(239, 68, 68, 0.4);
+@media (hover: hover) and (pointer: fine) {
+  .pc-side-btn--skip:hover .pc-side-icon {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.4);
+  }
 }
 
 /* ── Double-tap heart burst ── */

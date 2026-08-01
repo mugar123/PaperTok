@@ -25,11 +25,13 @@
   transition: fill 0.4s ease-out, stroke 0.4s ease-out;
 }
 
-.wm-geo:hover {
-  fill: rgba(255, 255, 255, 0.2);
-  stroke: rgba(255, 255, 255, 0.4);
-  cursor: pointer;
-  outline: none !important;
+@media (hover: hover) and (pointer: fine) {
+  .wm-geo:hover {
+    fill: rgba(255, 255, 255, 0.2);
+    stroke: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    outline: none !important;
+  }
 }
 
 .wm-geo.selected {
@@ -37,9 +39,11 @@
   stroke: rgba(99, 102, 241, 0.8);
 }
 
-.wm-geo.selected:hover {
-  fill: rgba(99, 102, 241, 0.6);
-  stroke: rgba(99, 102, 241, 1);
+@media (hover: hover) and (pointer: fine) {
+  .wm-geo.selected:hover {
+    fill: rgba(99, 102, 241, 0.6);
+    stroke: rgba(99, 102, 241, 1);
+  }
 }
 
 .wm-geo:focus-visible {

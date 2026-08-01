@@ -98,9 +98,11 @@
   animation: sr-fade-in 0.8s 0.3s both;
 }
 
-.sr-refresh-btn:hover:not(:disabled) {
-  color: rgba(255, 255, 255, 0.8);
-  background: rgba(255, 255, 255, 0.05);
+@media (hover: hover) and (pointer: fine) {
+  .sr-refresh-btn:hover:not(:disabled) {
+    color: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.05);
+  }
 }
 
 .sr-refresh-btn:active:not(:disabled) {
@@ -154,9 +156,11 @@
   isolation: isolate;
 }
 
-.sr-scope:hover {
-  color: rgba(255, 255, 255, 0.82);
-  background: rgba(255, 255, 255, 0.035);
+@media (hover: hover) and (pointer: fine) {
+  .sr-scope:hover {
+    color: rgba(255, 255, 255, 0.82);
+    background: rgba(255, 255, 255, 0.035);
+  }
 }
 
 .sr-scope:active { transform: scale(0.96); }
@@ -329,9 +333,11 @@
   position: relative;
 }
 
-.sr-tab:hover {
-  color: rgba(255, 255, 255, 0.8);
-  background: rgba(255, 255, 255, 0.03);
+@media (hover: hover) and (pointer: fine) {
+  .sr-tab:hover {
+    color: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.03);
+  }
 }
 
 .sr-tab:active { transform: scale(0.94); }
@@ -413,10 +419,12 @@
   padding: 10px 24px; border-radius: 10px; cursor: pointer;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.sr-retry:hover {
-  background: rgba(255, 255, 255, 0.12);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+@media (hover: hover) and (pointer: fine) {
+  .sr-retry:hover {
+    background: rgba(255, 255, 255, 0.12);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
 }
 .sr-retry:active { transform: scale(0.97); }
 
@@ -589,9 +597,11 @@
   transition: background 0.25s, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.sr-trend-item:hover {
-  background: rgba(52, 211, 153, 0.08);
-  transform: translateY(-2px);
+@media (hover: hover) and (pointer: fine) {
+  .sr-trend-item:hover {
+    background: rgba(52, 211, 153, 0.08);
+    transform: translateY(-2px);
+  }
 }
 
 @keyframes sr-trend-enter {
@@ -652,9 +662,11 @@
   transition: border-color 0.4s, box-shadow 0.4s;
 }
 
-.sr-stats-bar:hover {
-  border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+@media (hover: hover) and (pointer: fine) {
+  .sr-stats-bar:hover {
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+  }
 }
 
 .sr-stat {
@@ -668,9 +680,13 @@
   transition: color 0.3s;
 }
 
-.sr-stat:hover { color: rgba(255, 255, 255, 0.7); }
+@media (hover: hover) and (pointer: fine) {
+  .sr-stat:hover { color: rgba(255, 255, 255, 0.7); }
+}
 .sr-stat svg { flex-shrink: 0; transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
-.sr-stat:hover svg { transform: scale(1.15); }
+@media (hover: hover) and (pointer: fine) {
+  .sr-stat:hover svg { transform: scale(1.15); }
+}
 
 .sr-stat-info {
   display: flex;
@@ -715,10 +731,12 @@
   transition: border-color 0.4s, box-shadow 0.4s, transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.sr-hero:hover {
-  border-color: rgba(255, 255, 255, 0.12);
-  box-shadow: 0 32px 64px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
-  transform: translateY(-2px);
+@media (hover: hover) and (pointer: fine) {
+  .sr-hero:hover {
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 32px 64px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+    transform: translateY(-2px);
+  }
 }
 
 .sr-hero-glow {
@@ -768,8 +786,10 @@
   transition: color 0.3s;
 }
 
-.sr-hero:hover .sr-hero-title {
-  color: rgba(255, 255, 255, 0.95);
+@media (hover: hover) and (pointer: fine) {
+  .sr-hero:hover .sr-hero-title {
+    color: rgba(255, 255, 255, 0.95);
+  }
 }
 
 .sr-hero-authors {
@@ -798,7 +818,9 @@
   transition: all 0.25s;
 }
 
-.sr-tag:hover { filter: brightness(1.2); transform: translateY(-1px); }
+@media (hover: hover) and (pointer: fine) {
+  .sr-tag:hover { filter: brightness(1.2); transform: translateY(-1px); }
+}
 
 .sr-tag.preprint { color: #10b981; background: rgba(16, 185, 129, 0.1); }
 .sr-tag.verified { color: #3b82f6; background: rgba(59, 130, 246, 0.1); }
@@ -820,9 +842,11 @@
   transition: color 0.3s, border-color 0.3s;
 }
 
-.sr-hero:hover .sr-hero-abstract {
-  color: rgba(255, 255, 255, 0.75);
-  border-left-color: rgba(255, 255, 255, 0.2);
+@media (hover: hover) and (pointer: fine) {
+  .sr-hero:hover .sr-hero-abstract {
+    color: rgba(255, 255, 255, 0.75);
+    border-left-color: rgba(255, 255, 255, 0.2);
+  }
 }
 
 .sr-hero-abstract::-webkit-scrollbar { width: 3px; }
@@ -853,9 +877,11 @@
   color: #0a0a0f;
   box-shadow: 0 2px 8px rgba(255, 255, 255, 0.08);
 }
-.sr-btn.primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(255, 255, 255, 0.12);
+@media (hover: hover) and (pointer: fine) {
+  .sr-btn.primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 255, 255, 0.12);
+  }
 }
 
 .sr-btn.ghost {
@@ -863,10 +889,12 @@
   color: rgba(255, 255, 255, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
-.sr-btn.ghost:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.15);
+@media (hover: hover) and (pointer: fine) {
+  .sr-btn.ghost:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
 }
 
 /* ============================================
@@ -926,13 +954,17 @@
   z-index: 0;
 }
 
-.sr-bento-card:hover::before { opacity: 1; }
+@media (hover: hover) and (pointer: fine) {
+  .sr-bento-card:hover::before { opacity: 1; }
+}
 
-.sr-bento-card:hover {
-  background: rgba(255, 255, 255, 0.035);
-  border-color: rgba(255, 255, 255, 0.12);
-  transform: translateY(-4px) scale(1.008);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+@media (hover: hover) and (pointer: fine) {
+  .sr-bento-card:hover {
+    background: rgba(255, 255, 255, 0.035);
+    border-color: rgba(255, 255, 255, 0.12);
+    transform: translateY(-4px) scale(1.008);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  }
 }
 
 .sr-bento-card:active {
@@ -951,9 +983,11 @@
   transition: opacity 0.4s, width 0.3s;
 }
 
-.sr-bento-card:hover .sr-bento-accent {
-  opacity: 0.85;
-  width: 4px;
+@media (hover: hover) and (pointer: fine) {
+  .sr-bento-card:hover .sr-bento-accent {
+    opacity: 0.85;
+    width: 4px;
+  }
 }
 
 .sr-bento-body {
@@ -1037,10 +1071,12 @@
   cursor: default;
 }
 
-.sr-trending-pill:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.15);
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .sr-trending-pill:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    transform: translateY(-1px);
+  }
 }
 
 .sr-bento-cat { font-weight: 800; }
@@ -1065,7 +1101,9 @@
   overflow: hidden;
 }
 
-.sr-bento-card:hover .sr-bento-title { color: #fff; }
+@media (hover: hover) and (pointer: fine) {
+  .sr-bento-card:hover .sr-bento-title { color: #fff; }
+}
 
 .sr-bento-abstract {
   font-size: 14px;
@@ -1079,7 +1117,9 @@
   transition: color 0.3s;
 }
 
-.sr-bento-card:hover .sr-bento-abstract { color: rgba(255, 255, 255, 0.55); }
+@media (hover: hover) and (pointer: fine) {
+  .sr-bento-card:hover .sr-bento-abstract { color: rgba(255, 255, 255, 0.55); }
+}
 
 .sr-bento-bottom {
   display: flex;
@@ -1107,9 +1147,13 @@
   transition: color 0.3s;
 }
 
-.sr-bento-card:hover .sr-micro { color: rgba(255, 255, 255, 0.4); }
+@media (hover: hover) and (pointer: fine) {
+  .sr-bento-card:hover .sr-micro { color: rgba(255, 255, 255, 0.4); }
+}
 .sr-micro.oa { color: rgba(16, 185, 129, 0.55); }
-.sr-bento-card:hover .sr-micro.oa { color: rgba(16, 185, 129, 0.75); }
+@media (hover: hover) and (pointer: fine) {
+  .sr-bento-card:hover .sr-micro.oa { color: rgba(16, 185, 129, 0.75); }
+}
 
 .sr-micro.venue {
   overflow: hidden;
@@ -1157,11 +1201,13 @@
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.sr-overlay-close:hover {
-  background: rgba(255, 255, 255, 0.2);
-  color: #fff;
-  transform: scale(1.08);
-  border-color: rgba(255, 255, 255, 0.2);
+@media (hover: hover) and (pointer: fine) {
+  .sr-overlay-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    transform: scale(1.08);
+    border-color: rgba(255, 255, 255, 0.2);
+  }
 }
 
 .sr-overlay-close:active { transform: scale(0.95); }

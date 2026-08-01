@@ -90,9 +90,12 @@
   backdrop-filter: blur(8px);
 }
 
-.explorer-back-btn:hover, .explorer-action-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-  transform: scale(1.05);
+@media (hover: hover) and (pointer: fine) {
+  .explorer-back-btn:hover,
+  .explorer-action-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    transform: scale(1.05);
+  }
 }
 
 .explorer-back-btn:active, .explorer-action-btn:active {
@@ -205,10 +208,12 @@
   white-space: nowrap;
 }
 
-.ehc-author-institution:hover:not(:disabled) {
-  color: var(--text-primary);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+@media (hover: hover) and (pointer: fine) {
+  .ehc-author-institution:hover:not(:disabled) {
+    color: var(--text-primary);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
 }
 
 .ehc-author-institution:active:not(:disabled) {
@@ -261,9 +266,11 @@
   background: rgba(59, 130, 246, 0.09);
 }
 
-.ehc-institution-identity a:hover {
-  border-color: rgba(255, 255, 255, 0.22);
-  color: var(--text-primary);
+@media (hover: hover) and (pointer: fine) {
+  .ehc-institution-identity a:hover {
+    border-color: rgba(255, 255, 255, 0.22);
+    color: var(--text-primary);
+  }
 }
 
 .ehc-ror-relations {
@@ -294,10 +301,12 @@
   transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
 }
 
-.ehc-ror-relations button:hover {
-  border-color: rgba(139, 92, 246, 0.32);
-  background: rgba(139, 92, 246, 0.1);
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .ehc-ror-relations button:hover {
+    border-color: rgba(139, 92, 246, 0.32);
+    background: rgba(139, 92, 246, 0.1);
+    transform: translateY(-1px);
+  }
 }
 
 .ehc-ror-relations button span {
@@ -334,7 +343,9 @@
   transition: background 0.2s ease, color 0.2s ease, transform 0.16s ease, opacity 0.2s ease;
 }
 
-.entity-follow-btn:hover { transform: translateY(-1px); }
+@media (hover: hover) and (pointer: fine) {
+  .entity-follow-btn:hover { transform: translateY(-1px); }
+}
 .entity-follow-btn:active { transform: scale(0.95); }
 
 .entity-follow-btn.following {
@@ -518,7 +529,9 @@
   transform: rotate(180deg);
 }
 
-.ehc-wiki-toggle:hover { color: #b799ff; }
+@media (hover: hover) and (pointer: fine) {
+  .ehc-wiki-toggle:hover { color: #b799ff; }
+}
 
 .ehc-wiki-toggle:focus-visible {
   outline: 2px solid var(--accent-primary, #7c3aed);
@@ -542,8 +555,10 @@
   transition: opacity 0.2s;
 }
 
-.ehc-link:hover {
-  opacity: 0.8;
+@media (hover: hover) and (pointer: fine) {
+  .ehc-link:hover {
+    opacity: 0.8;
+  }
 }
 
 /* ─── Toolbar (Sticky) ─── */
@@ -582,9 +597,11 @@
   transition: all 0.2s;
 }
 
-.cat-pill:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--text-primary);
+@media (hover: hover) and (pointer: fine) {
+  .cat-pill:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+  }
 }
 
 .cat-pill.active {
@@ -641,9 +658,11 @@
   transition: all 0.15s;
 }
 
-.es-clear:hover {
-  background: rgba(255,255,255,0.2);
-  color: white;
+@media (hover: hover) and (pointer: fine) {
+  .es-clear:hover {
+    background: rgba(255,255,255,0.2);
+    color: white;
+  }
 }
 
 .explorer-search-box input {
@@ -725,10 +744,12 @@
   transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-.ec-pill:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-primary);
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .ec-pill:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+    transform: translateY(-1px);
+  }
 }
 
 .ec-pill.active {
@@ -784,15 +805,19 @@
   transition: all 0.5s ease;
 }
 
-.explorer-list-item:hover::after {
-  left: 150%;
+@media (hover: hover) and (pointer: fine) {
+  .explorer-list-item:hover::after {
+    left: 150%;
+  }
 }
 
-.explorer-list-item:hover {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+@media (hover: hover) and (pointer: fine) {
+  .explorer-list-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.08);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  }
 }
 
 .explorer-list-item:active {
@@ -892,9 +917,11 @@
   text-decoration: none;
 }
 
-.eli-citations--link:hover {
-  color: #ddd6fe;
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .eli-citations--link:hover {
+    color: #ddd6fe;
+    text-decoration: underline;
+  }
 }
 
 .eli-title {
@@ -906,8 +933,10 @@
   transition: color 0.2s;
 }
 
-.explorer-list-item:hover .eli-title {
-  color: var(--accent-primary, #7c3aed);
+@media (hover: hover) and (pointer: fine) {
+  .explorer-list-item:hover .eli-title {
+    color: var(--accent-primary, #7c3aed);
+  }
 }
 
 .eli-authors {
@@ -957,10 +986,12 @@
   margin-top: 8px;
 }
 
-.explorer-clear-btn:hover {
-  background: rgba(255,255,255,0.15);
-  color: white;
-  transform: translateY(-1px);
+@media (hover: hover) and (pointer: fine) {
+  .explorer-clear-btn:hover {
+    background: rgba(255,255,255,0.15);
+    color: white;
+    transform: translateY(-1px);
+  }
 }
 
 .explorer-inline-error {
@@ -1027,9 +1058,11 @@
   transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-.explorer-overlay-close:hover {
-  background: rgba(255,255,255,0.2);
-  transform: scale(1.05);
+@media (hover: hover) and (pointer: fine) {
+  .explorer-overlay-close:hover {
+    background: rgba(255,255,255,0.2);
+    transform: scale(1.05);
+  }
 }
 
 .explorer-overlay-content {
@@ -1093,8 +1126,10 @@
   transition: color 0.2s;
 }
 
-.ee-tab:hover {
-  color: var(--text-secondary);
+@media (hover: hover) and (pointer: fine) {
+  .ee-tab:hover {
+    color: var(--text-secondary);
+  }
 }
 
 .ee-tab.active {
@@ -1128,9 +1163,11 @@
   flex-shrink: 0;
 }
 
-.filter-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-primary);
+@media (hover: hover) and (pointer: fine) {
+  .filter-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+  }
 }
 
 .filter-btn.active {
@@ -1183,8 +1220,10 @@
   padding: 4px;
 }
 
-.close-btn:hover {
-  color: white;
+@media (hover: hover) and (pointer: fine) {
+  .close-btn:hover {
+    color: white;
+  }
 }
 
 .ee-filter-body {
@@ -1248,9 +1287,11 @@
   cursor: pointer;
 }
 
-.ee-filter-reset:hover {
-  background: rgba(255,255,255,0.1);
-  color: white;
+@media (hover: hover) and (pointer: fine) {
+  .ee-filter-reset:hover {
+    background: rgba(255,255,255,0.1);
+    color: white;
+  }
 }
 
 .ee-filter-chips {
@@ -1271,9 +1312,11 @@
   transition: all 0.2s;
 }
 
-.ee-filter-chip:hover {
-  background: rgba(255,255,255,0.08);
-  color: var(--text-primary);
+@media (hover: hover) and (pointer: fine) {
+  .ee-filter-chip:hover {
+    background: rgba(255,255,255,0.08);
+    color: var(--text-primary);
+  }
 }
 
 .ee-filter-chip.active {
@@ -1349,10 +1392,12 @@
   transition: all 0.2s;
 }
 
-.ee-author-card:hover {
-  background: rgba(255, 255, 255, 0.05);
-  transform: translateX(4px);
-  border-color: rgba(255, 255, 255, 0.1);
+@media (hover: hover) and (pointer: fine) {
+  .ee-author-card:hover {
+    background: rgba(255, 255, 255, 0.05);
+    transform: translateX(4px);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
 }
 
 .ee-author-icon {
@@ -1389,10 +1434,12 @@
   transition: transform 0.2s;
 }
 
-.ee-author-card:hover .ee-author-arrow {
-  opacity: 1;
-  color: var(--text-primary);
-  transform: translateX(2px);
+@media (hover: hover) and (pointer: fine) {
+  .ee-author-card:hover .ee-author-arrow {
+    opacity: 1;
+    color: var(--text-primary);
+    transform: translateX(2px);
+  }
 }
 
 /* ─── Mobile ─── */
@@ -1514,12 +1561,20 @@
   transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.project-links-trigger:hover,
 .project-links-trigger.is-open {
   border-color: rgba(167, 139, 250, 0.68);
   background: rgba(139, 92, 246, 0.17);
   box-shadow: 0 7px 20px rgba(0, 0, 0, 0.24);
   transform: translateY(-1px);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .project-links-trigger:hover {
+    border-color: rgba(167, 139, 250, 0.68);
+    background: rgba(139, 92, 246, 0.17);
+    box-shadow: 0 7px 20px rgba(0, 0, 0, 0.24);
+    transform: translateY(-1px);
+  }
 }
 
 .project-links-trigger:active { transform: translateY(0) scale(0.98); }
@@ -1566,9 +1621,11 @@
   transition: background 0.16s ease, transform 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.project-links-option:hover {
-  background: rgba(139, 92, 246, 0.14);
-  transform: translateX(2px);
+@media (hover: hover) and (pointer: fine) {
+  .project-links-option:hover {
+    background: rgba(139, 92, 246, 0.14);
+    transform: translateX(2px);
+  }
 }
 
 .project-links-option:active { transform: translateX(1px) scale(0.99); }
@@ -1623,8 +1680,10 @@
 
 .project-summary-box.is-expandable { cursor: pointer; }
 
-.project-summary-box.is-expandable:hover {
-  background: rgba(255, 255, 255, 0.05);
+@media (hover: hover) and (pointer: fine) {
+  .project-summary-box.is-expandable:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
 }
 
 .project-summary-box p {
@@ -1737,9 +1796,11 @@
   transition: background 0.2s, border-color 0.2s;
 }
 
-.project-participant-card:hover {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 255, 255, 0.12);
+@media (hover: hover) and (pointer: fine) {
+  .project-participant-card:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
 }
 
 .project-participant-card:focus-visible {
@@ -1765,9 +1826,11 @@
   transition: transform 0.2s, color 0.2s;
 }
 
-.project-participant-card:hover .project-participant-arrow {
-  color: var(--text-primary);
-  transform: translateX(2px);
+@media (hover: hover) and (pointer: fine) {
+  .project-participant-card:hover .project-participant-arrow {
+    color: var(--text-primary);
+    transform: translateX(2px);
+  }
 }
 
 .project-participant-name {
@@ -1803,8 +1866,10 @@
   padding: 6px 0;
 }
 
-.project-show-more:hover {
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .project-show-more:hover {
+    text-decoration: underline;
+  }
 }
 
 
@@ -1981,10 +2046,12 @@
   white-space: nowrap;
 }
 
-.orcid-profile-link:hover {
-  background: rgba(166, 206, 57, 0.08);
-  border-color: rgba(166, 206, 57, 0.3);
-  color: #a6ce39;
+@media (hover: hover) and (pointer: fine) {
+  .orcid-profile-link:hover {
+    background: rgba(166, 206, 57, 0.08);
+    border-color: rgba(166, 206, 57, 0.3);
+    color: #a6ce39;
+  }
 }
 
 /* Bio */
@@ -2023,10 +2090,12 @@
   transition: all 0.2s;
 }
 
-.orcid-ext-link:hover {
-  background: rgba(124, 58, 237, 0.1);
-  border-color: rgba(124, 58, 237, 0.3);
-  color: var(--accent-primary, #a78bfa);
+@media (hover: hover) and (pointer: fine) {
+  .orcid-ext-link:hover {
+    background: rgba(124, 58, 237, 0.1);
+    border-color: rgba(124, 58, 237, 0.3);
+    color: var(--accent-primary, #a78bfa);
+  }
 }
 
 /* Career Timeline */
@@ -2106,10 +2175,12 @@
   transition: background 0.2s, border-color 0.2s, transform 0.15s;
 }
 
-.orcid-timeline-item:hover {
-  background: rgba(255, 255, 255, 0.055);
-  border-color: rgba(255, 255, 255, 0.1);
-  transform: translateX(2px);
+@media (hover: hover) and (pointer: fine) {
+  .orcid-timeline-item:hover {
+    background: rgba(255, 255, 255, 0.055);
+    border-color: rgba(255, 255, 255, 0.1);
+    transform: translateX(2px);
+  }
 }
 
 .orcid-timeline-item::before {
@@ -2146,9 +2217,11 @@
   transition: opacity 0.15s;
 }
 
-.orcid-item-org--link:hover {
-  opacity: 0.8;
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .orcid-item-org--link:hover {
+    opacity: 0.8;
+    text-decoration: underline;
+  }
 }
 
 .orcid-item-role {
@@ -2180,7 +2253,9 @@
   transition: opacity 0.15s;
 }
 
-.eli-header-inst-link:hover {
-  opacity: 0.8;
-  text-decoration: underline;
+@media (hover: hover) and (pointer: fine) {
+  .eli-header-inst-link:hover {
+    opacity: 0.8;
+    text-decoration: underline;
+  }
 }

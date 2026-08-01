@@ -1,5 +1,24 @@
 import React from 'react';
 
+const COPY = {
+  es: {
+    title: 'Se ha producido un error',
+    body: 'PaperTok no pudo completar esta acción. Recarga la página para intentarlo de nuevo.',
+    retry: 'Recargar',
+    details: 'Detalles técnicos',
+  },
+  en: {
+    title: 'Something went wrong',
+    body: 'PaperTok could not complete this action. Reload the page to try again.',
+    retry: 'Reload',
+    details: 'Technical details',
+  },
+};
+
+function activeLanguage() {
+  return document.documentElement.lang === 'en' ? 'en' : 'es';
+}
+
 export default class GlobalErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -17,16 +36,23 @@ export default class GlobalErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
+      const copy = COPY[activeLanguage()];
       return (
-        <div style={{ padding: '20px', background: '#220000', color: '#ffaaaa', zIndex: 99999, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'auto', fontFamily: 'monospace' }}>
-          <h2>Application Error</h2>
-          <p>Please take a screenshot of this error and share it!</p>
-          <hr />
-          <h3>{this.state.error?.toString()}</h3>
-          <pre style={{ whiteSpace: 'pre-wrap' }}>{this.state.error?.stack}</pre>
-          <hr />
-          <h4>Component Stack:</h4>
-          <pre style={{ whiteSpace: 'pre-wrap' }}>{this.state.errorInfo?.componentStack}</pre>
+        <div style={{ padding: '24px', background: '#0c0b10', color: '#f6f4fb', zIndex: 99999, position: 'fixed', inset: 0, overflow: 'auto', display: 'grid', placeItems: 'center', textAlign: 'center', fontFamily: 'Inter, system-ui, sans-serif' }}>
+          <div style={{ maxWidth: '560px' }}>
+            <h2 style={{ marginBottom: '10px' }}>{copy.title}</h2>
+            <p style={{ color: '#a7a2b3', lineHeight: 1.6 }}>{copy.body}</p>
+            <button type="button" onClick={() => window.location.reload()} style={{ marginTop: '16px', padding: '11px 18px', border: '1px solid #6d45bb', borderRadius: '6px', background: '#7c3aed', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>
+              {copy.retry}
+            </button>
+            {import.meta.env.DEV && (
+              <details style={{ marginTop: '28px', textAlign: 'left', color: '#a7a2b3' }}>
+                <summary>{copy.details}</summary>
+                <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{this.state.error?.stack}</pre>
+                <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{this.state.errorInfo?.componentStack}</pre>
+              </details>
+            )}
+          </div>
         </div>
       );
     }

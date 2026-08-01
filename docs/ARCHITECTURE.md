@@ -79,7 +79,7 @@ The Worker entry point is `worker/report-api.js`. Its route groups include:
 - open access: `/oa`
 - specialist sources: `/sources/*`
 - AI: `/ai/explain`
-- notifications: `/notifications/*`
+- notifications: `/notifications/*` (authenticated preferences include the active `es`/`en` locale used by digest and unsubscribe copy)
 
 The browser calls the Worker through `VITE_PAPER_API_BASE_URL`. Worker credentials are stored
 with `wrangler secret put`.

@@ -63,7 +63,9 @@
   cursor: pointer;
 }
 
-.email-notification-close:hover { color: #fff; background: rgba(255, 255, 255, 0.07); }
+@media (hover: hover) and (pointer: fine) {
+  .email-notification-close:hover { color: #fff; background: rgba(255, 255, 255, 0.07); }
+}
 
 .email-notification-body { padding: 20px 22px; }
 

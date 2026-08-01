@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { useAuth } from './AuthContext';
 import { useFollowing } from './FollowingContext';
 import { useFollowingUpdates } from './FollowingUpdatesContext';
+import { useLanguage } from './LanguageContext';
 import {
   EmailNotificationServiceError,
   getEmailNotificationPreferences,
@@ -18,6 +19,7 @@ const DEFAULT_PREFERENCES = {
   enabled: false,
   frequency: 'daily',
   maxPapers: 5,
+  language: 'es',
   email: '',
   lastSentAt: null,
   lastTestAt: null,
@@ -25,10 +27,11 @@ const DEFAULT_PREFERENCES = {
 
 export function EmailNotificationsProvider({ children }) {
   const { user } = useAuth();
+  const { language } = useLanguage();
   const userEmail = user?.email || '';
   const { followedEntities, loading: followsLoading } = useFollowing();
   const { items, loading: updatesLoading } = useFollowingUpdates();
-  const [preferences, setPreferences] = useState({ ...DEFAULT_PREFERENCES, email: userEmail });
+  const [preferences, setPreferences] = useState({ ...DEFAULT_PREFERENCES, language, email: userEmail });
   const [loading, setLoading] = useState(Boolean(user));
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -56,7 +59,7 @@ export function EmailNotificationsProvider({ children }) {
         if (cancelled) return;
         if (preferencesResult.status === 'fulfilled') {
           const next = preferencesResult.value;
-          setPreferences({ ...DEFAULT_PREFERENCES, ...next, email: next.email || userEmail });
+          setPreferences({ ...DEFAULT_PREFERENCES, ...next, language, email: next.email || userEmail });
         } else {
           setError(preferencesResult.reason);
         }
@@ -66,15 +69,19 @@ export function EmailNotificationsProvider({ children }) {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [userEmail, userId]);
+  }, [language, userEmail, userId]);
 
   const savePreferences = useCallback(async (nextPreferences) => {
     if (!notificationDataReady) throw new EmailNotificationServiceError('EMAIL_DATA_LOADING');
     setSaving(true);
     setError(null);
     try {
-      const saved = await saveEmailNotificationPreferences(nextPreferences, followedEntities, items);
-      const normalized = { ...DEFAULT_PREFERENCES, ...saved, email: saved.email || userEmail };
+      const saved = await saveEmailNotificationPreferences(
+        { ...nextPreferences, language },
+        followedEntities,
+        items,
+      );
+      const normalized = { ...DEFAULT_PREFERENCES, ...saved, language, email: saved.email || userEmail };
       setPreferences(normalized);
       return normalized;
     } catch (saveError) {
@@ -83,7 +90,7 @@ export function EmailNotificationsProvider({ children }) {
     } finally {
       setSaving(false);
     }
-  }, [followedEntities, items, notificationDataReady, userEmail]);
+  }, [followedEntities, items, language, notificationDataReady, userEmail]);
 
   const sendTest = useCallback(async (nextPreferences = preferences) => {
     if (!notificationDataReady) throw new EmailNotificationServiceError('EMAIL_DATA_LOADING');
@@ -91,11 +98,11 @@ export function EmailNotificationsProvider({ children }) {
     setError(null);
     try {
       const saved = await saveEmailNotificationPreferences(
-        { ...nextPreferences, enabled: true },
+        { ...nextPreferences, enabled: true, language },
         followedEntities,
         items,
       );
-      const normalized = { ...DEFAULT_PREFERENCES, ...saved, email: saved.email || userEmail };
+      const normalized = { ...DEFAULT_PREFERENCES, ...saved, language, email: saved.email || userEmail };
       setPreferences(normalized);
       const result = await sendEmailNotificationTest();
       if (result.preferences) {
@@ -108,19 +115,24 @@ export function EmailNotificationsProvider({ children }) {
     } finally {
       setTesting(false);
     }
-  }, [followedEntities, items, notificationDataReady, preferences, userEmail]);
+  }, [followedEntities, items, language, notificationDataReady, preferences, userEmail]);
 
   useEffect(() => {
     if (!preferences.enabled || !userId || followsLoading || updatesLoading || loadedForUser.current !== userId) return undefined;
     const syncTimeout = setTimeout(() => {
-      saveEmailNotificationPreferences(preferences, followedEntities, items)
-        .catch(syncError => console.warn('No se pudo sincronizar el digest de novedades', syncError));
+      saveEmailNotificationPreferences({ ...preferences, language }, followedEntities, items)
+        .catch(syncError => console.warn('Could not synchronize the notification digest', syncError));
     }, 1800);
     return () => clearTimeout(syncTimeout);
-  }, [followSignature, followedEntities, followsLoading, items, preferences, previewSignature, updatesLoading, userId]);
+  }, [followSignature, followedEntities, followsLoading, items, language, preferences, previewSignature, updatesLoading, userId]);
+
+  const localizedPreferences = useMemo(
+    () => ({ ...preferences, language }),
+    [language, preferences],
+  );
 
   const value = useMemo(() => ({
-    preferences,
+    preferences: localizedPreferences,
     loading,
     saving,
     testing,
@@ -129,7 +141,7 @@ export function EmailNotificationsProvider({ children }) {
     notificationDataReady,
     savePreferences,
     sendTest,
-  }), [error, health, loading, notificationDataReady, preferences, savePreferences, saving, sendTest, testing]);
+  }), [error, health, loading, localizedPreferences, notificationDataReady, savePreferences, saving, sendTest, testing]);
 
   return <EmailNotificationsContext.Provider value={value}>{children}</EmailNotificationsContext.Provider>;
 }

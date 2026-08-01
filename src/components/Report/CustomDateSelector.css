@@ -39,8 +39,10 @@
   transition: color 0.2s;
 }
 
-.cds-minimal-close:hover {
-  color: #fff;
+@media (hover: hover) and (pointer: fine) {
+  .cds-minimal-close:hover {
+    color: #fff;
+  }
 }
 
 /* Timeline Layout */
@@ -109,11 +111,20 @@
   transition: all 0.3s ease;
 }
 
-.cds-badge-btn:hover, .cds-badge-btn.active {
+.cds-badge-btn.active {
   background: rgba(155, 135, 245, 0.2);
   border-color: rgba(155, 135, 245, 0.4);
   box-shadow: 0 0 15px rgba(155, 135, 245, 0.2);
   color: #fff;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cds-badge-btn:hover {
+    background: rgba(155, 135, 245, 0.2);
+    border-color: rgba(155, 135, 245, 0.4);
+    box-shadow: 0 0 15px rgba(155, 135, 245, 0.2);
+    color: #fff;
+  }
 }
 
 .cds-badge-arrow {
@@ -171,8 +182,10 @@
   transition: color 0.2s;
 }
 
-.cds-fcal-nav:hover:not(:disabled) {
-  color: #fff;
+@media (hover: hover) and (pointer: fine) {
+  .cds-fcal-nav:hover:not(:disabled) {
+    color: #fff;
+  }
 }
 
 .cds-fcal-nav:disabled {
@@ -211,10 +224,12 @@
   cursor: default;
 }
 
-.cds-fcal-day:not(.empty):hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-  text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+@media (hover: hover) and (pointer: fine) {
+  .cds-fcal-day:not(.empty):hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+  }
 }
 
 .cds-fcal-day.selected {
@@ -245,8 +260,10 @@
   transition: all 0.3s ease;
 }
 
-.cds-minimal-apply:hover {
-  background: #fff;
-  color: #000;
-  box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+@media (hover: hover) and (pointer: fine) {
+  .cds-minimal-apply:hover {
+    background: #fff;
+    color: #000;
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+  }
 }

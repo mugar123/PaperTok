@@ -21,6 +21,7 @@ import { paperLegacyAdapter } from '../../models/Paper';
 import { Download, Pencil, X } from 'lucide-react';
 import { downloadCitationFile } from '../../utils/readingLibrary';
 import { settleWithin } from '../../utils/asyncTiming';
+import { getUiErrorMessage } from '../../utils/errorMessages';
 import './ListsPage.css';
 
 const LISTS_LOAD_DEADLINE_MS = 2_500;
@@ -129,14 +130,14 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
             }).catch(() => {});
           }
           throw snapshot.status === 'timed_out'
-            ? new Error('La conexión está tardando demasiado.')
-            : (snapshot.reason || new Error('No se pudieron cargar tus listas.'));
+            ? new Error('The list request exceeded its deadline.')
+            : (snapshot.reason || new Error('Custom lists could not be loaded.'));
         }
         applySnapshot(snapshot.value);
         if (active) setError(null);
       } catch (err) {
         console.error('Error loading lists:', err);
-        if (active) setError('No se pudieron actualizar tus listas personalizadas.');
+        if (active) setError('LISTS_LOAD_FAILED');
       } finally {
         if (active) setLoading(false);
       }
@@ -317,7 +318,7 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
 
       if (failedRequests.length > 0 && unresolvedIds.length > 0) {
         failedMetadataRequests.current.set(list.id, failedRequests);
-        setMetadataError('No se pudieron cargar todos los datos de esta lista.');
+        setMetadataError('LIST_METADATA_LOAD_FAILED');
       } else {
         failedMetadataRequests.current.delete(list.id);
         setMetadataError(null);
@@ -325,7 +326,7 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
     } catch (metadataLoadError) {
       console.error('Error loading list paper metadata:', metadataLoadError);
       if (metadataRequestId.current === requestId) {
-        setMetadataError('No se pudieron cargar todos los datos de esta lista.');
+        setMetadataError('LIST_METADATA_LOAD_FAILED');
       }
     } finally {
       if (metadataRequestId.current === requestId) {
@@ -410,7 +411,7 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
       )}
       {error && (
         <div className="lists-inline-status is-error" role="alert">
-          <span>{isEnglish ? 'Your custom lists could not be updated.' : error}</span>
+          <span>{getUiErrorMessage(error, language, 'LISTS_LOAD_FAILED')}</span>
           <button className="lists-retry-btn" onClick={() => setReloadToken(token => token + 1)}>
             {isEnglish ? 'Try again' : 'Reintentar'}
           </button>
@@ -451,7 +452,7 @@ export default function ListsPage({ onOpenPdf, onEditPaper }) {
                 )}
                 {metadataError && (
                   <div className="lists-metadata-status is-error" role="alert">
-                    <span>{isEnglish ? 'Some paper details could not be loaded.' : metadataError}</span>
+                    <span>{getUiErrorMessage(metadataError, language, 'LIST_METADATA_LOAD_FAILED')}</span>
                     <button className="lists-retry-btn" onClick={() => openList(list, true)}>
                       {isEnglish ? 'Try again' : 'Reintentar'}
                     </button>

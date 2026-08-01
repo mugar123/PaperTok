@@ -1,4 +1,6 @@
 import { auth } from './firebase.js';
+import { getLocalizedInstitutionName } from '../utils/institutionLocalization.js';
+import { resolvePaperTopic } from '../utils/topicNavigation.js';
 
 export class EmailNotificationServiceError extends Error {
   constructor(code, status = 0) {
@@ -15,11 +17,31 @@ function apiBase() {
   return value;
 }
 
-export function serializeFollowForNotifications(follow = {}) {
+function localizedFollowName(follow, language) {
+  if (follow.type === 'institution') {
+    return getLocalizedInstitutionName({
+      display_name: follow.displayName,
+      metadata: follow.metadata,
+    }, language) || follow.displayName;
+  }
+
+  if (follow.type === 'topic') {
+    const localizedMetadataLabel = language === 'en'
+      ? follow.metadata?.labelEn
+      : follow.metadata?.labelEs;
+    const localTopic = resolvePaperTopic(follow.canonicalId, language)
+      || resolvePaperTopic(follow.displayName, language);
+    return localizedMetadataLabel || localTopic?.label || follow.displayName;
+  }
+
+  return follow.displayName;
+}
+
+export function serializeFollowForNotifications(follow = {}, language = 'es') {
   return {
     type: follow.type,
     canonicalId: follow.canonicalId,
-    displayName: follow.displayName,
+    displayName: localizedFollowName(follow, language),
     externalIds: {
       ...(follow.externalIds?.ror ? { ror: follow.externalIds.ror } : {}),
       ...(follow.externalIds?.orcid ? { orcid: follow.externalIds.orcid } : {}),
@@ -30,7 +52,7 @@ export function serializeFollowForNotifications(follow = {}) {
   };
 }
 
-export function serializeUpdateForNotifications(paper = {}) {
+export function serializeUpdateForNotifications(paper = {}, language = 'es') {
   return {
     id: paper.id,
     doi: paper.doi,
@@ -42,7 +64,9 @@ export function serializeUpdateForNotifications(paper = {}) {
     openAccess: paper.openAccess,
     landingPageUrl: paper.landingPageUrl,
     pdfUrl: paper.pdfUrl,
-    matches: (paper._followedEntityMatches || []).slice(0, 4).map(serializeFollowForNotifications),
+    matches: (paper._followedEntityMatches || [])
+      .slice(0, 4)
+      .map(follow => serializeFollowForNotifications(follow, language)),
   };
 }
 
@@ -107,14 +131,16 @@ export async function getEmailNotificationHealth() {
 }
 
 export async function saveEmailNotificationPreferences(preferences, follows = [], previewItems = []) {
+  const language = preferences.language === 'en' ? 'en' : 'es';
   const payload = await authenticatedRequest('/notifications/preferences', {
     method: 'PUT',
     body: JSON.stringify({
       enabled: Boolean(preferences.enabled),
       frequency: preferences.frequency === 'weekly' ? 'weekly' : 'daily',
       maxPapers: [3, 5, 10].includes(Number(preferences.maxPapers)) ? Number(preferences.maxPapers) : 5,
-      follows: follows.slice(0, 40).map(serializeFollowForNotifications),
-      previewItems: previewItems.slice(0, 20).map(serializeUpdateForNotifications),
+      language,
+      follows: follows.slice(0, 40).map(follow => serializeFollowForNotifications(follow, language)),
+      previewItems: previewItems.slice(0, 20).map(paper => serializeUpdateForNotifications(paper, language)),
     }),
   });
   return payload.preferences;

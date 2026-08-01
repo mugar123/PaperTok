@@ -30,10 +30,12 @@
   transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast);
 }
 
-.following-settings-back:hover {
-  border-color: var(--border-strong);
-  background: var(--bg-elevated);
-  transform: translateX(-2px);
+@media (hover: hover) and (pointer: fine) {
+  .following-settings-back:hover {
+    border-color: var(--border-strong);
+    background: var(--bg-elevated);
+    transform: translateX(-2px);
+  }
 }
 
 .following-settings-header span {
@@ -89,9 +91,11 @@
   content: '';
 }
 
-.following-settings-tabs button:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.025);
+@media (hover: hover) and (pointer: fine) {
+  .following-settings-tabs button:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.025);
+  }
 }
 
 .following-settings-tabs button.is-active {
@@ -159,8 +163,10 @@
   transition: background var(--transition-fast);
 }
 
-.following-settings-link:hover {
-  background: rgba(255, 255, 255, 0.025);
+@media (hover: hover) and (pointer: fine) {
+  .following-settings-link:hover {
+    background: rgba(255, 255, 255, 0.025);
+  }
 }
 
 .following-settings-link > svg {
@@ -168,9 +174,11 @@
   transition: color var(--transition-fast), transform var(--transition-fast);
 }
 
-.following-settings-link:hover > svg {
-  color: #bda8fa;
-  transform: translateX(2px);
+@media (hover: hover) and (pointer: fine) {
+  .following-settings-link:hover > svg {
+    color: #bda8fa;
+    transform: translateX(2px);
+  }
 }
 
 .following-settings-entity-icon {
@@ -238,10 +246,12 @@
   transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
 }
 
-.following-settings-unfollow:hover {
-  border-color: rgba(239, 68, 68, 0.22);
-  color: #f18a9a;
-  background: rgba(239, 68, 68, 0.065);
+@media (hover: hover) and (pointer: fine) {
+  .following-settings-unfollow:hover {
+    border-color: rgba(239, 68, 68, 0.22);
+    color: #f18a9a;
+    background: rgba(239, 68, 68, 0.065);
+  }
 }
 
 .following-settings-unfollow:disabled {

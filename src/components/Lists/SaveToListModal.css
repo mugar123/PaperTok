@@ -52,8 +52,10 @@
   color: var(--text-secondary);
 }
 
-.save-modal-close:hover {
-  background: var(--bg-glass-hover);
+@media (hover: hover) and (pointer: fine) {
+  .save-modal-close:hover {
+    background: var(--bg-glass-hover);
+  }
 }
 
 .save-modal-paper-title {
@@ -88,7 +90,9 @@
   transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
 }
 
-.save-modal-read-later:hover { background: var(--bg-glass-hover); }
+@media (hover: hover) and (pointer: fine) {
+  .save-modal-read-later:hover { background: var(--bg-glass-hover); }
+}
 .save-modal-read-later:active { transform: scale(0.99); }
 .save-modal-read-later.active {
   border-color: var(--accent-primary);
@@ -130,7 +134,9 @@
 .save-modal-metadata-btn { background: var(--accent-primary); color: white; }
 .save-modal-export { display: flex; gap: var(--space-2); }
 .save-modal-export button { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border-default); color: var(--text-secondary); }
-.save-modal-export button:hover { background: var(--bg-glass-hover); color: var(--text-primary); }
+@media (hover: hover) and (pointer: fine) {
+  .save-modal-export button:hover { background: var(--bg-glass-hover); color: var(--text-primary); }
+}
 .save-modal-section-title { padding: var(--space-1) var(--space-4); color: var(--text-tertiary); font-size: var(--fs-xs); font-weight: var(--fw-semibold); text-transform: uppercase; }
 
 .save-modal-loading {
@@ -156,8 +162,10 @@
   transition: background var(--transition-fast);
 }
 
-.save-modal-list-item:hover {
-  background: var(--bg-glass-hover);
+@media (hover: hover) and (pointer: fine) {
+  .save-modal-list-item:hover {
+    background: var(--bg-glass-hover);
+  }
 }
 
 .save-modal-list-item input[type="checkbox"] {
@@ -235,8 +243,10 @@
   border: 1px solid transparent;
 }
 
-.save-modal-emoji-btn:hover {
-  background: var(--bg-glass-hover);
+@media (hover: hover) and (pointer: fine) {
+  .save-modal-emoji-btn:hover {
+    background: var(--bg-glass-hover);
+  }
 }
 
 .save-modal-emoji-btn.active {

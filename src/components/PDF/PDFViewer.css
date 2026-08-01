@@ -50,8 +50,10 @@
   transition: all var(--transition-fast);
 }
 
-.pdf-close-btn:hover {
-  background: var(--bg-glass-hover);
+@media (hover: hover) and (pointer: fine) {
+  .pdf-close-btn:hover {
+    background: var(--bg-glass-hover);
+  }
 }
 
 .pdf-title {
@@ -81,9 +83,11 @@
   transition: all var(--transition-fast);
 }
 
-.pdf-external-btn:hover {
-  background: var(--bg-glass-hover);
-  border-color: var(--accent-secondary);
+@media (hover: hover) and (pointer: fine) {
+  .pdf-external-btn:hover {
+    background: var(--bg-glass-hover);
+    border-color: var(--accent-secondary);
+  }
 }
 
 .pdf-iframe {

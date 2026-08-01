@@ -99,11 +99,11 @@ export function AuthProvider({ children }) {
             setOnboardingComplete(false);
           }
         } else if (!hydratedFromCache) {
-          setProfileLoadError('No se pudo recuperar tu perfil. Comprueba la conexión e inténtalo de nuevo.');
+          setProfileLoadError('PROFILE_LOAD_FAILED');
           if (remote.status === 'rejected') {
             console.error('Error fetching user data', remote.reason);
           } else {
-            console.warn('La carga del perfil superó el tiempo de espera');
+            console.warn('Profile loading exceeded the timeout');
           }
         }
       }
@@ -140,7 +140,7 @@ export function AuthProvider({ children }) {
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (err) {
-      setError(err.message);
+      setError(err?.code || 'AUTH_FAILED');
     }
   };
 
@@ -158,7 +158,7 @@ export function AuthProvider({ children }) {
     try {
       await firebaseSignOut(auth);
     } catch (err) {
-      setError(err.message);
+      setError(err?.code || 'AUTH_FAILED');
     }
   };
 

@@ -734,7 +734,7 @@ export function FeedProvider({ children }) {
         // either: a dead arXiv must not blank a feed that graph/followed papers
         // could populate on their own.
         if (shouldAbortFeedLoad(mainSourceResults, mainPapers, graphPapers, followedPapers)) {
-          throw new Error('No se pudieron cargar papers de tus fuentes. Reinténtalo en unos segundos.');
+          throw new Error('No scientific provider returned usable papers.');
         }
 
         // ─── STEP 6: ADAPTIVE EXPLORATION (always baseline, more if bored) ───
@@ -1070,9 +1070,9 @@ export function FeedProvider({ children }) {
         });
       }
 
-    } catch (err) {
+    } catch {
       if (requestId === feedRequestId.current) {
-        setError(err.message);
+        setError('FEED_LOAD_FAILED');
         // A transient multi-source failure used to require a manual reload.
         // Retry ONCE per session automatically; further failures keep the
         // error state with its manual "Reintentar" so there is no cascade.

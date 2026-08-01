@@ -77,7 +77,9 @@ test('sanitizes notification preferences and followed entities', () => {
     enabled: true,
     frequency: 'weekly',
     maxPapers: 10,
+    language: 'es',
   });
+  assert.equal(sanitizePreferences({ language: 'en' }).language, 'en');
   assert.deepEqual(sanitizeFollow({
     type: 'institution',
     canonicalId: 'https://ror.org/02f40zc51',
@@ -594,4 +596,34 @@ test('renders common LaTeX in email-safe HTML without exposing delimiters', () =
   }], 'https://example.com/unsubscribe', false);
   assert.equal(digest.html.includes('2560<sup>3</sup>'), true);
   assert.equal(digest.text.includes('$2560^3$'), false);
+});
+
+test('renders every digest label in the subscription language', () => {
+  const digest = renderDigest({
+    frequency: 'weekly',
+    language: 'en',
+    displayName: 'Nicolas',
+  }, [{
+    title: 'A new result',
+    authors: [],
+    citationCount: 2,
+    matches: [{ displayName: 'Quantum Physics' }],
+  }], 'https://example.com/unsubscribe?lang=en', false);
+
+  assert.equal(digest.subject, '1 scientific update for you');
+  assert.equal(digest.html.includes('PAPERTOK · FOLLOWING UPDATES'), true);
+  assert.equal(digest.html.includes('Because you follow Quantum Physics'), true);
+  assert.equal(digest.html.includes('Authors unavailable'), true);
+  assert.equal(digest.html.includes('2 citations'), true);
+  assert.equal(digest.html.includes('Open my feed'), true);
+  assert.equal(digest.html.includes('Unsubscribe'), true);
+  assert.equal(digest.html.includes('Porque sigues'), false);
+  assert.equal(digest.text.includes('This is your weekly selection.'), true);
+});
+
+test('localizes the test-email subject and empty state', () => {
+  const digest = renderDigest({ frequency: 'daily', language: 'en' }, [], 'https://example.com/unsubscribe', true);
+  assert.equal(digest.subject, 'PaperTok: test email');
+  assert.equal(digest.html.includes('Your PaperTok email works'), true);
+  assert.equal(digest.html.includes('We have not found recent publications'), true);
 });

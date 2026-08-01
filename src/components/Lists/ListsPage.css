@@ -80,9 +80,11 @@
   transition: background 160ms ease, border-color 160ms ease;
 }
 
-.lists-retry-btn:hover {
-  border-color: var(--accent-primary);
-  background: var(--bg-hover);
+@media (hover: hover) and (pointer: fine) {
+  .lists-retry-btn:hover {
+    border-color: var(--accent-primary);
+    background: var(--bg-hover);
+  }
 }
 
 /* Grid */
@@ -112,14 +114,18 @@
   transition: opacity 0.3s ease;
 }
 
-.list-card:hover {
-  transform: translateY(-4px) scale(1.02);
-  box-shadow: 0 12px 24px rgba(0,0,0,0.4);
-  border-color: rgba(255,255,255,0.1);
+@media (hover: hover) and (pointer: fine) {
+  .list-card:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.4);
+    border-color: rgba(255,255,255,0.1);
+  }
 }
 
-.list-card:hover::before {
-  opacity: 1;
+@media (hover: hover) and (pointer: fine) {
+  .list-card:hover::before {
+    opacity: 1;
+  }
 }
 
 @keyframes fadeInUp {
@@ -154,13 +160,17 @@
   transition: all var(--transition-fast);
 }
 
-.list-card:hover .list-card-delete {
-  opacity: 1;
+@media (hover: hover) and (pointer: fine) {
+  .list-card:hover .list-card-delete {
+    opacity: 1;
+  }
 }
 
-.list-card-delete:hover {
-  background: rgba(239, 68, 68, 0.2);
-  color: var(--accent-danger);
+@media (hover: hover) and (pointer: fine) {
+  .list-card-delete:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--accent-danger);
+  }
 }
 
 .list-card-name {
@@ -203,8 +213,10 @@
   padding: var(--space-2) 0;
 }
 
-.lists-back-btn:hover {
-  color: var(--accent-primary);
+@media (hover: hover) and (pointer: fine) {
+  .lists-back-btn:hover {
+    color: var(--accent-primary);
+  }
 }
 
 .lists-expanded-title {
@@ -239,7 +251,9 @@
   font-size: var(--fs-xs);
 }
 
-.lists-export-actions button:hover { background: var(--bg-glass-hover); color: var(--text-primary); }
+@media (hover: hover) and (pointer: fine) {
+  .lists-export-actions button:hover { background: var(--bg-glass-hover); color: var(--text-primary); }
+}
 
 .lists-expanded-papers {
   display: flex;
@@ -259,9 +273,11 @@
   justify-content: space-between;
 }
 
-.lists-paper-item:hover {
-  background: var(--bg-glass-hover);
-  border-color: var(--border-default);
+@media (hover: hover) and (pointer: fine) {
+  .lists-paper-item:hover {
+    background: var(--bg-glass-hover);
+    border-color: var(--border-default);
+  }
 }
 
 .lists-paper-item-content {
@@ -291,7 +307,9 @@
   transition: all var(--transition-fast);
 }
 
-.lists-paper-edit-btn:hover { color: var(--accent-secondary); background: var(--accent-primary-glow); }
+@media (hover: hover) and (pointer: fine) {
+  .lists-paper-edit-btn:hover { color: var(--accent-secondary); background: var(--accent-primary-glow); }
+}
 
 .lists-paper-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: var(--space-2); }
 .lists-paper-tags span {
@@ -312,9 +330,11 @@
   overflow: hidden;
 }
 
-.lists-paper-unmark-btn:hover {
-  color: var(--accent-danger);
-  background: rgba(255, 69, 58, 0.1);
+@media (hover: hover) and (pointer: fine) {
+  .lists-paper-unmark-btn:hover {
+    color: var(--accent-danger);
+    background: rgba(255, 69, 58, 0.1);
+  }
 }
 
 .lists-paper-cat {

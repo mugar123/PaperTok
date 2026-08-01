@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { getUiErrorMessage } from '../../utils/errorMessages';
 import { FileText, Bookmark, Microscope, FlaskConical, Atom, Dna, Brain, Cpu, Database, Orbit, Network, Activity } from 'lucide-react';
 import './LoginPage.css';
 
@@ -9,7 +10,7 @@ const FLOATING_ICONS = [FileText, Bookmark, Microscope, FlaskConical, Atom, Dna,
 
 export default function LoginPage() {
   const { signInWithGoogle, error, user, onboardingComplete, loading } = useAuth();
-  const { isEnglish } = useLanguage();
+  const { language, isEnglish } = useLanguage();
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -117,7 +118,7 @@ export default function LoginPage() {
           )}
         </button>
 
-        {error && <p className="login-error">{error}</p>}
+        {error && <p className="login-error">{getUiErrorMessage(error, language, 'AUTH_FAILED')}</p>}
 
         <p className="login-powered">
           Powered by <strong>arXiv</strong>

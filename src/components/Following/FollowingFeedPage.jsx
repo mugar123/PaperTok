@@ -68,9 +68,7 @@ export default function FollowingFeedPage({ onOpenPdf, onSaveToList }) {
   const source = useMemo(() => ({
     papers: orderedPapers,
     loading,
-    error: error && orderedPapers.length === 0
-      ? (isEnglish ? 'The content you follow could not be retrieved.' : 'No se han podido consultar tus seguimientos.')
-      : null,
+    error: error && orderedPapers.length === 0 ? 'FOLLOWING_LOAD_FAILED' : null,
     hasMore: false,
     loadMore: () => {},
     refresh,
@@ -78,7 +76,7 @@ export default function FollowingFeedPage({ onOpenPdf, onSaveToList }) {
     emptyState,
     showFollowReason: true,
     onPaperViewed: markSeen,
-  }), [orderedPapers, loading, error, refresh, refreshing, emptyState, markSeen, isEnglish]);
+  }), [orderedPapers, loading, error, refresh, refreshing, emptyState, markSeen]);
 
   return (
     <FeedContainer
