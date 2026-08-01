@@ -585,11 +585,80 @@ export function dedupeAuthors(authors) {
     const loser = winner === author ? compatible.author : author;
     // Preserve identity fields the stronger record is missing.
     if (!winner.institution && loser.institution) winner.institution = loser.institution;
+    if (!winner.institutionData && loser.institutionData) winner.institutionData = loser.institutionData;
     if (!winner.orcid && loser.orcid) winner.orcid = loser.orcid;
     compatible.author = winner;
   }
 
   return ordered.map(cluster => cluster.author);
+}
+
+const AUTHOR_INSTITUTION_LOOKUPS = new Map();
+
+function settleAuthorInstitutionLookup(promise, timeoutMs) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return promise;
+
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = value => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeoutId);
+      resolve(value);
+    };
+    const timeoutId = setTimeout(() => finish(null), timeoutMs);
+
+    promise.then(finish).catch(() => finish(null));
+  });
+}
+
+/**
+ * Attach ROR's localized labels to an author institution without changing its
+ * OpenAlex identity or canonical display name.
+ */
+export async function enrichAuthorInstitutionLocalization(author, { timeoutMs = 1800 } = {}) {
+  if (!author) return author;
+
+  const sourceInstitution = author.institutionData
+    || author.last_known_institutions?.[0]
+    || (author.institution ? { display_name: author.institution } : null);
+  if (!sourceInstitution) return author;
+
+  const existingNames = sourceInstitution.localized_names || sourceInstitution.localizedNames || {};
+  if (existingNames.es && existingNames.en) {
+    return { ...author, institutionData: sourceInstitution };
+  }
+
+  const lookupKey = sourceInstitution.ror
+    || sourceInstitution.id
+    || String(sourceInstitution.display_name || '').trim().toLowerCase();
+  if (!lookupKey) return { ...author, institutionData: sourceInstitution };
+
+  let lookup = AUTHOR_INSTITUTION_LOOKUPS.get(lookupKey);
+  if (!lookup) {
+    lookup = sourceInstitution.ror
+      ? getRorInstitution(sourceInstitution.ror).catch(() => null)
+      : resolveRorInstitution({ name: sourceInstitution.display_name }).catch(() => null);
+    AUTHOR_INSTITUTION_LOOKUPS.set(lookupKey, lookup);
+  }
+
+  const rorInstitution = await settleAuthorInstitutionLookup(lookup, timeoutMs);
+  const localizedNames = rorInstitution?.localized_names || {};
+  const localizedInstitution = {
+    ...sourceInstitution,
+    localized_names: { ...existingNames, ...localizedNames },
+    ror: sourceInstitution.ror || rorInstitution?.ror,
+  };
+
+  const lastKnownInstitutions = Array.isArray(author.last_known_institutions)
+    ? [localizedInstitution, ...author.last_known_institutions.slice(1)]
+    : author.last_known_institutions;
+
+  return {
+    ...author,
+    institutionData: localizedInstitution,
+    last_known_institutions: lastKnownInstitutions,
+  };
 }
 
 export async function searchAuthors(query, options = {}) {

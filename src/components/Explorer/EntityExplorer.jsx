@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Building2, Lightbulb, Users, Loader2, Search, X, Share2, ExternalLink, Filter, SlidersHorizontal, ChevronRight, ChevronDown, BadgeCheck, Check, FileText, Briefcase, Globe, MapPin, BookOpen, Download, Eye, Award, Tag } from 'lucide-react';
-import { getEntityById, getWorksByEntity, getAuthorsByEntity, enrichPapersBatch, fetchPapersByDois, getAuthorProfileExact, getAuthorProfileByOrcid, findInstitution, getInstitutionRecentImpact, getLocalTopicEntity } from '../../services/openAlexService';
+import { getEntityById, getWorksByEntity, getAuthorsByEntity, enrichPapersBatch, fetchPapersByDois, getAuthorProfileExact, getAuthorProfileByOrcid, findInstitution, getInstitutionRecentImpact, getLocalTopicEntity, enrichAuthorInstitutionLocalization } from '../../services/openAlexService';
 import { isOpenAlexRateLimitError } from '../../services/openAlexClient';
 import { fetchPapers, fetchPapersByIds, getAuthorPapers } from '../../services/arxivService';
 import { ElsevierAdapter, isScopusEnabled, OpenAlexAdapter, PubmedAdapter, ScopusAdapter } from '../../services/adapters';
@@ -146,6 +146,10 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
   const entityDisplayName = type === 'institution'
     ? getLocalizedInstitutionName(entity, language)
     : entityOfficialName;
+  const authorInstitution = type === 'author'
+    ? entity?.institutionData || entity?.last_known_institutions?.[0] || (entity?.institution ? { display_name: entity.institution } : null)
+    : null;
+  const authorInstitutionDisplayName = getLocalizedInstitutionName(authorInstitution, language);
   const wikiRequestKey = `${language}:${type}:${entityDisplayName}`;
   const visibleWikiInfo = wikiInfo?._requestKey === wikiRequestKey ? wikiInfo : null;
   const getInteractionState = useCallback((paper) => ({
@@ -336,6 +340,11 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
       }
 
       if (isCancelled) return;
+
+      if (type === 'author' && data) {
+        data = await enrichAuthorInstitutionLocalization(data);
+        if (isCancelled) return;
+      }
       
       setEntity(data);
       setIsLoadingEntity(false);
@@ -961,7 +970,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
                   )}
                 </>
               )}
-              {type === 'author' && (entity.institution || entity.last_known_institutions?.[0]?.display_name) && (
+              {type === 'author' && authorInstitutionDisplayName && (
                 <div className="ehc-author-institution-wrap">
                   <button
                     type="button"
@@ -971,7 +980,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
                     title={isEnglish ? 'View institution' : 'Ver institución'}
                   >
                     {isResolvingAuthorInstitution ? <Loader2 className="spinning" size={15} /> : <Building2 size={15} />}
-                    <span>{entity.institution || entity.last_known_institutions[0].display_name}</span>
+                    <span>{authorInstitutionDisplayName}</span>
                   </button>
                   {authorInstitutionNavigationError && (
                     <p className="ehc-author-institution-error" role="alert">{authorInstitutionNavigationError}</p>

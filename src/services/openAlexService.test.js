@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mapCrossrefInstitutionWork } from './crossrefInstitutionService.js';
 import {
   dedupeAuthors,
+  enrichAuthorInstitutionLocalization,
   getLocalTopicEntity,
   isOpenAlexEnrichmentId,
   mapOpenAlexEnrichmentWork,
@@ -135,6 +136,35 @@ test('collapses fragmented author records sharing a name, keeping the richest pr
   assert.equal(deduped.length, 1);
   assert.equal(deduped[0].id, 'A2');
   assert.equal(deduped[0].institution, 'University of Toronto');
+});
+
+test('adds localized ROR institution names to author profiles', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    id: 'https://ror.org/02f40zc51',
+    names: [
+      { value: 'Universidad de Salamanca', lang: 'es', types: ['ror_display', 'label'] },
+      { value: 'University of Salamanca', lang: 'en', types: ['label'] },
+    ],
+    locations: [{ geonames_details: { name: 'Salamanca', country_name: 'Spain', country_code: 'ES' } }],
+  }), { status: 200, headers: { 'content-type': 'application/json' } });
+
+  try {
+    const author = await enrichAuthorInstitutionLocalization({
+      id: 'https://openalex.org/A123',
+      display_name: 'Raúl Muñoz',
+      last_known_institutions: [{
+        id: 'https://openalex.org/I123',
+        display_name: 'Universidad de Salamanca',
+        ror: 'https://ror.org/02f40zc51',
+      }],
+    });
+
+    assert.equal(author.institutionData.localized_names.en, 'University of Salamanca');
+    assert.equal(author.last_known_institutions[0].localized_names.es, 'Universidad de Salamanca');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('back-fills a missing institution and ORCID from a weaker duplicate', () => {

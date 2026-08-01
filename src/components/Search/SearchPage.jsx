@@ -22,6 +22,7 @@ import {
   searchInstitutions,
   searchConcepts,
   searchLocalTopics,
+  enrichAuthorInstitutionLocalization,
 } from '../../services/openAlexService';
 import { searchProjects } from '../../services/openAireService';
 import { OpenAlexAdapter } from '../../services/adapters/OpenAlexAdapter';
@@ -200,6 +201,8 @@ export default function SearchPage({ onSaveToList = () => {} }) {
           searchTerm,
           results,
           author => [author.display_name],
+        )).then(results => Promise.all(
+          results.map(author => enrichAuthorInstitutionLocalization(author, { timeoutMs: 1500 })),
         )),
         [],
         5000,
@@ -677,6 +680,10 @@ export default function SearchPage({ onSaveToList = () => {} }) {
                 <h3 className="search-section-title">{isEnglish ? 'Authors' : 'Autores'}</h3>
                 {authorResults.map((author, index) => {
                   const authorFollow = { type: 'author', id: author.id, displayName: author.display_name, source: 'openalex', externalIds: { orcid: author.orcid } };
+                  const authorInstitution = getLocalizedInstitutionName(
+                    author.institutionData || { display_name: author.institution },
+                    language,
+                  );
                   return (
                     <div
                       key={author.id}
@@ -695,7 +702,7 @@ export default function SearchPage({ onSaveToList = () => {} }) {
                       </div>
                       <div className="search-item-info">
                         <h4>{author.display_name}</h4>
-                        <p>{author.institution || (isEnglish ? 'Unknown institution' : 'Institución desconocida')}</p>
+                        <p>{authorInstitution || (isEnglish ? 'Unknown institution' : 'Institución desconocida')}</p>
                       </div>
                       <FollowButton
                         entity={authorFollow}

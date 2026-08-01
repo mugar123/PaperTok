@@ -29,10 +29,32 @@ function readStoredManualLanguage() {
   }
 }
 
+function readStoredLanguage() {
+  try {
+    const language = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    return SUPPORTED_LANGUAGES.has(language) ? language : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistLanguage(language) {
+  try {
+    window.localStorage.setItem(LANGUAGE_STORAGE_KEY, language);
+    window.localStorage.setItem(LANGUAGE_MODE_STORAGE_KEY, 'manual');
+  } catch {
+    // The active language still works for this session if storage is unavailable.
+  }
+}
+
 export function LanguageProvider({ children }) {
   const { user, readingPreferences, updateReadingPreferences } = useAuth();
   const [guestManualLanguage, setGuestManualLanguage] = useState(readStoredManualLanguage);
-  const [detectedLanguage, setDetectedLanguage] = useState(browserLanguageFallback);
+  // Keep the initial protected-route loader in the user's last chosen language.
+  // The Firestore profile is loaded asynchronously, after that loader is visible.
+  const [detectedLanguage, setDetectedLanguage] = useState(
+    () => readStoredLanguage() || browserLanguageFallback(),
+  );
   const accountManualLanguage = user
     && readingPreferences?.languagePreferenceSet === true
     && SUPPORTED_LANGUAGES.has(readingPreferences?.language)
@@ -44,6 +66,10 @@ export function LanguageProvider({ children }) {
   useEffect(() => {
     document.documentElement.lang = language;
   }, [language]);
+
+  useEffect(() => {
+    if (accountManualLanguage) persistLanguage(accountManualLanguage);
+  }, [accountManualLanguage]);
 
   useEffect(() => {
     if (manualLanguage) return undefined;
@@ -64,13 +90,7 @@ export function LanguageProvider({ children }) {
   const setLanguage = useCallback(async (nextLanguage) => {
     const normalized = normalizeLanguage(nextLanguage);
     setGuestManualLanguage(normalized);
-
-    try {
-      window.localStorage.setItem(LANGUAGE_STORAGE_KEY, normalized);
-      window.localStorage.setItem(LANGUAGE_MODE_STORAGE_KEY, 'manual');
-    } catch {
-      // Keep the session preference even if storage is unavailable.
-    }
+    persistLanguage(normalized);
 
     if (user) {
       await updateReadingPreferences({ language: normalized, languagePreferenceSet: true });
