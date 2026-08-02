@@ -12,6 +12,7 @@ const MAX_PREVIEW_ITEMS = 20;
 const MAX_SENT_PAPER_KEYS = 120;
 const DEFAULT_DAILY_SEND_LIMIT = 290;
 const SEND_COUNT_PREFIX = 'notification:send-count:';
+const SCHEDULE_STATUS_KEY = 'notification:schedule:last-run';
 const TEST_IDEMPOTENCY_WINDOW_MS = 60_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const FUTURE_DATE_TOLERANCE_MS = DAY_MS;
@@ -512,6 +513,9 @@ async function saveSubscription(request, env, identity) {
   const previewItems = Array.isArray(body.previewItems)
     ? body.previewItems.map(sanitizePaper).filter(Boolean).slice(0, MAX_PREVIEW_ITEMS)
     : [];
+  if (!follows.length) {
+    throw new EmailNotificationError('EMAIL_FOLLOWS_REQUIRED', 409);
+  }
   const unsubscribeToken = existing?.unsubscribeToken || crypto.randomUUID().replace(/-/g, '');
   const now = new Date().toISOString();
   const subscription = {
@@ -789,6 +793,7 @@ function selectDigestPapers(papers, {
 
 async function collectDigestPapers(subscription, env, { test = false, now = Date.now() } = {}) {
   const follows = (subscription.follows || []).slice(0, MAX_QUERIED_FOLLOWS);
+  if (!follows.length) return [];
   const arxivFollows = follows.filter(follow => arxivCategoriesForFollow(follow).length > 0);
   const indexedFollows = follows.filter(follow => arxivCategoriesForFollow(follow).length === 0);
   const indexedFreshPromise = mapWithConcurrency(indexedFollows, 4, follow => (
@@ -1269,23 +1274,67 @@ async function processScheduledSubscription(env, key, now) {
   return { sent: true };
 }
 
+async function recordScheduleOutcome(env, summary) {
+  console.info('Email notification schedule completed', JSON.stringify(summary));
+  if (!env.NOTIFICATION_STORE) return;
+  try {
+    await env.NOTIFICATION_STORE.put(SCHEDULE_STATUS_KEY, JSON.stringify(summary));
+  } catch (error) {
+    console.warn('Could not persist email notification schedule outcome', error?.message || error);
+  }
+}
+
 export async function runEmailNotificationSchedule(env, scheduledTime = Date.now()) {
-  if (!env.NOTIFICATION_STORE || !configuredEmailProvider(env)) return { sent: 0, skipped: true };
   const now = new Date(scheduledTime);
+  const provider = configuredEmailProvider(env);
+  if (!env.NOTIFICATION_STORE || !provider) {
+    const summary = {
+      scheduledAt: now.toISOString(),
+      completedAt: new Date().toISOString(),
+      provider: provider || null,
+      scanned: 0,
+      due: 0,
+      sent: 0,
+      empty: 0,
+      skipped: 1,
+      failed: 0,
+      disabled: true,
+    };
+    await recordScheduleOutcome(env, summary);
+    return summary;
+  }
   let cursor;
+  let scanned = 0;
   let sent = 0;
+  let empty = 0;
+  let skipped = 0;
   let failed = 0;
   do {
     const page = await env.NOTIFICATION_STORE.list({ prefix: SUBSCRIPTION_PREFIX, cursor, limit: 100 });
     for (let index = 0; index < page.keys.length; index += 3) {
       const batch = page.keys.slice(index, index + 3);
       const results = await Promise.allSettled(batch.map(key => processScheduledSubscription(env, key, now)));
+      scanned += batch.length;
       sent += results.filter(result => result.status === 'fulfilled' && result.value?.sent).length;
+      empty += results.filter(result => result.status === 'fulfilled' && result.value?.empty).length;
+      skipped += results.filter(result => result.status === 'fulfilled' && result.value?.skipped).length;
       failed += results.filter(result => result.status === 'rejected').length;
     }
     cursor = page.list_complete ? undefined : page.cursor;
   } while (cursor);
-  return { sent, failed };
+  const summary = {
+    scheduledAt: now.toISOString(),
+    completedAt: new Date().toISOString(),
+    provider,
+    scanned,
+    due: sent + empty + failed,
+    sent,
+    empty,
+    skipped,
+    failed,
+  };
+  await recordScheduleOutcome(env, summary);
+  return summary;
 }
 
 export const emailNotificationInternals = {
@@ -1295,6 +1344,7 @@ export const emailNotificationInternals = {
   sanitizeFollow,
   sanitizePaper,
   sanitizePreferences,
+  saveSubscription,
   mergePapers,
   arxivCategoriesForFollow,
   parseArxivDigestFeed,
@@ -1303,4 +1353,5 @@ export const emailNotificationInternals = {
   resendSendErrorCode,
   renderScientificHtml,
   renderDigest,
+  scheduleStatusKey: SCHEDULE_STATUS_KEY,
 };

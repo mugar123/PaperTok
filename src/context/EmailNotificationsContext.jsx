@@ -29,7 +29,7 @@ export function EmailNotificationsProvider({ children }) {
   const { user } = useAuth();
   const { language } = useLanguage();
   const userEmail = user?.email || '';
-  const { followedEntities, loading: followsLoading } = useFollowing();
+  const { followedEntities, loading: followsLoading, error: followsError } = useFollowing();
   const { items, loading: updatesLoading } = useFollowingUpdates();
   const [preferences, setPreferences] = useState({ ...DEFAULT_PREFERENCES, language, email: userEmail });
   const [loading, setLoading] = useState(Boolean(user));
@@ -48,7 +48,8 @@ export function EmailNotificationsProvider({ children }) {
   const userId = user?.uid || null;
   const followSignature = useMemo(() => getFollowingSignature(followedEntities), [followedEntities]);
   const previewSignature = useMemo(() => items.slice(0, 20).map(item => item.updateKey || item.id || item.doi).join('|'), [items]);
-  const notificationDataReady = !followsLoading;
+  const notificationDataReady = !followsLoading && !followsError;
+  const hasFollows = followedEntities.length > 0;
 
   useEffect(() => {
     if (!userId) return undefined;
@@ -73,6 +74,9 @@ export function EmailNotificationsProvider({ children }) {
 
   const savePreferences = useCallback(async (nextPreferences) => {
     if (!notificationDataReady) throw new EmailNotificationServiceError('EMAIL_DATA_LOADING');
+    if (nextPreferences.enabled && !hasFollows) {
+      throw new EmailNotificationServiceError('EMAIL_FOLLOWS_REQUIRED', 409);
+    }
     setSaving(true);
     setError(null);
     try {
@@ -90,10 +94,11 @@ export function EmailNotificationsProvider({ children }) {
     } finally {
       setSaving(false);
     }
-  }, [followedEntities, items, language, notificationDataReady, userEmail]);
+  }, [followedEntities, hasFollows, items, language, notificationDataReady, userEmail]);
 
   const sendTest = useCallback(async (nextPreferences = preferences) => {
     if (!notificationDataReady) throw new EmailNotificationServiceError('EMAIL_DATA_LOADING');
+    if (!hasFollows) throw new EmailNotificationServiceError('EMAIL_FOLLOWS_REQUIRED', 409);
     setTesting(true);
     setError(null);
     try {
@@ -115,16 +120,24 @@ export function EmailNotificationsProvider({ children }) {
     } finally {
       setTesting(false);
     }
-  }, [followedEntities, items, language, notificationDataReady, preferences, userEmail]);
+  }, [followedEntities, hasFollows, items, language, notificationDataReady, preferences, userEmail]);
 
   useEffect(() => {
-    if (!preferences.enabled || !userId || followsLoading || updatesLoading || loadedForUser.current !== userId) return undefined;
+    if (
+      !preferences.enabled
+      || !userId
+      || followsLoading
+      || followsError
+      || updatesLoading
+      || !followedEntities.length
+      || loadedForUser.current !== userId
+    ) return undefined;
     const syncTimeout = setTimeout(() => {
       saveEmailNotificationPreferences({ ...preferences, language }, followedEntities, items)
         .catch(syncError => console.warn('Could not synchronize the notification digest', syncError));
     }, 1800);
     return () => clearTimeout(syncTimeout);
-  }, [followSignature, followedEntities, followsLoading, items, language, preferences, previewSignature, updatesLoading, userId]);
+  }, [followSignature, followedEntities, followsError, followsLoading, items, language, preferences, previewSignature, updatesLoading, userId]);
 
   const localizedPreferences = useMemo(
     () => ({ ...preferences, language }),
@@ -139,9 +152,10 @@ export function EmailNotificationsProvider({ children }) {
     error,
     health,
     notificationDataReady,
+    hasFollows,
     savePreferences,
     sendTest,
-  }), [error, health, loading, localizedPreferences, notificationDataReady, savePreferences, saving, sendTest, testing]);
+  }), [error, hasFollows, health, loading, localizedPreferences, notificationDataReady, savePreferences, saving, sendTest, testing]);
 
   return <EmailNotificationsContext.Provider value={value}>{children}</EmailNotificationsContext.Provider>;
 }

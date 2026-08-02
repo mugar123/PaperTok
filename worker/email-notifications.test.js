@@ -17,9 +17,11 @@ const {
   parseArxivDigestFeed,
   selectDigestPapers,
   isSubscriptionDue,
+  saveSubscription,
   resendSendErrorCode,
   renderScientificHtml,
   renderDigest,
+  scheduleStatusKey,
 } = emailNotificationInternals;
 
 function stubFetch(response) {
@@ -269,7 +271,9 @@ test('scheduled digest fetches native arXiv follows before OpenAlex indexes them
       BREVO_FROM_EMAIL: 'papertok@example.com',
     }, now.getTime());
 
-    assert.deepEqual(result, { sent: 1, failed: 0 });
+    assert.equal(result.sent, 1);
+    assert.equal(result.failed, 0);
+    assert.equal(result.empty, 0);
     assert.equal(arxivQuery, 'cat:astro-ph.GA');
     assert.equal(brevoPayload.subject, '1 novedad científica para ti');
     assert.equal(
@@ -374,7 +378,9 @@ test('scheduled digest fetches and emails papers from every followed entity type
       BREVO_FROM_EMAIL: 'papertok@example.com',
     }, now.getTime());
 
-    assert.deepEqual(result, { sent: 1, failed: 0 });
+    assert.equal(result.sent, 1);
+    assert.equal(result.failed, 0);
+    assert.equal(result.empty, 0);
     assert.deepEqual(brevoPayload.sender, { name: 'PaperTok', email: 'papertok@example.com' });
     assert.deepEqual(brevoPayload.to, [{ email: 'reader@example.com', name: 'Reader' }]);
     assert.equal(brevoPayload.subject, '4 novedades científicas para ti');
@@ -397,6 +403,78 @@ test('scheduled digest fetches and emails papers from every followed entity type
       [...kv.values.entries()].some(([key, value]) => key.startsWith('notification:send-count:') && value === '1'),
       true,
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('does not overwrite an enabled subscription when the client sends zero follows', async () => {
+  const subscriptionKey = 'notification:subscription:user-1';
+  const existing = {
+    uid: 'user-1',
+    email: 'reader@example.com',
+    enabled: true,
+    frequency: 'daily',
+    maxPapers: 5,
+    follows: [{ type: 'topic', canonicalId: 'T1', displayName: 'Physics' }],
+    previewItems: [],
+    unsubscribeToken: 'existing-token',
+  };
+  const kv = createMemoryKv({ [subscriptionKey]: existing });
+  const request = new Request('https://example.com/notifications/preferences', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ enabled: true, frequency: 'daily', maxPapers: 5, follows: [] }),
+  });
+
+  await assert.rejects(
+    () => saveSubscription(request, { NOTIFICATION_STORE: kv }, {
+      uid: 'user-1',
+      email: 'reader@example.com',
+      displayName: 'Reader',
+    }),
+    error => error?.code === 'EMAIL_FOLLOWS_REQUIRED' && error?.status === 409,
+  );
+  assert.deepEqual(await kv.get(subscriptionKey, 'json'), existing);
+});
+
+test('records an empty no-send run without calling a provider', async () => {
+  const now = new Date('2026-08-02T07:00:02Z');
+  const subscriptionKey = 'notification:subscription:empty-reader';
+  const kv = createMemoryKv({
+    [subscriptionKey]: {
+      uid: 'empty-reader',
+      email: 'reader@example.com',
+      enabled: true,
+      frequency: 'daily',
+      maxPapers: 5,
+      follows: [],
+      previewItems: [],
+      unsubscribeToken: 'unsubscribe-token',
+    },
+  });
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { throw new Error('No network call expected'); };
+
+  try {
+    const result = await runEmailNotificationSchedule({
+      NOTIFICATION_STORE: kv,
+      EMAIL_PROVIDER: 'brevo',
+      BREVO_API_KEY: 'xkeysib-test',
+      BREVO_FROM_EMAIL: 'papertok@example.com',
+    }, now.getTime());
+
+    assert.equal(result.sent, 0);
+    assert.equal(result.empty, 1);
+    assert.equal(result.failed, 0);
+    const storedSubscription = await kv.get(subscriptionKey, 'json');
+    assert.equal(storedSubscription.lastCheckedAt, now.toISOString());
+    assert.equal(storedSubscription.lastSentAt, undefined);
+    assert.equal([...kv.values.keys()].some(key => key.startsWith('notification:send-count:')), false);
+    const storedOutcome = await kv.get(scheduleStatusKey, 'json');
+    assert.equal(storedOutcome.scheduledAt, now.toISOString());
+    assert.equal(storedOutcome.empty, 1);
+    assert.equal(storedOutcome.failed, 0);
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -15,6 +15,7 @@ const ERROR_COPY = {
     EMAIL_TEST_RATE_LIMIT: 'Espera un minuto antes de enviar otra prueba.',
     EMAIL_TEST_RECIPIENT_RESTRICTED: 'Resend está en modo de prueba y sólo permite enviar al correo propietario de la cuenta. Para otros destinatarios necesitas verificar un dominio.',
     EMAIL_DATA_LOADING: 'Estamos terminando de cargar tus seguimientos. Inténtalo de nuevo en unos segundos.',
+    EMAIL_FOLLOWS_REQUIRED: 'Sigue al menos un tema, autor, institución o proyecto antes de activar los correos.',
     EMAIL_SEND_FAILED: 'No se ha podido enviar el correo de prueba.',
     EMAIL_TIMEOUT: 'El servicio de correo está tardando demasiado.',
     EMAIL_UNAVAILABLE: 'El servicio de correo no está disponible ahora mismo.',
@@ -28,6 +29,7 @@ const ERROR_COPY = {
     EMAIL_TEST_RATE_LIMIT: 'Wait one minute before sending another test.',
     EMAIL_TEST_RECIPIENT_RESTRICTED: 'Resend is in test mode and can only send to the account owner. A verified domain is required for other recipients.',
     EMAIL_DATA_LOADING: 'We are still loading what you follow. Try again in a few seconds.',
+    EMAIL_FOLLOWS_REQUIRED: 'Follow at least one topic, author, institution, or project before enabling emails.',
     EMAIL_SEND_FAILED: 'The test email could not be sent.',
     EMAIL_TIMEOUT: 'The email service is taking too long.',
     EMAIL_UNAVAILABLE: 'The email service is not available right now.',
@@ -48,6 +50,7 @@ export default function EmailNotificationModal({ isOpen, onClose }) {
     saving,
     testing,
     notificationDataReady,
+    hasFollows,
     savePreferences,
     sendTest,
   } = useEmailNotifications();
@@ -178,6 +181,14 @@ export default function EmailNotificationModal({ isOpen, onClose }) {
                     : 'La credencial de Resend sólo tiene permiso de envío, así que no podemos comprobar el estado del dominio desde aquí. El envío funciona con normalidad.'}</span>
                 </div>
               )}
+              {!loading && notificationDataReady && !hasFollows && (
+                <div className="email-notification-provider-warning is-info">
+                  <strong>{isEnglish ? 'Nothing followed yet' : 'Todavía no sigues nada'}</strong>
+                  <span>{isEnglish
+                    ? 'Follow a topic, author, institution, or project so PaperTok can prepare relevant email updates.'
+                    : 'Sigue un tema, autor, institución o proyecto para que PaperTok pueda preparar correos relevantes.'}</span>
+                </div>
+              )}
               <label className="email-notification-toggle-row">
                 <span>
                   <strong>{isEnglish ? 'Enable email updates' : 'Activar correos'}</strong>
@@ -187,7 +198,7 @@ export default function EmailNotificationModal({ isOpen, onClose }) {
                   type="checkbox"
                   checked={Boolean(draft.enabled)}
                   onChange={event => setDraft(current => ({ ...current, enabled: event.target.checked }))}
-                  disabled={loading || (!health.available && !draft.enabled)}
+                  disabled={loading || (!health.available && !draft.enabled) || (!hasFollows && !draft.enabled)}
                 />
                 <span className="email-notification-switch" aria-hidden="true" />
               </label>
@@ -244,7 +255,7 @@ export default function EmailNotificationModal({ isOpen, onClose }) {
               <button
                 className={`email-notification-test ${testState === 'sending' ? 'is-sending' : ''} ${testState === 'sent' ? 'is-sent' : ''}`}
                 onClick={handleTest}
-                disabled={saving || testing || loading || !notificationDataReady || !health.available || testState === 'sent'}
+                disabled={saving || testing || loading || !notificationDataReady || !hasFollows || !health.available || testState === 'sent'}
                 aria-live="polite"
                 aria-busy={testState === 'sending'}
               >
@@ -264,7 +275,7 @@ export default function EmailNotificationModal({ isOpen, onClose }) {
                   )}
                 </AnimatePresence>
               </button>
-              <button className="email-notification-save" onClick={handleSave} disabled={saving || testing || loading || !notificationDataReady || (draft.enabled && !health.available)}>
+              <button className="email-notification-save" onClick={handleSave} disabled={saving || testing || loading || !notificationDataReady || (draft.enabled && (!health.available || !hasFollows))}>
                 {saving
                   ? (isEnglish ? 'Saving...' : 'Guardando...')
                   : (isEnglish ? 'Save changes' : 'Guardar cambios')}
