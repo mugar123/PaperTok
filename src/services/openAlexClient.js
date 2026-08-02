@@ -129,7 +129,7 @@ export class OpenAlexClient {
 
       const entries = Object.entries(store)
         .sort(([keyA, a], [keyB, b]) => {
-          const priority = key => key.startsWith('institution-impact:')
+          const priority = key => key.startsWith('recent-impact:') || key.startsWith('institution-impact:')
             ? 2
             : key.startsWith('entity:') ? 1 : 0;
           return priority(keyB) - priority(keyA) || (b.savedAt || 0) - (a.savedAt || 0);

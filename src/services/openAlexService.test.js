@@ -2,11 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mapCrossrefInstitutionWork } from './crossrefInstitutionService.js';
 import {
+  buildRecentImpactUrl,
   dedupeAuthors,
   enrichAuthorInstitutionLocalization,
+  fetchRecentImpactWorks,
   getLocalTopicEntity,
   isOpenAlexEnrichmentId,
   mapOpenAlexEnrichmentWork,
+  normalizeRecentImpactEntityId,
   searchLocalTopics,
 } from './openAlexService.js';
 
@@ -39,6 +42,45 @@ test('returns real local topic metadata instead of invented work counts', () => 
   assert.equal(physics.works_count, null);
   assert.ok(physics.subcategoryCount > 0);
   assert.equal(physics._localTopic, true);
+});
+
+test('builds recent-impact samples for institutions and authors on the same FWCI contract', () => {
+  const period = { from: '2023-01-01', to: '2025-12-31' };
+  const institutionUrl = new URL(buildRecentImpactUrl('institution', 'https://openalex.org/I63966007', period));
+  const authorUrl = new URL(buildRecentImpactUrl('author', 'A123', period));
+
+  assert.equal(normalizeRecentImpactEntityId('institution', { id: 'https://openalex.org/I63966007' }), 'I63966007');
+  assert.equal(normalizeRecentImpactEntityId('author', 'https://openalex.org/A123'), 'A123');
+  assert.equal(normalizeRecentImpactEntityId('project', 'P123'), '');
+  assert.match(institutionUrl.searchParams.get('filter'), /^institutions\.id:I63966007,/);
+  assert.equal(institutionUrl.searchParams.get('sample'), '200');
+  assert.match(authorUrl.searchParams.get('filter'), /^author\.id:A123,/);
+  assert.equal(authorUrl.searchParams.get('sample'), '100');
+});
+
+test('retries a full recent-impact sample only when FWCI coverage is insufficient', async () => {
+  const calls = [];
+  const fetchJson = async (url) => {
+    calls.push(url);
+    const offset = calls.length === 1 ? 0 : 100;
+    return {
+      results: Array.from({ length: 100 }, (_, index) => ({
+        id: `https://openalex.org/W${offset + index}`,
+        fwci: calls.length === 1 && index >= 4 ? null : 1,
+      })),
+    };
+  };
+
+  const result = await fetchRecentImpactWorks(
+    'author',
+    'A123',
+    { from: '2023-01-01', to: '2025-12-31' },
+    fetchJson,
+  );
+
+  assert.equal(result.attempts, 2);
+  assert.equal(calls.length, 2);
+  assert.equal(result.works.length, 200);
 });
 
 test('only sends arXiv and OpenAlex identifiers to batch enrichment', () => {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Building2, Lightbulb, Users, Loader2, Search, X, Share2, ExternalLink, Filter, SlidersHorizontal, ChevronRight, ChevronDown, BadgeCheck, Check, FileText, Briefcase, Globe, MapPin, BookOpen, Download, Eye, Award, Tag } from 'lucide-react';
-import { getEntityById, getWorksByEntity, getAuthorsByEntity, enrichPapersBatch, fetchPapersByDois, getAuthorProfileExact, getAuthorProfileByOrcid, findInstitution, getInstitutionRecentImpact, getLocalTopicEntity, enrichAuthorInstitutionLocalization } from '../../services/openAlexService';
+import { getEntityById, getWorksByEntity, getAuthorsByEntity, enrichPapersBatch, fetchPapersByDois, getAuthorProfileExact, getAuthorProfileByOrcid, findInstitution, getEntityRecentImpact, getLocalTopicEntity, enrichAuthorInstitutionLocalization } from '../../services/openAlexService';
 import { isOpenAlexRateLimitError } from '../../services/openAlexClient';
 import { fetchPapers, fetchPapersByIds, getAuthorPapers } from '../../services/arxivService';
 import { ElsevierAdapter, isScopusEnabled, OpenAlexAdapter, PubmedAdapter, ScopusAdapter } from '../../services/adapters';
@@ -22,6 +22,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import PaperCard from '../Feed/PaperCard';
 import PDFViewer from '../PDF/PDFViewer';
 import ScientificText from '../ScientificText';
+import RecentImpactStat from './RecentImpactStat';
 import { normalizeScientificMarkup } from '../../utils/latex';
 import { paperMatchesLocalTopic } from '../../utils/topicNavigation';
 import { hasUsableAIAbstract } from '../../utils/aiExplanationAccess.js';
@@ -57,15 +58,6 @@ const ROR_RELATION_LABELS = {
     predecessor: 'Predecessor',
     successor: 'Successor',
   },
-};
-
-const IMPACT_LEVELS_EN = {
-  Excepcional: 'Exceptional',
-  'Muy alto': 'Very high',
-  'Por encima de la media': 'Above average',
-  'En la media': 'Average',
-  'Por debajo de la media': 'Below average',
-  Bajo: 'Low',
 };
 
 export default function EntityExplorer({ onSaveToList = () => {} }) {
@@ -349,11 +341,11 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
       setEntity(data);
       setIsLoadingEntity(false);
 
-      if (type === 'institution' && data?.id) {
+      if (['institution', 'author'].includes(type) && data) {
         setIsLoadingRecentImpact(true);
         setRecentImpactError(null);
         try {
-          const impact = await getInstitutionRecentImpact(data.id);
+          const impact = await getEntityRecentImpact(type, data);
           if (!isCancelled) setRecentImpact(impact);
         } catch (error) {
           if (!isCancelled) {
@@ -366,7 +358,7 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
                     ? 'network_error'
                     : 'unavailable'
             );
-            console.error('Failed to load recent institution impact', error);
+            console.error(`Failed to load recent ${type} impact`, error);
           }
         } finally {
           if (!isCancelled) setIsLoadingRecentImpact(false);
@@ -1086,53 +1078,13 @@ export default function EntityExplorer({ onSaveToList = () => {} }) {
                 <span className="ehc-stat-label">{type === 'source' ? (isEnglish ? 'Type' : 'Tipo') : 'H-Index'}</span>
               </div>
             )}
-            {type === 'institution' && (
-              <div
-                className={`ehc-stat-box ehc-stat-box--impact${recentImpact?.stale ? ' ehc-stat-box--stale' : ''}`}
-                title={recentImpact?.available
-                  ? (isEnglish
-                    ? `${recentImpact.stale ? 'Last saved calculation. ' : ''}PaperTok estimate based on ${recentImpact.sampleSize} publications with FWCI. Median FWCI: ${recentImpact.medianFwci}; ${Math.round(recentImpact.highImpactShare * 100)}% exceeds twice the expected impact.`
-                    : `${recentImpact.stale ? 'Último cálculo guardado. ' : ''}Estimación PaperTok basada en ${recentImpact.sampleSize} publicaciones con FWCI. FWCI mediano: ${recentImpact.medianFwci}; ${Math.round(recentImpact.highImpactShare * 100)}% supera 2 veces el impacto esperado.`)
-                  : recentImpactError === 'rate_limited'
-                    ? (isEnglish ? 'OpenAlex has temporarily limited requests. The score will return when available.' : 'OpenAlex ha limitado temporalmente las consultas. La nota se recuperará cuando vuelva a estar disponible.')
-                    : recentImpactError
-                      ? (isEnglish ? 'Recent impact could not be retrieved from OpenAlex.' : 'No se pudo consultar el impacto reciente en OpenAlex.')
-                      : (isEnglish ? 'The score requires at least 50 recent publications with FWCI data.' : 'La nota requiere al menos 50 publicaciones recientes con datos FWCI.')}
-                aria-label={recentImpact?.available
-                  ? (isEnglish
-                    ? `Recent impact ${recentImpact.score} out of 10, ${IMPACT_LEVELS_EN[recentImpact.level] || recentImpact.level}`
-                    : `Impacto reciente ${recentImpact.score} sobre 10, ${recentImpact.level}`)
-                  : (isEnglish ? 'Recent impact unavailable' : 'Impacto reciente no disponible')}
-              >
-                <span className="ehc-stat-value">
-                  {isLoadingRecentImpact ? '…' : recentImpact?.available ? recentImpact.score.toFixed(1) : '—'}
-                  <span className="ehc-stat-scale">/ 10</span>
-                </span>
-                <span className="ehc-stat-label">{isEnglish ? 'Recent impact' : 'Impacto reciente'}</span>
-                <span className="ehc-stat-detail">
-                  {isLoadingRecentImpact
-                    ? (isEnglish ? 'Calculating…' : 'Calculando…')
-                    : recentImpact?.available
-                      ? recentImpact.stale
-                        ? `${isEnglish ? 'Saved' : 'Guardado'} · ${recentImpact.period.label}`
-                        : `${isEnglish ? IMPACT_LEVELS_EN[recentImpact.level] || recentImpact.level : recentImpact.level} · ${recentImpact.period.label}`
-                      : recentImpactError === 'rate_limited'
-                        ? (isEnglish ? 'Temporary limit' : 'Límite temporal')
-                        : recentImpactError === 'timeout'
-                          ? (isEnglish ? 'No response' : 'Sin respuesta')
-                          : recentImpactError === 'network_error'
-                            ? (isEnglish ? 'Offline' : 'Sin conexión')
-                            : recentImpactError
-                              ? (isEnglish ? 'Unavailable' : 'No disponible')
-                              : (isEnglish ? 'Insufficient data' : 'Datos insuficientes')}
-                </span>
-              </div>
-            )}
-            {type !== 'institution' && entity?.summary_stats?.['2yr_mean_citedness'] != null && (
-              <div className="ehc-stat-box">
-                <span className="ehc-stat-value">{Number(entity.summary_stats['2yr_mean_citedness']).toFixed(1)}</span>
-                <span className="ehc-stat-label">{isEnglish ? 'Recent impact' : 'Impacto reciente'}</span>
-              </div>
+            {['institution', 'author'].includes(type) && (
+              <RecentImpactStat
+                impact={recentImpact}
+                isLoading={isLoadingRecentImpact}
+                error={recentImpactError}
+                isEnglish={isEnglish}
+              />
             )}
             {type === 'project' && entity.budget > 0 && (
               <div className="ehc-stat-box">

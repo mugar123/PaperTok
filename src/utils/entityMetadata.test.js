@@ -2,8 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   applyInstitutionWorksFallback,
+  calculateEntityRecentImpact,
   calculateInstitutionRecentImpact,
   deduplicateProjectParticipants,
+  getRecentImpactConfig,
   getRecentImpactPeriod,
 } from './entityMetadata.js';
 
@@ -64,6 +66,27 @@ test('does not publish an impact score from an undersized sample', () => {
     sampleSize: 49,
     minimumSampleSize: 50,
   });
+});
+
+test('uses the same recent-impact scale with entity-appropriate sample requirements', () => {
+  assert.deepEqual(getRecentImpactConfig('institution'), {
+    minimumSampleSize: 50,
+    sampleSize: 200,
+  });
+  assert.deepEqual(getRecentImpactConfig('author'), {
+    minimumSampleSize: 5,
+    sampleSize: 100,
+  });
+  assert.equal(getRecentImpactConfig('project'), null);
+
+  const authorImpact = calculateEntityRecentImpact(
+    Array.from({ length: 5 }, () => ({ fwci: 1 })),
+    getRecentImpactConfig('author').minimumSampleSize,
+  );
+
+  assert.equal(authorImpact.available, true);
+  assert.equal(authorImpact.score, 4.3);
+  assert.equal(authorImpact.minimumSampleSize, 5);
 });
 
 test('deduplicates project participants and keeps the richest metadata', () => {

@@ -20,6 +20,15 @@ export function applyInstitutionWorksFallback(institution, worksCount) {
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
+const RECENT_IMPACT_CONFIG = Object.freeze({
+  institution: Object.freeze({ minimumSampleSize: 50, sampleSize: 200 }),
+  author: Object.freeze({ minimumSampleSize: 5, sampleSize: 100 }),
+});
+
+export function getRecentImpactConfig(type) {
+  return RECENT_IMPACT_CONFIG[type] || null;
+}
+
 export function getRecentImpactPeriod(now = new Date()) {
   const endDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 6, 0));
   const startDate = new Date(Date.UTC(
@@ -35,7 +44,7 @@ export function getRecentImpactPeriod(now = new Date()) {
   };
 }
 
-export function calculateInstitutionRecentImpact(works = [], minimumSampleSize = 50) {
+export function calculateEntityRecentImpact(works = [], minimumSampleSize = 50) {
   const fwciValues = works
     .map(work => work?.fwci)
     .filter(value => Number.isFinite(value) && value >= 0)
@@ -81,6 +90,10 @@ export function calculateInstitutionRecentImpact(works = [], minimumSampleSize =
     highImpactShare: Math.round(highImpactShare * 1000) / 1000,
     minimumSampleSize,
   };
+}
+
+export function calculateInstitutionRecentImpact(works = [], minimumSampleSize = 50) {
+  return calculateEntityRecentImpact(works, minimumSampleSize);
 }
 
 export function deduplicateProjectParticipants(participants = []) {

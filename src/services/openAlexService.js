@@ -6,13 +6,15 @@
 import { CATEGORIES } from '../data/categories.js';
 import {
   applyInstitutionWorksFallback,
-  calculateInstitutionRecentImpact,
+  calculateEntityRecentImpact,
+  getRecentImpactConfig,
   getRecentImpactPeriod,
 } from '../utils/entityMetadata.js';
 import { PaperBuilder } from './PaperBuilder.js';
 import {
   getRorInstitution,
   mergeInstitutionWithRor,
+  normalizeRorId,
   resolveRorInstitution,
   searchRorInstitutions,
 } from './rorService.js';
@@ -30,11 +32,11 @@ import {
 
 const CACHE = new Map();
 const GRAPH_CACHE = new Map(); // caches W... to arxivId mappings
-const INSTITUTION_IMPACT_CACHE = new Map();
+const RECENT_IMPACT_CACHE = new Map();
 const ENTITY_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const ENTITY_STALE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const IMPACT_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const IMPACT_INSUFFICIENT_TTL_MS = 6 * 60 * 60 * 1000;
+const IMPACT_INSUFFICIENT_TTL_MS = 60 * 60 * 1000;
 const IMPACT_STALE_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const ENRICHMENT_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const ENTITY_WORKS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
@@ -1101,66 +1103,175 @@ export async function getEntityById(type, id) {
   }
 }
 
-export async function getInstitutionRecentImpact(id, now = new Date()) {
-  if (!id) return null;
-  const cleanId = id.includes('/') ? id.split('/').pop() : id;
-  if (!/^I\d+$/.test(cleanId)) return null;
+export function normalizeRecentImpactEntityId(type, value) {
+  const prefix = type === 'institution' ? 'I' : type === 'author' ? 'A' : '';
+  if (!prefix) return '';
+  const rawId = typeof value === 'object' ? value?.id : value;
+  const match = String(rawId || '').match(new RegExp(`(?:openalex\\.org/)?(${prefix}\\d+)`, 'i'));
+  return match?.[1]?.toUpperCase() || '';
+}
 
-  const period = getRecentImpactPeriod(now);
-  const cacheKey = `${cleanId}:${period.from}:${period.to}`;
-  if (INSTITUTION_IMPACT_CACHE.has(cacheKey)) {
-    return INSTITUTION_IMPACT_CACHE.get(cacheKey);
+async function resolveRecentImpactEntityId(type, entityOrId) {
+  const directId = normalizeRecentImpactEntityId(type, entityOrId);
+  if (directId) return directId;
+
+  if (type === 'institution') {
+    const rawRor = typeof entityOrId === 'object'
+      ? entityOrId?.ror || entityOrId?._rorId || entityOrId?.id
+      : entityOrId;
+    const rorId = normalizeRorId(rawRor);
+    if (!rorId) return '';
+    const data = await openAlexJson(
+      `https://api.openalex.org/institutions?filter=ror:${rorId}&per-page=1&select=id`,
+      {
+        timeoutMs: 7000,
+        retries: 1,
+        cacheTtlMs: 24 * 60 * 60 * 1000,
+        persistentKey: `recent-impact-identity:institution:${rorId}`,
+        persistentTtlMs: 30 * 24 * 60 * 60 * 1000,
+        staleIfError: true,
+      },
+    );
+    return normalizeRecentImpactEntityId(type, data?.results?.[0]?.id);
   }
 
-  const persistentCacheKey = `institution-impact:${cacheKey}`;
-  const cachedImpact = readOpenAlexPersistent(persistentCacheKey, Number.POSITIVE_INFINITY);
-  if (cachedImpact) {
-    const ttlMs = cachedImpact.data?.available ? IMPACT_CACHE_TTL_MS : IMPACT_INSUFFICIENT_TTL_MS;
-    if (cachedImpact.ageMs <= ttlMs) {
-      const impact = {
-        ...cachedImpact.data,
-        cacheStatus: 'fresh-cache',
-        cachedAt: cachedImpact.savedAt,
-      };
-      INSTITUTION_IMPACT_CACHE.set(cacheKey, impact);
-      return impact;
-    }
-  }
+  const rawOrcid = typeof entityOrId === 'object' ? entityOrId?.orcid : entityOrId;
+  const orcid = String(rawOrcid || '').match(/\b\d{4}-\d{4}-\d{4}-\d{3}[\dX]\b/i)?.[0]?.toUpperCase();
+  if (!orcid) return '';
+  const data = await openAlexJson(
+    `https://api.openalex.org/authors?filter=orcid:${encodeURIComponent(orcid)}&per-page=1&select=id`,
+    {
+      timeoutMs: 7000,
+      retries: 1,
+      cacheTtlMs: 24 * 60 * 60 * 1000,
+      persistentKey: `recent-impact-identity:author:${orcid}`,
+      persistentTtlMs: 30 * 24 * 60 * 60 * 1000,
+      staleIfError: true,
+    },
+  );
+  return normalizeRecentImpactEntityId(type, data?.results?.[0]?.id);
+}
 
-  const seed = cleanId.replace(/\D/g, '');
-  const filter = [
-    `institutions.id:${cleanId}`,
-    `from_publication_date:${period.from}`,
-    `to_publication_date:${period.to}`,
-  ].join(',');
+export function buildRecentImpactUrl(type, openAlexId, period, attempt = 0) {
+  const config = getRecentImpactConfig(type);
+  const normalizedId = normalizeRecentImpactEntityId(type, openAlexId);
+  if (!config || !normalizedId || !period?.from || !period?.to) return '';
+  const filterKey = type === 'institution' ? 'institutions.id' : 'author.id';
+  const numericSeed = Number(normalizedId.slice(1)) || 1;
   const params = new URLSearchParams({
-    filter,
-    sample: '200',
-    seed,
-    'per-page': '200',
+    filter: [
+      `${filterKey}:${normalizedId}`,
+      `from_publication_date:${period.from}`,
+      `to_publication_date:${period.to}`,
+    ].join(','),
+    sample: String(config.sampleSize),
+    seed: String(numericSeed + attempt),
+    'per-page': String(config.sampleSize),
     select: 'id,fwci,publication_date',
   });
+  return `https://api.openalex.org/works?${params}`;
+}
 
-  try {
-    const data = await openAlexJson(`https://api.openalex.org/works?${params}`, {
+export async function fetchRecentImpactWorks(type, openAlexId, period, fetchJson = openAlexJson) {
+  const config = getRecentImpactConfig(type);
+  if (!config) return { works: [], attempts: 0 };
+  const uniqueWorks = new Map();
+  let attempts = 0;
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const url = buildRecentImpactUrl(type, openAlexId, period, attempt);
+    if (!url) break;
+    const data = await fetchJson(url, {
       timeoutMs: 12000,
       cacheTtlMs: 60 * 60 * 1000,
       retries: 1,
     });
+    attempts += 1;
+    const results = Array.isArray(data?.results) ? data.results : [];
+    results.forEach((work, index) => {
+      const key = work?.id || `${attempt}:${index}`;
+      uniqueWorks.set(key, work);
+    });
+
+    const works = [...uniqueWorks.values()];
+    if (calculateEntityRecentImpact(works, config.minimumSampleSize).available) break;
+    if (results.length < config.sampleSize) break;
+  }
+
+  return { works: [...uniqueWorks.values()], attempts };
+}
+
+function recentImpactCacheTtl(impact) {
+  return impact?.available ? IMPACT_CACHE_TTL_MS : IMPACT_INSUFFICIENT_TTL_MS;
+}
+
+export async function getEntityRecentImpact(type, entityOrId, now = new Date()) {
+  const config = getRecentImpactConfig(type);
+  if (!config || !entityOrId) return null;
+  const period = getRecentImpactPeriod(now);
+  const openAlexId = await resolveRecentImpactEntityId(type, entityOrId);
+  if (!openAlexId) {
+    return {
+      available: false,
+      reason: 'unresolved_identity',
+      sampleSize: 0,
+      minimumSampleSize: config.minimumSampleSize,
+      period,
+      source: 'OpenAlex',
+    };
+  }
+
+  const cacheKey = `${type}:${openAlexId}:${period.from}:${period.to}`;
+  const memoryEntry = RECENT_IMPACT_CACHE.get(cacheKey);
+  if (memoryEntry && Date.now() - memoryEntry.savedAt <= recentImpactCacheTtl(memoryEntry.data)) {
+    return {
+      ...memoryEntry.data,
+      cacheStatus: 'memory-cache',
+      cachedAt: memoryEntry.savedAt,
+    };
+  }
+  if (memoryEntry) RECENT_IMPACT_CACHE.delete(cacheKey);
+
+  const persistentCacheKey = `recent-impact:v2:${cacheKey}`;
+  const cachedImpact = readOpenAlexPersistent(persistentCacheKey, Number.POSITIVE_INFINITY);
+  if (cachedImpact && cachedImpact.ageMs <= recentImpactCacheTtl(cachedImpact.data)) {
     const impact = {
-      ...calculateInstitutionRecentImpact(data.results || []),
+      ...cachedImpact.data,
+      cacheStatus: 'fresh-cache',
+      cachedAt: cachedImpact.savedAt,
+    };
+    RECENT_IMPACT_CACHE.set(cacheKey, { data: impact, savedAt: cachedImpact.savedAt });
+    return impact;
+  }
+
+  try {
+    const sample = await fetchRecentImpactWorks(type, openAlexId, period);
+    const impact = {
+      ...calculateEntityRecentImpact(sample.works, config.minimumSampleSize),
+      entityType: type,
+      openAlexId,
       period,
       source: 'OpenAlex',
       sampled: true,
+      sampleAttempts: sample.attempts,
       cacheStatus: 'network',
       cachedAt: Date.now(),
     };
 
+    if (!impact.available && cachedImpact?.data?.available && cachedImpact.ageMs <= IMPACT_STALE_TTL_MS) {
+      return {
+        ...cachedImpact.data,
+        cacheStatus: 'stale-cache',
+        stale: true,
+        cachedAt: cachedImpact.savedAt,
+      };
+    }
+
     writeOpenAlexPersistent(persistentCacheKey, impact);
-    INSTITUTION_IMPACT_CACHE.set(cacheKey, impact);
+    RECENT_IMPACT_CACHE.set(cacheKey, { data: impact, savedAt: impact.cachedAt });
     return impact;
   } catch (error) {
-    if (cachedImpact && cachedImpact.ageMs <= IMPACT_STALE_TTL_MS) {
+    if (cachedImpact?.data?.available && cachedImpact.ageMs <= IMPACT_STALE_TTL_MS) {
       return {
         ...cachedImpact.data,
         cacheStatus: 'stale-cache',
@@ -1171,6 +1282,14 @@ export async function getInstitutionRecentImpact(id, now = new Date()) {
     }
     throw error;
   }
+}
+
+export function getInstitutionRecentImpact(entityOrId, now = new Date()) {
+  return getEntityRecentImpact('institution', entityOrId, now);
+}
+
+export function getAuthorRecentImpact(entityOrId, now = new Date()) {
+  return getEntityRecentImpact('author', entityOrId, now);
 }
 
 /**
